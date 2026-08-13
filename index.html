@@ -44,7 +44,7 @@ body{background:var(--bench);color:var(--ink);font-family:var(--ui);-webkit-font
 }
 .art{position:absolute;overflow:hidden}
 .art img{
-  width:100%;height:100%;object-fit:cover;
+  width:100%;height:100%;object-fit:var(--art-fit, cover);
   object-position:50% var(--art-y);
   transform:scale(var(--art-zoom));transform-origin:50% var(--art-y);display:block;
 }
@@ -327,6 +327,7 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
           <input type="range" id="inArtY" min="0" max="100" step="1" value="50"></label>
         <label><span class="lab">Échelle <span class="val" id="vZoom">1,00</span></span>
           <input type="range" id="inZoom" min="1" max="2.2" step="0.01" value="1"></label>
+        <div class="check"><input type="checkbox" id="inKeepRatio"><span>Conserver les proportions de l'image (sans recadrage)</span></div>
         <label><span class="lab">Voile de lisibilité</span>
           <select id="inScrim">
             <option value="none" selected>Aucun</option>
@@ -486,6 +487,7 @@ function render(){
 
   s.setProperty('--art-y', $('inArtY').value + '%');
   s.setProperty('--art-zoom', $('inZoom').value);
+  s.setProperty('--art-fit', $('inKeepRatio').checked ? 'contain' : 'cover');
 
   $('elAuthor').textContent = $('inAuthor').value;
   $('elTitle').textContent  = $('inTitle').value;
@@ -537,7 +539,7 @@ const PRESETS = {
     inTitleFace:F['Spectral'], inTitleWeight:'400', inTitleCase:'none', inTitleColor:'#191917',
     inTitleSize:8, inLeading:1.1, inTitleTrack:0, inGap:3.5,
     inGenreOn:false, inImprintOn:false, inPastilleOn:true, inPastille:'folio',
-    inScrim:'none', inArtY:50, inZoom:1
+    inScrim:'none', inArtY:50, inZoom:1, inKeepRatio:false
   },
   blanche: {
     mode:'typo', inFormat:'140,205', inPaper:'#fcf0d8', inAlign:'center', inPadX:16,
@@ -561,7 +563,7 @@ const PRESETS = {
     inTitleFace:F['Playfair Display'], inTitleWeight:'500', inTitleCase:'none',
     inTitleColor:'#ffffff', inTitleSize:11, inLeading:1.02, inTitleTrack:-1, inGap:6,
     inGenreOn:false, inImprintOn:false, inPastilleOn:false,
-    inScrim:'both', inScrimOp:62, inArtY:62, inZoom:1.05
+    inScrim:'both', inScrimOp:62, inArtY:62, inZoom:1.05, inKeepRatio:false
   }
 };
 
@@ -737,15 +739,54 @@ function download(blob, name){
   a.href = url; a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
+
+/* Dialogue natif « Enregistrer sous » (Chromium seulement). Retourne un handle,
+   'aborted' si l'utilisateur annule, ou null → repli sur download(). */
+async function pickSaveFile(name, desc, mime, ext){
+  if (!window.showSaveFilePicker) return null;
+  try {
+    return await showSaveFilePicker({ suggestedName: name, types: [{ description: desc, accept: { [mime]: [ext] } }] });
+  } catch (e) {
+    return e.name === 'AbortError' ? 'aborted' : null;
+  }
+}
+
+async function saveBlob(handle, blob, name){
+  if (handle) { const w = await handle.createWritable(); await w.write(blob); await w.close(); }
+  else download(blob, name);
+}
 const slug = () => ($('inTitle').value || 'couverture').trim().replace(/\s+/g, '-').toLowerCase();
 
 /* ================= export PNG ================= */
+
+/* html2canvas ignore object-fit/object-position (il étire l'image sur sa boîte) :
+   on fige dans le clone la géométrie que le CSS produit à l'écran — cadrage
+   (cover/contain), position verticale et zoom — en px, sans transform. */
+function freezeArtGeometry(doc){
+  const src = $('elImg'), dst = doc.getElementById('elImg');
+  if (!src || !dst || mode === 'typo') return;
+  const zone = $('art').getBoundingClientRect();
+  const nw = src.naturalWidth, nh = src.naturalHeight;
+  if (!nw || !nh || !zone.width || !zone.height) return;
+  const fit = ($('inKeepRatio').checked ? Math.min : Math.max)(zone.width / nw, zone.height / nh);
+  const artY = +$('inArtY').value / 100, zoom = +$('inZoom').value;
+  const dw = nw * fit, dh = nh * fit;
+  const left = (zone.width - dw) / 2, top = (zone.height - dh) * artY;
+  /* zoom replié dans la géométrie, autour de l'origine (50%, artY) de la zone */
+  const ox = zone.width / 2, oy = zone.height * artY;
+  dst.style.cssText = 'position:absolute;' +
+    'left:' + (ox - (ox - left) * zoom) + 'px;top:' + (oy - (oy - top) * zoom) + 'px;' +
+    'width:' + (dw * zoom) + 'px;height:' + (dh * zoom) + 'px;transform:none;';
+}
 $('btnPng').addEventListener('click', async () => {
+  /* dialogue avant le rendu : l'activation utilisateur expire pendant html2canvas */
+  const handle = await pickSaveFile(slug() + '.png', 'Image PNG', 'image/png', '.png');
+  if (handle === 'aborted') return;
   const btn = $('btnPng'), old = btn.textContent, wasMarks = $('inMarks').checked;
   $('inMarks').checked = false; render();
   btn.textContent = 'Rendu en cours…'; btn.disabled = true;
   try {
-    const canvas = await html2canvas(cover, { scale: 3, backgroundColor: null, logging: false });
+    const canvas = await html2canvas(cover, { scale: 3, backgroundColor: null, logging: false, onclone: freezeArtGeometry });
     const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
     let bytes = new Uint8Array(await blob.arrayBuffer());
     let note = '';
@@ -756,7 +797,7 @@ $('btnPng').addEventListener('click', async () => {
       bytes = pngInsertText(bytes, CFG_KEY, b64enc(JSON.stringify(cfg)));
       note = ' — réglages' + (cfg.image ? ' et photo source embarqués' : ' embarqués');
     }
-    download(new Blob([bytes], { type: 'image/png' }), slug() + '.png');
+    await saveBlob(handle, new Blob([bytes], { type: 'image/png' }), slug() + '.png');
     status(`PNG ${canvas.width}×${canvas.height} px, ${(bytes.length/1048576).toFixed(2)} Mo${note}`, 'ok');
   } catch (e) {
     status('Rendu impossible : ' + e.message, 'err');
@@ -791,10 +832,14 @@ $('inLoadJson').addEventListener('change', async e => {
   e.target.value = '';
 });
 
-$('btnJson').addEventListener('click', () => {
-  const cfg = collectConfig();
-  download(new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' }), slug() + '.json');
-  status('Réglages enregistrés (sans image).', 'ok');
+$('btnJson').addEventListener('click', async () => {
+  const handle = await pickSaveFile(slug() + '.json', 'Réglages JSON', 'application/json', '.json');
+  if (handle === 'aborted') return;
+  try {
+    const cfg = collectConfig();
+    await saveBlob(handle, new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' }), slug() + '.json');
+    status('Réglages enregistrés (sans image).', 'ok');
+  } catch (err) { status('Enregistrement impossible : ' + err.message, 'err'); }
 });
 
 window.addEventListener('resize', () => { fitCover(); render(); });
