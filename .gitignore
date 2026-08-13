@@ -1,0 +1,5 @@
+.DS_Store
+*.png
+*.json
+!package.json
+node_modules/
