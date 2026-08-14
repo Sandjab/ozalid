@@ -113,6 +113,19 @@ body{display:flex;flex-direction:column;height:100vh}
 .marks i.h{height:1px;width:18px}
 .marks i.v{width:1px;height:18px}
 
+/* ---------- calque de sélection (hors .cover : jamais exporté) ---------- */
+.overlay{position:absolute;inset:0;pointer-events:none}
+.ovl{position:absolute;pointer-events:auto;cursor:pointer;border:1px solid transparent}
+.ovl:hover{border-color:rgba(26,110,224,.5)}
+.ovl.sel{border:1.5px solid #1a6ee0;cursor:grab}
+.ovl.sel:active{cursor:grabbing}
+.ovl-line{cursor:ns-resize}
+.handle{position:absolute;width:11px;height:11px;background:#fff;border:1.5px solid #1a6ee0;border-radius:50%;display:none;pointer-events:auto}
+.ovl.sel .handle{display:block}
+.h-left{left:-6px;top:50%;margin-top:-6px;cursor:ew-resize}
+.h-right{right:-6px;top:50%;margin-top:-6px;cursor:ew-resize}
+.h-corner{left:-6px;top:-6px;cursor:nwse-resize}
+
 /* ---------- panneau ---------- */
 .panel-inner{padding:22px 20px 60px}
 .brand{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
@@ -222,6 +235,13 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
           <div class="editor" id="elEditor">GALLIMARD</div>
         </div>
         <div class="pastille" id="elPastille">folio</div>
+      </div>
+      <div class="overlay" id="overlay">
+        <div class="ovl" data-el="image"></div>
+        <div class="ovl ovl-line" data-el="band"></div>
+        <div class="ovl" data-el="frame"><i class="handle h-corner"></i></div>
+        <div class="ovl" data-el="block"><i class="handle h-left"></i><i class="handle h-right"></i></div>
+        <div class="ovl" data-el="imprint"><i class="handle h-left"></i><i class="handle h-right"></i></div>
       </div>
     </div>
   </div>
@@ -567,6 +587,7 @@ function render(){
     vZoom:[$('inZoom').value,2,''], vScrim:[$('inScrimOp').value,0,' %']
   };
   for (const [k,[v,d,u]] of Object.entries(R)) $(k).textContent = fr(v,d) + u;
+  syncOverlay();
 }
 
 function fitCover(){
@@ -651,7 +672,7 @@ function applyInspector(){
 }
 
 function selectEl(name){
-  selected = ELEMENTS[name] ? name : null;
+  selected = Object.hasOwn(ELEMENTS, name || '') ? name : null;
   applyInspector();
   render();
 }
@@ -659,6 +680,45 @@ function selectEl(name){
 $('btnBack').addEventListener('click', () => selectEl(null));
 document.querySelectorAll('#fsNav .nav button').forEach(b =>
   b.addEventListener('click', () => selectEl(b.dataset.el)));
+
+/* ---------- calque : positionné d'après la géométrie réelle ---------- */
+function syncOverlay(){
+  const hb = $('overlay').parentElement.getBoundingClientRect();
+  const place = (name, el, visible) => {
+    const o = document.querySelector(`.ovl[data-el="${name}"]`);
+    o.classList.toggle('off', !visible);
+    o.classList.toggle('sel', selected === name);
+    if (!visible) return;
+    const r = el.getBoundingClientRect();
+    o.style.left = (r.left - hb.left) + 'px';
+    o.style.top = (r.top - hb.top) + 'px';
+    o.style.width = r.width + 'px';
+    o.style.height = r.height + 'px';
+  };
+  place('image', $('art'), mode !== 'typo');
+  place('frame', $('frame'), $('inFrameOn').checked);
+  place('block', $('block'), true);
+  place('imprint', $('imprint'), $('inImprintOn').checked);
+  /* frontière du bandeau : fine bande horizontale sur le bord haut de l'image */
+  const ob = document.querySelector('.ovl[data-el="band"]');
+  const bandOn = mode === 'band';
+  ob.classList.toggle('off', !bandOn);
+  ob.classList.toggle('sel', selected === 'band');
+  if (bandOn) {
+    const cr = cover.getBoundingClientRect();
+    ob.style.left = (cr.left - hb.left) + 'px';
+    ob.style.top = (cr.top - hb.top + cr.height * (+$('inBand').value / 100) - 5) + 'px';
+    ob.style.width = cr.width + 'px';
+    ob.style.height = '10px';
+  }
+}
+
+/* clic sur le calque = sélection ; clic sur le fond de la scène = désélection */
+document.querySelectorAll('.ovl').forEach(o =>
+  o.addEventListener('pointerdown', () => { if (selected !== o.dataset.el) selectEl(o.dataset.el); }));
+document.querySelector('.stage').addEventListener('pointerdown', e => {
+  if (!e.target.closest('.holder')) selectEl(null);
+});
 
 document.querySelectorAll('[data-preset]').forEach(b =>
   b.addEventListener('click', () => applyPreset(b.dataset.preset)));
@@ -926,12 +986,18 @@ document.addEventListener('click', e => {
   });
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape')
-    document.querySelectorAll('details.menu[open]').forEach(d => {
+  if (e.key !== 'Escape') return;
+  const menus = document.querySelectorAll('details.menu[open]');
+  if (menus.length) {
+    /* un menu ouvert : Échap le ferme, sans toucher à la sélection */
+    menus.forEach(d => {
       const dansLeMenu = d.contains(document.activeElement);
       d.removeAttribute('open');
       if (dansLeMenu) d.querySelector('summary').focus();
     });
+    return;
+  }
+  selectEl(null);
 });
 
 window.addEventListener('resize', () => { fitCover(); render(); });
