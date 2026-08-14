@@ -131,6 +131,7 @@ body{display:flex;flex-direction:column;height:100vh}
 .h-left{left:-6px;top:50%;margin-top:-6px;cursor:ew-resize}
 .h-right{right:-6px;top:50%;margin-top:-6px;cursor:ew-resize}
 .h-corner{left:-6px;top:-6px;cursor:nwse-resize}
+.ovl,.handle{touch-action:none}
 
 /* ---------- panneau ---------- */
 .panel-inner{padding:22px 20px 60px}
@@ -730,6 +731,73 @@ document.querySelector('.stage').addEventListener('pointerdown', e => {
   if (!e.target.closest('.ovl')) selectEl(null);
 });
 
+/* ---------- manipulation directe : px souris → % → input inXxx → render ---------- */
+function setParam(id, v){
+  const el = $(id);
+  v = Math.min(+el.max, Math.max(+el.min, v));
+  el.value = v;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+/* drag du corps d'un élément du calque. opts : { input, axis:'x'|'y', invert, enabled } */
+function dragParam(name, opts){
+  const o = document.querySelector(`.ovl[data-el="${name}"]`);
+  o.addEventListener('pointerdown', e => {
+    if (e.button) return;
+    if (opts.enabled && !opts.enabled()) return;
+    e.preventDefault();
+    const r = cover.getBoundingClientRect();
+    const ref = opts.axis === 'x' ? r.width : r.height;
+    const start = opts.axis === 'x' ? e.clientX : e.clientY;
+    const v0 = +$(opts.input).value;
+    const move = ev => {
+      const d = ((opts.axis === 'x' ? ev.clientX : ev.clientY) - start) / ref * 100;
+      setParam(opts.input, v0 + (opts.invert ? -d : d));
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  });
+}
+
+/* drag d'une poignée. opts : { input, axis, dir(handle) → +1|-1 } */
+function dragHandle(sel, opts){
+  document.querySelectorAll(sel).forEach(h => {
+    h.addEventListener('pointerdown', e => {
+      if (e.button) return;
+      e.stopPropagation(); e.preventDefault();
+      const r = cover.getBoundingClientRect();
+      const ref = opts.axis === 'x' ? r.width : r.height;
+      const start = opts.axis === 'x' ? e.clientX : e.clientY;
+      const v0 = +$(opts.input).value;
+      const dir = opts.dir ? opts.dir(h) : 1;
+      const move = ev => {
+        const d = ((opts.axis === 'x' ? ev.clientX : ev.clientY) - start) / ref * 100;
+        setParam(opts.input, v0 + d * dir);
+      };
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    });
+  });
+}
+
+/* bloc titre : vertical (sauf mode bandeau, où la position dérive du bandeau) */
+dragParam('block',   { input: 'inBlockY',   axis: 'y', enabled: () => mode !== 'band' });
+/* pied éditeur : inImprintY est une distance depuis le bas → inversé */
+dragParam('imprint', { input: 'inImprintY', axis: 'y', invert: true });
+/* poignées latérales des deux blocs : marge symétrique */
+dragHandle('.ovl[data-el="block"] .handle, .ovl[data-el="imprint"] .handle', {
+  input: 'inPadX', axis: 'x',
+  dir: h => h.classList.contains('h-left') ? 1 : -1
+});
+
 document.querySelectorAll('[data-preset]').forEach(b =>
   b.addEventListener('click', () => applyPreset(b.dataset.preset)));
 
@@ -1007,7 +1075,8 @@ document.addEventListener('keydown', e => {
     });
     return;
   }
-  if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+  const a = document.activeElement;
+  if (a.matches('textarea, select, input:not([type=range]):not([type=checkbox]):not([type=radio])')) return;
   selectEl(null);
 });
 
