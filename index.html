@@ -119,7 +119,13 @@ body{display:flex;flex-direction:column;height:100vh}
 .ovl:hover{border-color:rgba(26,110,224,.5)}
 .ovl.sel{border:1.5px solid #1a6ee0;cursor:grab}
 .ovl.sel:active{cursor:grabbing}
-.ovl-line{cursor:ns-resize}
+.ovl-line.sel{cursor:ns-resize}
+.ovl-ring{pointer-events:none}
+.ovl-ring .edge{position:absolute;pointer-events:auto}
+.e-t{left:0;right:0;top:-5px;height:10px}
+.e-b{left:0;right:0;bottom:-5px;height:10px}
+.e-l{top:0;bottom:0;left:-5px;width:10px}
+.e-r{top:0;bottom:0;right:-5px;width:10px}
 .handle{position:absolute;width:11px;height:11px;background:#fff;border:1.5px solid #1a6ee0;border-radius:50%;display:none;pointer-events:auto}
 .ovl.sel .handle{display:block}
 .h-left{left:-6px;top:50%;margin-top:-6px;cursor:ew-resize}
@@ -239,7 +245,7 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
       <div class="overlay" id="overlay">
         <div class="ovl" data-el="image"></div>
         <div class="ovl ovl-line" data-el="band"></div>
-        <div class="ovl" data-el="frame"><i class="handle h-corner"></i></div>
+        <div class="ovl ovl-ring" data-el="frame"><i class="edge e-t"></i><i class="edge e-r"></i><i class="edge e-b"></i><i class="edge e-l"></i><i class="handle h-corner"></i></div>
         <div class="ovl" data-el="block"><i class="handle h-left"></i><i class="handle h-right"></i></div>
         <div class="ovl" data-el="imprint"><i class="handle h-left"></i><i class="handle h-right"></i></div>
       </div>
@@ -715,9 +721,13 @@ function syncOverlay(){
 
 /* clic sur le calque = sélection ; clic sur le fond de la scène = désélection */
 document.querySelectorAll('.ovl').forEach(o =>
-  o.addEventListener('pointerdown', () => { if (selected !== o.dataset.el) selectEl(o.dataset.el); }));
+  o.addEventListener('pointerdown', e => {
+    if (e.button) return;
+    if (selected !== o.dataset.el) selectEl(o.dataset.el);
+  }));
 document.querySelector('.stage').addEventListener('pointerdown', e => {
-  if (!e.target.closest('.holder')) selectEl(null);
+  if (e.button) return;
+  if (!e.target.closest('.ovl')) selectEl(null);
 });
 
 document.querySelectorAll('[data-preset]').forEach(b =>
@@ -997,6 +1007,7 @@ document.addEventListener('keydown', e => {
     });
     return;
   }
+  if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
   selectEl(null);
 });
 
