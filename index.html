@@ -828,7 +828,8 @@ $('overlay').addEventListener('wheel', e => {
   if (selected !== 'image') return;
   e.preventDefault();
   const PX = {0:1, 1:16, 2:400}[e.deltaMode] ?? 1;
-  setParam('inZoom', +$('inZoom').value - e.deltaY * PX * 0.001);
+  const d = -e.deltaY * PX * 0.001;
+  setParam('inZoom', +$('inZoom').value + (Math.abs(d) < 0.01 ? Math.sign(d) * 0.01 : d));
 }, { passive: false });
 
 document.querySelectorAll('[data-preset]').forEach(b =>
