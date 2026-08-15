@@ -5,7 +5,7 @@ Générateur de maquettes de couverture de livre. Un seul fichier HTML autonome,
 ## Contraintes non négociables
 
 - **Fichier unique.** CSS et JS inline dans `index.html`. Pas de bundler, pas de `node_modules`, pas de serveur. Le fichier doit s'ouvrir en `file://`.
-- **Pas de `localStorage` ni `sessionStorage`.** État en mémoire uniquement.
+- **`localStorage` limité à une seule clé** (`atelier-couverture-session`) : la dernière configuration, sauvegardée depuis `render()` (debounce), rechargée au démarrage, effacée par « Réinitialiser l'atelier » dans le menu Réglages. Aucun autre usage de `localStorage`/`sessionStorage` ; tout le reste de l'état vit en mémoire.
 - **Dépendances externes** : Google Fonts et `html2canvas` via CDN. Ne pas en ajouter sans raison forte.
 - **Tout réglage est en pourcentage de la largeur de couverture**, jamais en px absolus. C'est ce qui rend les maquettes portables d'un format à l'autre.
 - **Français** dans l'interface, les commentaires et les commits. Termes techniques anglais conservés tels quels (`fond perdu` reste `fond perdu`, mais `viewport`, `chunk`, `canvas` ne se traduisent pas).
