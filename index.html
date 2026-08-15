@@ -120,7 +120,8 @@ body{display:flex;flex-direction:column;height:100vh}
 .ovl.sel{border:1.5px solid #1a6ee0;cursor:grab}
 .ovl.sel:active{cursor:grabbing}
 .ovl.sel.fige{cursor:pointer}
-.ovl-line.sel{cursor:ns-resize}
+.ovl-ring.sel{cursor:pointer}
+.ovl-line{cursor:ns-resize}
 .ovl-ring{pointer-events:none}
 .ovl-ring .edge{position:absolute;pointer-events:auto}
 .e-t{left:0;right:0;top:-5px;height:10px}
@@ -804,6 +805,20 @@ dragHandle('.ovl[data-el="block"] .handle, .ovl[data-el="imprint"] .handle', {
   input: 'inPadX', axis: 'x',
   dir: h => h.classList.contains('h-left') ? 1 : -1
 });
+
+/* image : le contenu suit la souris (artY diminue quand on tire vers le bas) */
+dragParam('image', { input: 'inArtY', axis: 'y', invert: true });
+/* frontière du bandeau : tirer vers le bas agrandit le bandeau */
+dragParam('band',  { input: 'inBand', axis: 'y' });
+/* coin du cadre : tirer vers l'intérieur (droite) élargit la marge */
+dragHandle('.ovl[data-el="frame"] .handle', { input: 'inFrameM', axis: 'x', dir: () => 1 });
+
+/* molette / trackpad sur l'image sélectionnée : échelle */
+document.querySelector('.ovl[data-el="image"]').addEventListener('wheel', e => {
+  if (selected !== 'image') return;
+  e.preventDefault();
+  setParam('inZoom', +$('inZoom').value - e.deltaY * 0.002);
+}, { passive: false });
 
 document.querySelectorAll('[data-preset]').forEach(b =>
   b.addEventListener('click', () => applyPreset(b.dataset.preset)));
