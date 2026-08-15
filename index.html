@@ -119,6 +119,7 @@ body{display:flex;flex-direction:column;height:100vh}
 .ovl:hover{border-color:rgba(26,110,224,.5)}
 .ovl.sel{border:1.5px solid #1a6ee0;cursor:grab}
 .ovl.sel:active{cursor:grabbing}
+.ovl.sel.fige{cursor:pointer}
 .ovl-line.sel{cursor:ns-resize}
 .ovl-ring{pointer-events:none}
 .ovl-ring .edge{position:absolute;pointer-events:auto}
@@ -695,11 +696,13 @@ function syncOverlay(){
     const o = document.querySelector(`.ovl[data-el="${name}"]`);
     o.classList.toggle('off', !visible);
     o.classList.toggle('sel', selected === name);
+    o.classList.toggle('fige', name === 'block' && mode === 'band');
     if (!visible) return;
     const r = el.getBoundingClientRect();
-    o.style.left = (r.left - hb.left) + 'px';
+    const pad = parseFloat(getComputedStyle(el).paddingLeft) || 0;
+    o.style.left = (r.left - hb.left + pad) + 'px';
     o.style.top = (r.top - hb.top) + 'px';
-    o.style.width = r.width + 'px';
+    o.style.width = (r.width - 2 * pad) + 'px';
     o.style.height = r.height + 'px';
   };
   place('image', $('art'), mode !== 'typo');
@@ -757,9 +760,11 @@ function dragParam(name, opts){
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   });
 }
 
@@ -781,9 +786,11 @@ function dragHandle(sel, opts){
       const up = () => {
         window.removeEventListener('pointermove', move);
         window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', up);
       };
       window.addEventListener('pointermove', move);
       window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', up);
     });
   });
 }
