@@ -24,13 +24,31 @@
 html,body{margin:0;padding:0}
 body{background:var(--bench);color:var(--ink);font-family:var(--ui);-webkit-font-smoothing:antialiased}
 
-.wrap{display:flex;min-height:100vh}
+body{display:flex;flex-direction:column;height:100vh}
+.wrap{display:flex;flex:1 1 auto;min-height:0}
+.topbar{display:flex;flex-wrap:wrap;align-items:center;gap:14px;background:var(--ink);color:#eee;padding:8px 14px;position:relative;z-index:5}
+.tb-brand{font-family:var(--mono);font-size:11px;font-weight:400;letter-spacing:.14em;text-transform:uppercase;color:#999;margin:0}
+.tb-lab{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#888;margin-right:2px}
+.tb-group{display:flex;align-items:center;gap:6px}
+.tb-group button{padding:6px 10px;border:1px solid #4a4a46;background:transparent;color:#eee;cursor:pointer;font-family:var(--ui);font-size:11px;font-weight:700;border-radius:2px}
+.tb-group button:hover{background:#fff;color:var(--ink)}
+.tb-right{margin-left:auto;display:flex;gap:8px}
+.topbar .status{margin:0;min-height:0;color:#aaa}
+.topbar .status.ok{color:#7fd18f}
+.topbar .status.err{color:#ff9a90}
+.menu{position:relative}
+.menu summary{list-style:none;cursor:pointer;padding:6px 10px;border:1px solid #4a4a46;border-radius:2px;font-size:11px;font-weight:700;user-select:none}
+.menu summary::-webkit-details-marker{display:none}
+.menu[open] summary{background:#fff;color:var(--ink)}
+.menu-body{position:absolute;right:0;top:calc(100% + 8px);background:var(--panel);color:var(--ink);border:1px solid var(--rule);border-radius:3px;padding:14px;width:270px;box-shadow:0 10px 24px rgba(0,0,0,.25);z-index:10}
+.topbar :focus-visible{outline-color:#ff9a90}
+.menu-body :focus-visible{outline-color:var(--accent)}
 .stage{
   flex:1 1 auto;display:flex;align-items:center;justify-content:center;
   padding:48px 32px;position:relative;
   background:radial-gradient(ellipse at 50% 40%, var(--bench) 0%, var(--bench-dark) 100%);
 }
-.panel{flex:0 0 344px;background:var(--panel);border-left:1px solid var(--rule);overflow-y:auto;max-height:100vh}
+.panel{flex:0 0 344px;background:var(--panel);border-left:1px solid var(--rule);overflow-y:auto;max-height:none}
 
 /* ---------- la couverture ---------- */
 .holder{position:relative}
@@ -95,17 +113,41 @@ body{background:var(--bench);color:var(--ink);font-family:var(--ui);-webkit-font
 .marks i.h{height:1px;width:18px}
 .marks i.v{width:1px;height:18px}
 
+/* ---------- calque de sélection (hors .cover : jamais exporté) ---------- */
+.overlay{position:absolute;inset:0;pointer-events:none}
+.ovl{position:absolute;pointer-events:auto;cursor:pointer;border:1px solid transparent}
+.ovl:hover{border-color:rgba(26,110,224,.5)}
+/* curseurs : à spécificité égale, l'ordre source tranche — ne pas réordonner ces règles */
+.ovl.sel{border:1.5px solid #1a6ee0;cursor:grab}
+.ovl.sel:active{cursor:grabbing}
+.ovl.sel.fige{cursor:pointer}
+.ovl-ring.sel{cursor:pointer}
+.ovl-line{cursor:ns-resize}
+.ovl-line.sel{cursor:ns-resize}
+.ovl-line.sel:active{cursor:ns-resize}
+.ovl-ring.sel:active{cursor:pointer}
+.ovl-ring{pointer-events:none}
+.ovl-ring .edge{position:absolute;pointer-events:auto}
+.e-t{left:0;right:0;top:-5px;height:10px}
+.e-b{left:0;right:0;bottom:-5px;height:10px}
+.e-l{top:0;bottom:0;left:-5px;width:10px}
+.e-r{top:0;bottom:0;right:-5px;width:10px}
+.handle{position:absolute;width:11px;height:11px;background:#fff;border:1.5px solid #1a6ee0;border-radius:50%;display:none;pointer-events:auto}
+.ovl.sel .handle{display:block}
+.h-left{left:-6px;top:50%;margin-top:-6px;cursor:ew-resize}
+.h-right{right:-6px;top:50%;margin-top:-6px;cursor:ew-resize}
+.h-corner{left:-6px;top:-6px;cursor:nwse-resize}
+.ovl,.handle{touch-action:none}
+
 /* ---------- panneau ---------- */
 .panel-inner{padding:22px 20px 60px}
-.brand{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
-h1{font-size:15px;font-weight:700;margin:0 0 16px;letter-spacing:-.01em}
 fieldset{border:0;border-top:1px solid var(--rule);margin:0 0 4px;padding:16px 0 4px}
 legend{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding:0 8px 0 0}
 label{display:block;margin:0 0 12px}
 .lab{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;font-weight:600;margin-bottom:5px}
 .val{font-family:var(--mono);font-size:10px;color:var(--muted);font-weight:400}
 input[type=text],select{width:100%;padding:7px 9px;border:1px solid var(--rule);background:#fff;font-family:var(--ui);font-size:13px;color:var(--ink);border-radius:2px}
-input[type=text]:focus,select:focus,input[type=range]:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+input[type=text]:focus,select:focus,input[type=range]:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:2px;background:var(--rule);border-radius:2px;margin:9px 0}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--ink);border:3px solid var(--panel);cursor:pointer}
 input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--ink);border:3px solid var(--panel);cursor:pointer}
@@ -122,12 +164,6 @@ input[type=color]{width:100%;height:30px;padding:2px;border:1px solid var(--rule
 .btn:hover{background:var(--accent)}
 .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--rule)}
 .btn.ghost:hover{background:#fff;border-color:var(--ink)}
-.presets{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:4px}
-.presets button{
-  padding:9px 2px;border:1px solid var(--rule);background:#fff;cursor:pointer;
-  font-family:var(--ui);font-size:11px;font-weight:700;border-radius:2px;color:var(--ink);
-}
-.presets button:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
 .note{font-size:11px;line-height:1.5;color:var(--muted);margin:8px 0 0}
 .note code{font-family:var(--mono);font-size:10px;background:#fff;padding:1px 3px;border:1px solid var(--rule)}
 .status{font-family:var(--mono);font-size:10.5px;line-height:1.5;margin:10px 0 0;min-height:1.4em;color:var(--muted)}
@@ -135,16 +171,55 @@ input[type=color]{width:100%;height:30px;padding:2px;border:1px solid var(--rule
 .status.err{color:var(--accent)}
 input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
 .hide{display:none!important}
+.off{display:none!important}
+.nav button{display:flex;justify-content:space-between;width:100%;padding:8px 10px;border:1px solid var(--rule);background:#fff;cursor:pointer;font-family:var(--ui);font-size:12px;font-weight:600;color:var(--ink);border-radius:2px;margin-bottom:6px}
+.nav button:hover{border-color:var(--ink)}
+.nav button.dim{color:var(--muted);background:transparent}
+.nav button span{color:var(--muted)}
+.back{display:block;width:100%;text-align:left;padding:8px 0;border:0;background:none;cursor:pointer;font-family:var(--ui);font-size:12px;font-weight:700;color:var(--accent)}
 
 @media (max-width:820px){
+  body{height:auto;min-height:100vh}
   .wrap{flex-direction:column}
-  .panel{flex:1 1 auto;max-height:none;border-left:0;border-top:1px solid var(--rule)}
+  .panel{flex:1 1 auto;overflow-y:visible;border-left:0;border-top:1px solid var(--rule)}
   .stage{padding:36px 20px;min-height:52vh}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
+<header class="topbar">
+  <h1 class="tb-brand">Atelier — couverture</h1>
+  <div class="tb-group" title="Chaque maquette recharge tous les réglages.">
+    <span class="tb-lab">Maquettes</span>
+    <button data-preset="folio">Folio</button>
+    <button data-preset="blanche">Blanche</button>
+    <button data-preset="overlay">Surimpression</button>
+  </div>
+  <div class="tb-right">
+    <p class="status" id="status"></p>
+    <details class="menu">
+      <summary>Exporter PNG ▾</summary>
+      <div class="menu-body">
+        <div class="check"><input type="checkbox" id="inMarks" checked><span>Traits de coupe à l'écran</span></div>
+        <div class="check"><input type="checkbox" id="inEmbedCfg" checked><span>Écrire les réglages dans le PNG</span></div>
+        <div class="check"><input type="checkbox" id="inEmbedImg" checked><span>Y joindre la photo source</span></div>
+        <button class="btn" id="btnPng">Exporter en PNG</button>
+        <p class="note">Les réglages sont écrits dans un bloc <code>tEXt</code> du fichier. L'image reste lisible partout ; seul cet atelier sait relire ce bloc.</p>
+      </div>
+    </details>
+    <details class="menu">
+      <summary>Réglages ▾</summary>
+      <div class="menu-body">
+        <label><span class="lab">Depuis un PNG exporté</span>
+          <input type="file" id="inLoadPng" accept="image/png"></label>
+        <label><span class="lab">Depuis un fichier de réglages</span>
+          <input type="file" id="inLoadJson" accept="application/json,.json"></label>
+        <button class="btn ghost" id="btnJson">Enregistrer les réglages seuls (JSON)</button>
+      </div>
+    </details>
+  </div>
+</header>
 <div class="wrap">
 
   <div class="stage">
@@ -171,25 +246,21 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
         </div>
         <div class="pastille" id="elPastille">folio</div>
       </div>
+      <div class="overlay" id="overlay">
+        <div class="ovl" data-el="image"></div>
+        <div class="ovl ovl-line" data-el="band"></div>
+        <div class="ovl ovl-ring" data-el="frame"><i class="edge e-t"></i><i class="edge e-r"></i><i class="edge e-b"></i><i class="edge e-l"></i><i class="handle h-corner"></i></div>
+        <div class="ovl" data-el="block"><i class="handle h-left"></i><i class="handle h-right"></i></div>
+        <div class="ovl" data-el="imprint"><i class="handle h-left"></i><i class="handle h-right"></i></div>
+      </div>
     </div>
   </div>
 
   <div class="panel">
     <div class="panel-inner">
-      <p class="brand">Gabarit de première de couverture</p>
-      <h1>Atelier</h1>
-
-      <fieldset style="border-top:0;padding-top:0">
-        <legend>Maquettes de départ</legend>
-        <div class="presets">
-          <button data-preset="folio">Folio</button>
-          <button data-preset="blanche">Blanche</button>
-          <button data-preset="overlay">Surimpression</button>
-        </div>
-        <p class="note">Chaque maquette recharge tous les réglages. Modifie ensuite ce que tu veux.</p>
-      </fieldset>
-
-      <fieldset>
+      <button class="back off" id="btnBack">‹ Général</button>
+      <p class="note off" id="noteEmpty">Cet élément n'existe pas dans le mode courant. Change de mode dans « Mise en page ».</p>
+      <fieldset id="fsGeneral" style="border-top:0;padding-top:0">
         <legend>Mise en page</legend>
         <div class="seg" id="segMode">
           <button data-v="band" aria-pressed="true">Bandeau</button>
@@ -213,20 +284,32 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
           <input type="range" id="inPadX" min="2" max="24" step="0.5" value="7"></label>
       </fieldset>
 
-      <fieldset id="fsBand">
+      <fieldset id="fsNav">
+        <legend>Éléments</legend>
+        <div class="nav">
+          <button data-el="image">Image <span>›</span></button>
+          <button data-el="band">Bandeau <span>›</span></button>
+          <button data-el="frame">Cadre <span>›</span></button>
+          <button data-el="block">Bloc titre <span>›</span></button>
+          <button data-el="imprint">Pied éditeur <span>›</span></button>
+        </div>
+        <p class="note">Clique un élément ici ou directement sur la couverture.</p>
+      </fieldset>
+
+      <fieldset id="fsBand" class="off">
         <legend>Bandeau</legend>
         <label><span class="lab">Hauteur <span class="val" id="vBand">30 %</span></span>
-          <input type="range" id="inBand" min="10" max="60" step="1" value="30"></label>
+          <input type="range" id="inBand" min="10" max="60" step="0.5" value="30"></label>
         <div class="check"><input type="checkbox" id="inInset"><span>Cadre blanc autour de l'image (style Folio)</span></div>
       </fieldset>
 
-      <fieldset id="fsBlockY">
+      <fieldset id="fsBlockY" class="off">
         <legend>Bloc titre</legend>
         <label><span class="lab">Position verticale <span class="val" id="vBlockY">14 %</span></span>
           <input type="range" id="inBlockY" min="0" max="85" step="1" value="14"></label>
       </fieldset>
 
-      <fieldset>
+      <fieldset id="fsFrame" class="off">
         <legend>Cadre</legend>
         <div class="check"><input type="checkbox" id="inFrameOn"><span>Afficher le cadre</span></div>
         <label><span class="lab">Marge du cadre <span class="val" id="vFrameM">9,0 %</span></span>
@@ -247,7 +330,7 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
           <input type="range" id="inRule2Gap" min="0.2" max="4" step="0.1" value="0.9"></label>
       </fieldset>
 
-      <fieldset>
+      <fieldset id="fsText" class="off">
         <legend>Texte</legend>
         <label><span class="lab">Auteur</span><input type="text" id="inAuthor" value="Ivan Pjig"></label>
         <label><span class="lab">Titre</span><input type="text" id="inTitle" value="Au Petit Remords"></label>
@@ -255,7 +338,7 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
         <label><input type="text" id="inGenre" value="roman"></label>
       </fieldset>
 
-      <fieldset>
+      <fieldset id="fsAuthor" class="off">
         <legend>Auteur</legend>
         <label><span class="lab">Police</span><select id="inAuthorFace"></select></label>
         <div class="row3">
@@ -271,7 +354,7 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
           <input type="range" id="inAuthorTrack" min="-4" max="20" step="0.5" value="0"></label>
       </fieldset>
 
-      <fieldset>
+      <fieldset id="fsTitle" class="off">
         <legend>Titre</legend>
         <label><span class="lab">Police</span><select id="inTitleFace"></select></label>
         <div class="row3">
@@ -298,7 +381,7 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
         </div>
       </fieldset>
 
-      <fieldset>
+      <fieldset id="fsImprint" class="off">
         <legend>Pied — éditeur</legend>
         <div class="check"><input type="checkbox" id="inImprintOn"><span>Monogramme et éditeur</span></div>
         <div class="row">
@@ -321,7 +404,7 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
         <label><input type="text" id="inPastille" value="folio"></label>
       </fieldset>
 
-      <fieldset id="fsImage">
+      <fieldset id="fsImage" class="off">
         <legend>Image</legend>
         <label><span class="lab">Cadrage vertical <span class="val" id="vArtY">50 %</span></span>
           <input type="range" id="inArtY" min="0" max="100" step="1" value="50"></label>
@@ -342,24 +425,6 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
         <label><span class="lab">Remplacer l'image</span><input type="file" id="inFile" accept="image/*"></label>
       </fieldset>
 
-      <fieldset>
-        <legend>Sortie</legend>
-        <div class="check"><input type="checkbox" id="inMarks" checked><span>Traits de coupe à l'écran</span></div>
-        <div class="check"><input type="checkbox" id="inEmbedCfg" checked><span>Écrire les réglages dans le PNG</span></div>
-        <div class="check"><input type="checkbox" id="inEmbedImg" checked><span>Y joindre la photo source</span></div>
-        <button class="btn" id="btnPng">Exporter en PNG</button>
-        <p class="note">Les réglages sont écrits dans un bloc <code>tEXt</code> du fichier. L'image reste lisible partout ; seul cet atelier sait relire ce bloc.</p>
-      </fieldset>
-
-      <fieldset>
-        <legend>Reprendre des réglages</legend>
-        <label><span class="lab">Depuis un PNG exporté</span>
-          <input type="file" id="inLoadPng" accept="image/png"></label>
-        <label><span class="lab">Depuis un fichier de réglages</span>
-          <input type="file" id="inLoadJson" accept="application/json,.json"></label>
-        <button class="btn ghost" id="btnJson">Enregistrer les réglages seuls (JSON)</button>
-        <p class="status" id="status"></p>
-      </fieldset>
     </div>
   </div>
 </div>
@@ -505,9 +570,22 @@ function render(){
   $('fsImage').classList.toggle('hide', mode === 'typo');
   $('marks').style.setProperty('--marks-on', $('inMarks').checked ? 1 : 0);
 
+  /* navigateur : griser les éléments sans objet dans l'état courant */
+  const navDim = {
+    image: mode === 'typo', band: mode !== 'band',
+    frame: !$('inFrameOn').checked, block: false,
+    imprint: !$('inImprintOn').checked
+  };
+  document.querySelectorAll('#fsNav .nav button').forEach(b =>
+    b.classList.toggle('dim', navDim[b.dataset.el]));
+
+  /* sélection sans aucun fieldset visible (masqués par le mode) : l'expliquer */
+  $('noteEmpty').classList.toggle('off',
+    !selected || !ELEMENTS[selected].every(id => $(id).classList.contains('hide')));
+
   /* --- lectures --- */
   const R = {
-    vPadX:[padX,1,' %'], vBand:[bandH,0,' %'], vBlockY:[$('inBlockY').value,0,' %'],
+    vPadX:[padX,1,' %'], vBand:[bandH,1,' %'], vBlockY:[$('inBlockY').value,0,' %'],
     vFrameM:[fm,1,' %'], vRule1W:[r1w,2,' %'], vRule2Off:[r2o,1,' %'],
     vRule2W:[r2w,2,' %'], vRule2Gap:[r2g,1,' %'],
     vAuthorSize:[$('inAuthorSize').value,1,' %'], vAuthorTrack:[$('inAuthorTrack').value,1,''],
@@ -519,12 +597,13 @@ function render(){
     vZoom:[$('inZoom').value,2,''], vScrim:[$('inScrimOp').value,0,' %']
   };
   for (const [k,[v,d,u]] of Object.entries(R)) $(k).textContent = fr(v,d) + u;
+  syncOverlay();
 }
 
 function fitCover(){
   const stage = document.querySelector('.stage');
   const maxH = stage.clientHeight - 96;
-  const maxW = Math.min(stage.clientWidth - 120, 400);
+  const maxW = Math.min(stage.clientWidth - 120, 520);
   const w = Math.max(180, Math.min(maxW, maxH * format[0] / format[1]));
   cover.style.setProperty('--cw', w + 'px');
 }
@@ -575,7 +654,7 @@ function applyPreset(name){
     if (el.type === 'checkbox') el.checked = v; else el.value = v;
   }
   if (p.inFormat) format = p.inFormat.split(',').map(Number);
-  fitCover(); render();
+  fitCover(); selectEl(null);
 }
 
 function setMode(v){
@@ -583,7 +662,176 @@ function setMode(v){
   [...$('segMode').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v));
 }
 
-document.querySelectorAll('.presets button').forEach(b =>
+/* ---------- inspecteur : sélection d'élément ---------- */
+const ELEMENTS = {
+  image:  ['fsImage'],
+  band:   ['fsBand'],
+  frame:  ['fsFrame'],
+  block:  ['fsBlockY','fsText','fsAuthor','fsTitle'],
+  imprint:['fsImprint']
+};
+let selected = null;
+
+function applyInspector(){
+  const detail = !!selected;
+  $('fsGeneral').classList.toggle('off', detail);
+  $('fsNav').classList.toggle('off', detail);
+  $('btnBack').classList.toggle('off', !detail);
+  for (const [name, ids] of Object.entries(ELEMENTS))
+    ids.forEach(id => $(id).classList.toggle('off', selected !== name));
+}
+
+function selectEl(name){
+  selected = Object.hasOwn(ELEMENTS, name || '') ? name : null;
+  applyInspector();
+  render();
+}
+
+$('btnBack').addEventListener('click', () => selectEl(null));
+document.querySelectorAll('#fsNav .nav button').forEach(b =>
+  b.addEventListener('click', () => selectEl(b.dataset.el)));
+
+/* ---------- calque : positionné d'après la géométrie réelle ---------- */
+function syncOverlay(){
+  const hb = $('overlay').parentElement.getBoundingClientRect();
+  const place = (name, el, visible) => {
+    const o = document.querySelector(`.ovl[data-el="${name}"]`);
+    o.classList.toggle('off', !visible);
+    o.classList.toggle('sel', selected === name);
+    o.classList.toggle('fige', name === 'block' && mode === 'band');
+    if (!visible) return;
+    const r = el.getBoundingClientRect();
+    const pad = parseFloat(getComputedStyle(el).paddingLeft) || 0;
+    o.style.left = (r.left - hb.left + pad) + 'px';
+    o.style.top = (r.top - hb.top) + 'px';
+    o.style.width = (r.width - 2 * pad) + 'px';
+    o.style.height = r.height + 'px';
+  };
+  place('image', $('art'), mode !== 'typo');
+  place('frame', $('frame'), $('inFrameOn').checked);
+  place('block', $('block'), true);
+  place('imprint', $('imprint'), $('inImprintOn').checked);
+  /* frontière du bandeau : fine bande horizontale sur le bord haut de l'image */
+  const ob = document.querySelector('.ovl[data-el="band"]');
+  const bandOn = mode === 'band';
+  ob.classList.toggle('off', !bandOn);
+  ob.classList.toggle('sel', selected === 'band');
+  if (bandOn) {
+    const cr = cover.getBoundingClientRect();
+    ob.style.left = (cr.left - hb.left) + 'px';
+    ob.style.top = (cr.top - hb.top + cr.height * (+$('inBand').value / 100) - 5) + 'px';
+    ob.style.width = cr.width + 'px';
+    ob.style.height = '10px';
+  }
+}
+
+/* clic sur le calque = sélection ; clic sur le fond de la scène = désélection */
+document.querySelectorAll('.ovl').forEach(o =>
+  o.addEventListener('pointerdown', e => {
+    if (e.button) return;
+    if (selected !== o.dataset.el) selectEl(o.dataset.el);
+  }));
+document.querySelector('.stage').addEventListener('pointerdown', e => {
+  if (e.button) return;
+  if (!e.target.closest('.ovl')) selectEl(null);
+});
+
+/* ---------- manipulation directe : px souris → % → input inXxx → render ---------- */
+function setParam(id, v){
+  const el = $(id);
+  v = Math.min(+el.max, Math.max(+el.min, v));
+  el.value = v;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+/* drag du corps d'un élément du calque. opts : { input, axis:'x'|'y', invert, enabled, ref } */
+function dragParam(name, opts){
+  const o = document.querySelector(`.ovl[data-el="${name}"]`);
+  o.addEventListener('pointerdown', e => {
+    if (e.button) return;
+    if (opts.enabled && !opts.enabled()) return;
+    e.preventDefault();
+    const r = cover.getBoundingClientRect();
+    const ref = opts.ref ? opts.ref() : (opts.axis === 'x' ? r.width : r.height);
+    if (!isFinite(ref) || ref < 1) return; /* aucun mou : pas de geste plutôt qu'un slider qui ment */
+    const start = opts.axis === 'x' ? e.clientX : e.clientY;
+    const v0 = +$(opts.input).value;
+    const move = ev => {
+      const d = ((opts.axis === 'x' ? ev.clientX : ev.clientY) - start) / ref * 100;
+      setParam(opts.input, v0 + (opts.invert ? -d : d));
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  });
+}
+
+/* drag d'une poignée. opts : { input, axis, dir(handle) → +1|-1 } */
+function dragHandle(sel, opts){
+  document.querySelectorAll(sel).forEach(h => {
+    h.addEventListener('pointerdown', e => {
+      if (e.button) return;
+      e.stopPropagation(); e.preventDefault();
+      const r = cover.getBoundingClientRect();
+      const ref = opts.axis === 'x' ? r.width : r.height;
+      const start = opts.axis === 'x' ? e.clientX : e.clientY;
+      const v0 = +$(opts.input).value;
+      const dir = opts.dir ? opts.dir(h) : 1;
+      const move = ev => {
+        const d = ((opts.axis === 'x' ? ev.clientX : ev.clientY) - start) / ref * 100;
+        setParam(opts.input, v0 + d * dir);
+      };
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', up);
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', up);
+    });
+  });
+}
+
+/* bloc titre : vertical (sauf mode bandeau, où la position dérive du bandeau) */
+dragParam('block',   { input: 'inBlockY',   axis: 'y', enabled: () => mode !== 'band' });
+/* pied éditeur : inImprintY est une distance depuis le bas → inversé */
+dragParam('imprint', { input: 'inImprintY', axis: 'y', invert: true });
+/* poignées latérales des deux blocs : marge symétrique */
+dragHandle('.ovl[data-el="block"] .handle, .ovl[data-el="imprint"] .handle', {
+  input: 'inPadX', axis: 'x',
+  dir: h => h.classList.contains('h-left') ? 1 : -1
+});
+
+/* mou vertical réel de l'image : la course dont dispose inArtY (0 si l'image couvre pile) */
+function artSlack(){
+  const z = $('art').getBoundingClientRect(), im = $('elImg');
+  const fit = ($('inKeepRatio').checked ? Math.min : Math.max)(z.width / im.naturalWidth, z.height / im.naturalHeight);
+  return Math.abs(z.height - (+$('inZoom').value) * im.naturalHeight * fit);
+}
+/* image : le contenu suit la souris à 1:1 — la référence est le « mou » vertical réel */
+dragParam('image', { input: 'inArtY', axis: 'y', invert: true, ref: artSlack });
+/* frontière du bandeau : tirer vers le bas agrandit le bandeau */
+dragParam('band',  { input: 'inBand', axis: 'y' });
+/* coin du cadre : tirer vers l'intérieur (droite) élargit la marge */
+dragHandle('.ovl[data-el="frame"] .handle', { input: 'inFrameM', axis: 'x', dir: () => 1 });
+
+/* molette / trackpad sur l'image sélectionnée : échelle (le calque #overlay capte aussi
+   la molette au-dessus du bloc titre, qui n'a pas de listener propre) */
+$('overlay').addEventListener('wheel', e => {
+  if (selected !== 'image') return;
+  e.preventDefault();
+  const PX = {0:1, 1:16, 2:400}[e.deltaMode] ?? 1;
+  const d = -e.deltaY * PX * 0.001;
+  setParam('inZoom', +$('inZoom').value + (Math.abs(d) < 0.01 ? Math.sign(d) * 0.01 : d));
+}, { passive: false });
+
+document.querySelectorAll('[data-preset]').forEach(b =>
   b.addEventListener('click', () => applyPreset(b.dataset.preset)));
 
 $('segMode').addEventListener('click', e => {
@@ -613,7 +861,7 @@ const CFG_KEY = 'atelier-couverture';
 
 function collectConfig(){
   const fields = {};
-  document.querySelectorAll('.panel input[id^="in"], .panel select[id^="in"]').forEach(el => {
+  document.querySelectorAll('input[id^="in"], select[id^="in"]').forEach(el => {
     if (el.type === 'file') return;
     fields[el.id] = (el.type === 'checkbox') ? el.checked : el.value;
   });
@@ -629,7 +877,7 @@ function applyConfig(c){
   if (Array.isArray(c.format)) format = c.format.map(Number);
   if (c.mode) setMode(c.mode);
   if (c.image) $('elImg').src = c.image;
-  fitCover(); render();
+  fitCover(); selectEl(null);
   return true;
 }
 
@@ -840,6 +1088,47 @@ $('btnJson').addEventListener('click', async () => {
     await saveBlob(handle, new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' }), slug() + '.json');
     status('Réglages enregistrés (sans image).', 'ok');
   } catch (err) { status('Enregistrement impossible : ' + err.message, 'err'); }
+});
+
+/* les menus de la barre se referment au clic hors d'eux */
+document.addEventListener('click', e => {
+  document.querySelectorAll('details.menu[open]').forEach(d => {
+    if (!d.contains(e.target)) d.removeAttribute('open');
+  });
+});
+/* clavier : Échap désélectionne (les menus ouverts sont prioritaires) ; flèches = ± un pas
+   du paramètre de position principal. KEY_DIR : signe appliqué à ArrowDown pour que
+   « bas » déplace visuellement vers le bas. Signes à tenir en phase avec les options
+   invert des dragParam correspondants. */
+const PRIMARY = { image:'inArtY', band:'inBand', frame:'inFrameM', block:'inBlockY', imprint:'inImprintY' };
+const KEY_DIR = { image:-1, band:1, frame:1, block:1, imprint:-1 };
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    const menus = document.querySelectorAll('details.menu[open]');
+    if (menus.length) {
+      /* un menu ouvert : Échap le ferme, sans toucher à la sélection */
+      menus.forEach(d => {
+        const dansLeMenu = d.contains(document.activeElement);
+        d.removeAttribute('open');
+        if (dansLeMenu) d.querySelector('summary').focus();
+      });
+      return;
+    }
+    const a = document.activeElement;
+    if (a.matches('textarea, select, input:not([type=range]):not([type=checkbox]):not([type=radio])')) return;
+    selectEl(null);
+    return;
+  }
+  if (!selected || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+  if (document.querySelector('details.menu[open]')) return;
+  const t = e.target;
+  if (t && ['INPUT','SELECT','TEXTAREA','BUTTON'].includes(t.tagName)) return;
+  if (selected === 'block' && mode === 'band') return;
+  if (selected === 'image' && artSlack() < 1) return; /* même refus que le drag */
+  const el = $(PRIMARY[selected]);
+  const step = +el.step || 1;
+  setParam(el.id, +el.value + (e.key === 'ArrowDown' ? 1 : -1) * KEY_DIR[selected] * step);
+  e.preventDefault();
 });
 
 window.addEventListener('resize', () => { fitCover(); render(); });
