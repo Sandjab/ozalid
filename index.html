@@ -301,7 +301,7 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
       <fieldset id="fsBand" class="off">
         <legend>Bandeau</legend>
         <label><span class="lab">Hauteur <span class="val" id="vBand">30 %</span></span>
-          <input type="range" id="inBand" min="10" max="60" step="1" value="30"></label>
+          <input type="range" id="inBand" min="10" max="60" step="0.5" value="30"></label>
         <div class="check"><input type="checkbox" id="inInset"><span>Cadre blanc autour de l'image (style Folio)</span></div>
       </fieldset>
 
@@ -810,13 +810,14 @@ dragHandle('.ovl[data-el="block"] .handle, .ovl[data-el="imprint"] .handle', {
   dir: h => h.classList.contains('h-left') ? 1 : -1
 });
 
+/* mou vertical réel de l'image : la course dont dispose inArtY (0 si l'image couvre pile) */
+function artSlack(){
+  const z = $('art').getBoundingClientRect(), im = $('elImg');
+  const fit = ($('inKeepRatio').checked ? Math.min : Math.max)(z.width / im.naturalWidth, z.height / im.naturalHeight);
+  return Math.abs(z.height - (+$('inZoom').value) * im.naturalHeight * fit);
+}
 /* image : le contenu suit la souris à 1:1 — la référence est le « mou » vertical réel */
-dragParam('image', { input: 'inArtY', axis: 'y', invert: true,
-  ref: () => {
-    const z = $('art').getBoundingClientRect(), im = $('elImg');
-    const fit = ($('inKeepRatio').checked ? Math.min : Math.max)(z.width / im.naturalWidth, z.height / im.naturalHeight);
-    return Math.abs(z.height - (+$('inZoom').value) * im.naturalHeight * fit);
-  } });
+dragParam('image', { input: 'inArtY', axis: 'y', invert: true, ref: artSlack });
 /* frontière du bandeau : tirer vers le bas agrandit le bandeau */
 dragParam('band',  { input: 'inBand', axis: 'y' });
 /* coin du cadre : tirer vers l'intérieur (droite) élargit la marge */
@@ -1099,7 +1100,8 @@ document.addEventListener('click', e => {
 });
 /* clavier : Échap désélectionne (les menus ouverts sont prioritaires) ; flèches = ± un pas
    du paramètre de position principal. KEY_DIR : signe appliqué à ArrowDown pour que
-   « bas » déplace visuellement vers le bas. */
+   « bas » déplace visuellement vers le bas. Signes à tenir en phase avec les options
+   invert des dragParam correspondants. */
 const PRIMARY = { image:'inArtY', band:'inBand', frame:'inFrameM', block:'inBlockY', imprint:'inImprintY' };
 const KEY_DIR = { image:-1, band:1, frame:1, block:1, imprint:-1 };
 document.addEventListener('keydown', e => {
@@ -1120,9 +1122,11 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (!selected || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+  if (document.querySelector('details.menu[open]')) return;
   const t = e.target;
   if (t && ['INPUT','SELECT','TEXTAREA','BUTTON'].includes(t.tagName)) return;
   if (selected === 'block' && mode === 'band') return;
+  if (selected === 'image' && artSlack() < 1) return; /* même refus que le drag */
   const el = $(PRIMARY[selected]);
   const step = +el.step || 1;
   setParam(el.id, +el.value + (e.key === 'ArrowDown' ? 1 : -1) * KEY_DIR[selected] * step);
