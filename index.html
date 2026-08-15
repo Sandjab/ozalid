@@ -1097,21 +1097,36 @@ document.addEventListener('click', e => {
     if (!d.contains(e.target)) d.removeAttribute('open');
   });
 });
+/* clavier : Échap désélectionne (les menus ouverts sont prioritaires) ; flèches = ± un pas
+   du paramètre de position principal. KEY_DIR : signe appliqué à ArrowDown pour que
+   « bas » déplace visuellement vers le bas. */
+const PRIMARY = { image:'inArtY', band:'inBand', frame:'inFrameM', block:'inBlockY', imprint:'inImprintY' };
+const KEY_DIR = { image:-1, band:1, frame:1, block:1, imprint:-1 };
 document.addEventListener('keydown', e => {
-  if (e.key !== 'Escape') return;
-  const menus = document.querySelectorAll('details.menu[open]');
-  if (menus.length) {
-    /* un menu ouvert : Échap le ferme, sans toucher à la sélection */
-    menus.forEach(d => {
-      const dansLeMenu = d.contains(document.activeElement);
-      d.removeAttribute('open');
-      if (dansLeMenu) d.querySelector('summary').focus();
-    });
+  if (e.key === 'Escape') {
+    const menus = document.querySelectorAll('details.menu[open]');
+    if (menus.length) {
+      /* un menu ouvert : Échap le ferme, sans toucher à la sélection */
+      menus.forEach(d => {
+        const dansLeMenu = d.contains(document.activeElement);
+        d.removeAttribute('open');
+        if (dansLeMenu) d.querySelector('summary').focus();
+      });
+      return;
+    }
+    const a = document.activeElement;
+    if (a.matches('textarea, select, input:not([type=range]):not([type=checkbox]):not([type=radio])')) return;
+    selectEl(null);
     return;
   }
-  const a = document.activeElement;
-  if (a.matches('textarea, select, input:not([type=range]):not([type=checkbox]):not([type=radio])')) return;
-  selectEl(null);
+  if (!selected || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+  const t = e.target;
+  if (t && ['INPUT','SELECT','TEXTAREA','BUTTON'].includes(t.tagName)) return;
+  if (selected === 'block' && mode === 'band') return;
+  const el = $(PRIMARY[selected]);
+  const step = +el.step || 1;
+  setParam(el.id, +el.value + (e.key === 'ArrowDown' ? 1 : -1) * KEY_DIR[selected] * step);
+  e.preventDefault();
 });
 
 window.addEventListener('resize', () => { fitCover(); render(); });
