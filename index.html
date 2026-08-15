@@ -63,8 +63,9 @@ body{display:flex;flex-direction:column;height:100vh}
 .art{position:absolute;overflow:hidden}
 .art img{
   width:100%;height:100%;object-fit:var(--art-fit, cover);
-  object-position:50% var(--art-y);
-  transform:scale(var(--art-zoom));transform-origin:50% var(--art-y);display:block;
+  object-position:var(--art-x) var(--art-y);
+  transform:scale(calc(var(--art-zoom)*var(--art-stretch)), var(--art-zoom));
+  transform-origin:var(--art-x) var(--art-y);display:block;
 }
 .scrim{position:absolute;inset:0;pointer-events:none}
 
@@ -92,17 +93,19 @@ body{display:flex;flex-direction:column;height:100vh}
 }
 .imprint{position:absolute;left:0;right:0;text-align:var(--align);padding:0 var(--pad-x)}
 .mono{
-  font-family:var(--mono-face);font-style:italic;font-weight:600;
+  font-family:var(--mono-face);font-style:italic;font-weight:var(--mono-weight);
   font-size:calc(var(--cw)*var(--mono-size));color:var(--mono-color);line-height:1;margin:0;
 }
 .editor{
-  font-family:var(--editor-face);font-weight:400;
+  font-family:var(--editor-face);font-weight:var(--editor-weight);
   font-size:calc(var(--cw)*var(--editor-size));color:var(--editor-color);
   letter-spacing:.10em;line-height:1;margin:calc(var(--cw)*.06) 0 0;
 }
 .pastille{
   position:absolute;right:calc(var(--cw)*.045);bottom:calc(var(--cw)*.035);
-  background:#111;color:#fff;font-family:var(--ui);font-size:calc(var(--cw)*.032);
+  background:var(--pastille-bg);color:var(--pastille-color);
+  font-family:var(--pastille-face);font-weight:var(--pastille-weight);
+  font-size:calc(var(--cw)*var(--pastille-size));
   letter-spacing:.02em;padding:calc(var(--cw)*.012) calc(var(--cw)*.028);
   border-radius:calc(var(--cw)*.02);line-height:1;
 }
@@ -435,17 +438,46 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
           <label><span class="lab">Couleur monogramme</span><input type="color" id="inMonoColor" value="#191917"></label>
           <label><span class="lab">Couleur éditeur</span><input type="color" id="inEditorColor" value="#191917"></label>
         </div>
+        <div class="row">
+          <label><span class="lab">Police monogramme</span><select id="inMonoFace"></select></label>
+          <label><span class="lab">Graisse</span>
+            <select id="inMonoWeight"><option>300</option><option>400</option><option>500</option><option selected>600</option><option>700</option><option>800</option><option>900</option></select></label>
+        </div>
+        <div class="row">
+          <label><span class="lab">Police éditeur</span><select id="inEditorFace"></select></label>
+          <label><span class="lab">Graisse</span>
+            <select id="inEditorWeight"><option>300</option><option selected>400</option><option>500</option><option>600</option><option>700</option><option>800</option><option>900</option></select></label>
+        </div>
+      </fieldset>
+
+      <fieldset id="fsPastille" class="off">
+        <legend>Pastille collection</legend>
         <div class="check"><input type="checkbox" id="inPastilleOn" checked><span>Pastille collection (bas droite)</span></div>
-        <label><input type="text" id="inPastille" value="folio"></label>
+        <label><span class="lab">Texte</span><input type="text" id="inPastille" value="folio"></label>
+        <label><span class="lab">Police</span><select id="inPastilleFace"></select></label>
+        <div class="row">
+          <label><span class="lab">Graisse</span>
+            <select id="inPastilleWeight"><option>300</option><option selected>400</option><option>500</option><option>600</option><option>700</option><option>800</option><option>900</option></select></label>
+          <label><span class="lab">Corps <span class="val" id="vPastilleSize">3,2 %</span></span>
+            <input type="range" id="inPastilleSize" min="1" max="8" step="0.1" value="3.2"></label>
+        </div>
+        <div class="row">
+          <label><span class="lab">Couleur</span><input type="color" id="inPastilleColor" value="#ffffff"></label>
+          <label><span class="lab">Fond</span><input type="color" id="inPastilleBg" value="#111111"></label>
+        </div>
       </fieldset>
 
       <fieldset id="fsImage" class="off">
         <legend>Image</legend>
         <label><span class="lab">Cadrage vertical <span class="val" id="vArtY">50 %</span></span>
           <input type="range" id="inArtY" min="0" max="100" step="1" value="50"></label>
+        <label><span class="lab">Cadrage horizontal <span class="val" id="vArtX">50 %</span></span>
+          <input type="range" id="inArtX" min="0" max="100" step="1" value="50"></label>
         <label><span class="lab">Échelle <span class="val" id="vZoom">1,00</span></span>
           <input type="range" id="inZoom" min="1" max="2.2" step="0.01" value="1"></label>
         <div class="check"><input type="checkbox" id="inKeepRatio"><span>Conserver les proportions de l'image (sans recadrage)</span></div>
+        <label id="rowStretch"><span class="lab">Déformation horizontale <span class="val" id="vStretch">1,00</span></span>
+          <input type="range" id="inStretch" min="0.5" max="2" step="0.01" value="1"></label>
         <label><span class="lab">Voile de lisibilité</span>
           <select id="inScrim">
             <option value="none" selected>Aucun</option>
@@ -480,7 +512,7 @@ const FACES = [
 ];
 const F = {}; FACES.forEach(([n,s]) => F[n.split(' (')[0]] = s);
 
-['inAuthorFace','inTitleFace','inGenreFace'].forEach(id => {
+['inAuthorFace','inTitleFace','inGenreFace','inMonoFace','inEditorFace','inPastilleFace'].forEach(id => {
   const sel = document.getElementById(id);
   FACES.forEach(([name, stack]) => {
     const o = document.createElement('option');
@@ -578,16 +610,28 @@ function render(){
   s.setProperty('--genre-color', $('inGenreColor').value);
   s.setProperty('--genre-gap', +$('inGenreGap').value / 100);
 
-  s.setProperty('--mono-face', $('inTitleFace').value);
+  s.setProperty('--mono-face', $('inMonoFace').value);
+  s.setProperty('--mono-weight', $('inMonoWeight').value);
   s.setProperty('--mono-size', +$('inMonoSize').value / 100);
   s.setProperty('--mono-color', $('inMonoColor').value);
-  s.setProperty('--editor-face', $('inAuthorFace').value);
+  s.setProperty('--editor-face', $('inEditorFace').value);
+  s.setProperty('--editor-weight', $('inEditorWeight').value);
   s.setProperty('--editor-size', +$('inEditorSize').value / 100);
   s.setProperty('--editor-color', $('inEditorColor').value);
+  s.setProperty('--pastille-face', $('inPastilleFace').value);
+  s.setProperty('--pastille-weight', $('inPastilleWeight').value);
+  s.setProperty('--pastille-size', +$('inPastilleSize').value / 100);
+  s.setProperty('--pastille-color', $('inPastilleColor').value);
+  s.setProperty('--pastille-bg', $('inPastilleBg').value);
 
   s.setProperty('--art-y', $('inArtY').value + '%');
+  s.setProperty('--art-x', $('inArtX').value + '%');
   s.setProperty('--art-zoom', $('inZoom').value);
-  s.setProperty('--art-fit', $('inKeepRatio').checked ? 'contain' : 'cover');
+  const keepRatio = $('inKeepRatio').checked;
+  s.setProperty('--art-fit', keepRatio ? 'contain' : 'cover');
+  /* la déformation n'a de sens que hors « proportions conservées » : neutralisée sinon */
+  s.setProperty('--art-stretch', keepRatio ? 1 : $('inStretch').value);
+  $('rowStretch').classList.toggle('hide', keepRatio);
 
   $('elAuthor').textContent = $('inAuthor').value;
   $('elTitle').textContent  = $('inTitle').value;
@@ -629,7 +673,9 @@ function render(){
     vLeading:[$('inLeading').value,2,''], vGap:[$('inGap').value,1,' %'],
     vGenreGap:[$('inGenreGap').value,1,' %'], vGenreSize:[$('inGenreSize').value,1,' %'],
     vImprintY:[$('inImprintY').value,0,' %'], vMonoSize:[$('inMonoSize').value,1,' %'],
+    vPastilleSize:[$('inPastilleSize').value,1,' %'],
     vEditorSize:[$('inEditorSize').value,1,' %'], vArtY:[$('inArtY').value,0,' %'],
+    vArtX:[$('inArtX').value,0,' %'], vStretch:[$('inStretch').value,2,''],
     vZoom:[$('inZoom').value,2,''], vScrim:[$('inScrimOp').value,0,' %']
   };
   for (const [k,[v,d,u]] of Object.entries(R)) $(k).textContent = fr(v,d) + u;
@@ -676,8 +722,11 @@ const PRESETS = {
     inAuthorSize:6.4, inAuthorTrack:0,
     inTitleFace:F['Spectral'], inTitleWeight:'400', inTitleCase:'none', inTitleColor:'#191917',
     inTitleSize:8, inLeading:1.1, inTitleTrack:0, inGap:3.5,
-    inGenreOn:false, inGenreFace:F['Spectral'], inImprintOn:false, inPastilleOn:true, inPastille:'folio',
-    inScrim:'none', inArtY:50, inZoom:1, inKeepRatio:false
+    inGenreOn:false, inGenreFace:F['Spectral'], inImprintOn:false,
+    inMonoFace:F['Spectral'], inMonoWeight:'600', inEditorFace:F['Archivo'], inEditorWeight:'400',
+    inPastilleOn:true, inPastille:'folio', inPastilleFace:F['Archivo'], inPastilleWeight:'400',
+    inPastilleSize:3.2, inPastilleColor:'#ffffff', inPastilleBg:'#111111',
+    inScrim:'none', inArtY:50, inArtX:50, inZoom:1, inKeepRatio:false, inStretch:1
   },
   blanche: {
     mode:'typo', inFormat:'140,205', inPaper:'#fcf0d8', inAlign:'center', inPadX:16,
@@ -690,7 +739,9 @@ const PRESETS = {
     inGenreOn:true, inGenre:'roman', inGenreFace:F['Bodoni Moda'], inGenreSize:2.2, inGenreColor:'#191917', inGenreGap:6,
     inImprintOn:true, inMono:'nrf', inEditor:'GALLIMARD', inImprintY:11,
     inMonoSize:7, inEditorSize:3.2, inMonoColor:'#191917', inEditorColor:'#191917',
-    inPastilleOn:false
+    inMonoFace:F['Bodoni Moda'], inMonoWeight:'600', inEditorFace:F['Bodoni Moda'], inEditorWeight:'400',
+    inPastilleOn:false, inPastilleFace:F['Archivo'], inPastilleWeight:'400',
+    inPastilleSize:3.2, inPastilleColor:'#ffffff', inPastilleBg:'#111111'
   },
   overlay: {
     mode:'overlay', inFormat:'110,180', inPaper:'#000000', inAlign:'center', inPadX:12,
@@ -700,8 +751,11 @@ const PRESETS = {
     inAuthorColor:'#f4efe4', inAuthorSize:3.4, inAuthorTrack:14,
     inTitleFace:F['Playfair Display'], inTitleWeight:'500', inTitleCase:'none',
     inTitleColor:'#ffffff', inTitleSize:11, inLeading:1.02, inTitleTrack:-1, inGap:6,
-    inGenreOn:false, inGenreFace:F['Playfair Display'], inImprintOn:false, inPastilleOn:false,
-    inScrim:'both', inScrimOp:62, inArtY:62, inZoom:1.05, inKeepRatio:false
+    inGenreOn:false, inGenreFace:F['Playfair Display'], inImprintOn:false,
+    inMonoFace:F['Playfair Display'], inMonoWeight:'600', inEditorFace:F['Archivo'], inEditorWeight:'400',
+    inPastilleOn:false, inPastilleFace:F['Archivo'], inPastilleWeight:'400',
+    inPastilleSize:3.2, inPastilleColor:'#ffffff', inPastilleBg:'#111111',
+    inScrim:'both', inScrimOp:62, inArtY:62, inArtX:50, inZoom:1.05, inKeepRatio:false, inStretch:1
   }
 };
 
@@ -727,7 +781,7 @@ const ELEMENTS = {
   band:   ['fsBand'],
   frame:  ['fsFrame'],
   block:  ['fsBlockY','fsAuthor','fsTitle','fsGenre'],
-  imprint:['fsImprint']
+  imprint:['fsImprint','fsPastille']
 };
 let selected = null;
 
@@ -867,14 +921,22 @@ dragHandle('.ovl[data-el="block"] .handle, .ovl[data-el="imprint"] .handle', {
   dir: h => h.classList.contains('h-left') ? 1 : -1
 });
 
-/* mou vertical réel de l'image : la course dont dispose inArtY (0 si l'image couvre pile) */
-function artSlack(){
+/* mou réel de l'image sur un axe : la course dont dispose le cadrage (0 si l'image couvre pile) */
+function artSlackAxis(horiz){
   const z = $('art').getBoundingClientRect(), im = $('elImg');
-  const fit = ($('inKeepRatio').checked ? Math.min : Math.max)(z.width / im.naturalWidth, z.height / im.naturalHeight);
-  return Math.abs(z.height - (+$('inZoom').value) * im.naturalHeight * fit);
+  const keep = $('inKeepRatio').checked;
+  const fit = (keep ? Math.min : Math.max)(z.width / im.naturalWidth, z.height / im.naturalHeight);
+  const stretch = keep ? 1 : +$('inStretch').value;
+  return horiz
+    ? Math.abs(z.width  - (+$('inZoom').value) * stretch * im.naturalWidth * fit)
+    : Math.abs(z.height - (+$('inZoom').value) * im.naturalHeight * fit);
 }
-/* image : le contenu suit la souris à 1:1 — la référence est le « mou » vertical réel */
+const artSlack  = () => artSlackAxis(false);
+const artSlackX = () => artSlackAxis(true);
+/* image : le contenu suit la souris à 1:1 sur chaque axe — la référence est le « mou » réel.
+   Deux dragParam sur le même élément : un listener par axe, chacun refuse si son mou est nul */
 dragParam('image', { input: 'inArtY', axis: 'y', invert: true, ref: artSlack });
+dragParam('image', { input: 'inArtX', axis: 'x', invert: true, ref: artSlackX });
 /* frontière du bandeau : tirer vers le bas agrandit le bandeau */
 dragParam('band',  { input: 'inBand', axis: 'y' });
 /* coin du cadre : tirer vers l'intérieur (droite) élargit la marge */
@@ -1149,15 +1211,17 @@ function freezeArtGeometry(doc){
   const zone = $('art').getBoundingClientRect();
   const nw = src.naturalWidth, nh = src.naturalHeight;
   if (!nw || !nh || !zone.width || !zone.height) return;
-  const fit = ($('inKeepRatio').checked ? Math.min : Math.max)(zone.width / nw, zone.height / nh);
-  const artY = +$('inArtY').value / 100, zoom = +$('inZoom').value;
+  const keep = $('inKeepRatio').checked;
+  const fit = (keep ? Math.min : Math.max)(zone.width / nw, zone.height / nh);
+  const artX = +$('inArtX').value / 100, artY = +$('inArtY').value / 100, zoom = +$('inZoom').value;
+  const sx = zoom * (keep ? 1 : +$('inStretch').value); /* déformation repliée dans l'échelle horizontale */
   const dw = nw * fit, dh = nh * fit;
-  const left = (zone.width - dw) / 2, top = (zone.height - dh) * artY;
-  /* zoom replié dans la géométrie, autour de l'origine (50%, artY) de la zone */
-  const ox = zone.width / 2, oy = zone.height * artY;
+  const left = (zone.width - dw) * artX, top = (zone.height - dh) * artY;
+  /* échelle repliée dans la géométrie, autour de l'origine (artX, artY) de la zone */
+  const ox = zone.width * artX, oy = zone.height * artY;
   dst.style.cssText = 'position:absolute;' +
-    'left:' + (ox - (ox - left) * zoom) + 'px;top:' + (oy - (oy - top) * zoom) + 'px;' +
-    'width:' + (dw * zoom) + 'px;height:' + (dh * zoom) + 'px;transform:none;';
+    'left:' + (ox - (ox - left) * sx) + 'px;top:' + (oy - (oy - top) * zoom) + 'px;' +
+    'width:' + (dw * sx) + 'px;height:' + (dh * zoom) + 'px;transform:none;';
 }
 $('btnPng').addEventListener('click', async () => {
   /* dialogue avant le rendu : l'activation utilisateur expire pendant html2canvas */
@@ -1254,15 +1318,19 @@ document.addEventListener('keydown', e => {
     selectEl(null);
     return;
   }
-  if (!selected || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+  const vert = e.key === 'ArrowUp' || e.key === 'ArrowDown';
+  const horiz = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
+  if (!selected || (!vert && !(horiz && selected === 'image'))) return;
   if (document.querySelector('details.menu[open]')) return;
   const t = e.target;
   if (t && ['INPUT','SELECT','TEXTAREA','BUTTON'].includes(t.tagName)) return;
   if (selected === 'block' && mode === 'band') return;
-  if (selected === 'image' && artSlack() < 1) return; /* même refus que le drag */
-  const el = $(PRIMARY[selected]);
+  if (selected === 'image' && (horiz ? artSlackX() : artSlack()) < 1) return; /* même refus que le drag */
+  const el = $(horiz ? 'inArtX' : PRIMARY[selected]);
   const step = +el.step || 1;
-  setParam(el.id, +el.value + (e.key === 'ArrowDown' ? 1 : -1) * KEY_DIR[selected] * step);
+  /* mêmes signes que le drag : « droite » déplace visuellement le contenu vers la droite */
+  const dir = horiz ? (e.key === 'ArrowRight' ? -1 : 1) : (e.key === 'ArrowDown' ? 1 : -1) * KEY_DIR[selected];
+  setParam(el.id, +el.value + dir * step);
   e.preventDefault();
 });
 
