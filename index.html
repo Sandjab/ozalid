@@ -113,6 +113,22 @@ body{display:flex;flex-direction:column;height:100vh}
 .marks i.h{height:1px;width:18px}
 .marks i.v{width:1px;height:18px}
 
+/* cotes : mêmes filets que les traits de coupe, dans les gouttières autour de la couverture */
+.dims{position:absolute;inset:0;pointer-events:none}
+.dims .d{position:absolute;background:rgba(255,255,255,.75)}
+.dims .d.h{height:1px}
+.dims .d.v{width:1px}
+.dims .d.h::before,.dims .d.h::after{content:"";position:absolute;top:-4px;width:1px;height:9px;background:inherit}
+.dims .d.h::before{left:0}
+.dims .d.h::after{right:0}
+.dims .d.v::before,.dims .d.v::after{content:"";position:absolute;left:-4px;width:9px;height:1px;background:inherit}
+.dims .d.v::before{top:0}
+.dims .d.v::after{bottom:0}
+.dims .lbl{position:absolute;font-family:var(--ui);font-size:10px;line-height:1;color:rgba(255,255,255,.85);letter-spacing:.02em;white-space:nowrap}
+.dims .d.h .lbl{left:50%;transform:translateX(-50%);bottom:6px}
+.dims .d.v .lbl{right:8px;top:50%;transform:translateY(-50%)}
+.dims .d.v.r .lbl{right:auto;left:8px}
+
 /* ---------- calque de sélection (hors .cover : jamais exporté) ---------- */
 .overlay{position:absolute;inset:0;pointer-events:none}
 .ovl{position:absolute;pointer-events:auto;cursor:pointer;border:1px solid transparent}
@@ -202,6 +218,7 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
       <summary>Exporter PNG ▾</summary>
       <div class="menu-body">
         <div class="check"><input type="checkbox" id="inMarks" checked><span>Traits de coupe à l'écran</span></div>
+        <div class="check"><input type="checkbox" id="inDims"><span>Cotes à l'écran</span></div>
         <div class="check"><input type="checkbox" id="inEmbedCfg" checked><span>Écrire les réglages dans le PNG</span></div>
         <div class="check"><input type="checkbox" id="inEmbedImg" checked><span>Y joindre la photo source</span></div>
         <button class="btn" id="btnPng">Exporter en PNG</button>
@@ -229,6 +246,14 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
         <i class="h" style="right:0;top:26px"></i><i class="v" style="right:26px;top:0"></i>
         <i class="h" style="left:0;bottom:26px"></i><i class="v" style="left:26px;bottom:0"></i>
         <i class="h" style="right:0;bottom:26px"></i><i class="v" style="right:26px;bottom:0"></i>
+      </div>
+
+      <div class="dims hide" id="dims">
+        <div class="d h" id="dimPadX" style="top:-14px;left:0"><span class="lbl"></span></div>
+        <div class="d h" id="dimFrame" style="top:-14px;right:0"><span class="lbl"></span></div>
+        <div class="d v" id="dimBand" style="left:-14px;top:0"><span class="lbl"></span></div>
+        <div class="d v" id="dimBlock" style="left:-14px;top:0"><span class="lbl"></span></div>
+        <div class="d v r" id="dimImprint" style="right:-14px;bottom:0"><span class="lbl"></span></div>
       </div>
 
       <div class="cover" id="cover">
@@ -569,6 +594,7 @@ function render(){
   $('fsBlockY').classList.toggle('hide', mode === 'band');
   $('fsImage').classList.toggle('hide', mode === 'typo');
   $('marks').style.setProperty('--marks-on', $('inMarks').checked ? 1 : 0);
+  renderDims();
 
   /* navigateur : griser les éléments sans objet dans l'état courant */
   const navDim = {
@@ -598,6 +624,29 @@ function render(){
   };
   for (const [k,[v,d,u]] of Object.entries(R)) $(k).textContent = fr(v,d) + u;
   syncOverlay();
+}
+
+/* cotes à l'écran : calque .dims hors de .cover, jamais exporté.
+   Le % affiché est celui du curseur ; les mm sont calculés sur l'axe réel de la mesure
+   (largeur du format pour les cotes horizontales, hauteur pour les verticales). */
+function renderDims(){
+  const on = $('inDims').checked;
+  $('dims').classList.toggle('hide', !on);
+  if (!on) return;
+  /* axis : 0 = largeur, 1 = hauteur — pilote la dimension étirée et la conversion en mm */
+  const set = (id, show, val, axis) => {
+    const d = $(id);
+    d.classList.toggle('hide', !show);
+    if (!show) return;
+    d.style[axis === 0 ? 'width' : 'height'] = val + '%';
+    d.querySelector('.lbl').textContent =
+      fr(val, 1) + ' % · ' + fr(val / 100 * format[axis], 1) + ' mm';
+  };
+  set('dimPadX',    true,                      +$('inPadX').value,    0);
+  set('dimFrame',   $('inFrameOn').checked,    +$('inFrameM').value,  0);
+  set('dimBand',    mode === 'band',           +$('inBand').value,    1);
+  set('dimBlock',   mode !== 'band',           +$('inBlockY').value,  1);
+  set('dimImprint', $('inImprintOn').checked,  +$('inImprintY').value, 1);
 }
 
 function fitCover(){
