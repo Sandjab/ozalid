@@ -123,6 +123,8 @@ body{display:flex;flex-direction:column;height:100vh}
 .ovl-ring.sel{cursor:pointer}
 .ovl-line{cursor:ns-resize}
 .ovl-line.sel{cursor:ns-resize}
+.ovl-line.sel:active{cursor:ns-resize}
+.ovl-ring.sel:active{cursor:pointer}
 .ovl-ring{pointer-events:none}
 .ovl-ring .edge{position:absolute;pointer-events:auto}
 .e-t{left:0;right:0;top:-5px;height:10px}
@@ -752,7 +754,8 @@ function dragParam(name, opts){
     if (opts.enabled && !opts.enabled()) return;
     e.preventDefault();
     const r = cover.getBoundingClientRect();
-    const ref = opts.axis === 'x' ? r.width : r.height;
+    const ref = opts.ref ? opts.ref() : (opts.axis === 'x' ? r.width : r.height);
+    if (!isFinite(ref) || ref < 1) return; /* aucun mou : pas de geste plutôt qu'un slider qui ment */
     const start = opts.axis === 'x' ? e.clientX : e.clientY;
     const v0 = +$(opts.input).value;
     const move = ev => {
@@ -807,18 +810,25 @@ dragHandle('.ovl[data-el="block"] .handle, .ovl[data-el="imprint"] .handle', {
   dir: h => h.classList.contains('h-left') ? 1 : -1
 });
 
-/* image : le contenu suit la souris (artY diminue quand on tire vers le bas) */
-dragParam('image', { input: 'inArtY', axis: 'y', invert: true });
+/* image : le contenu suit la souris à 1:1 — la référence est le « mou » vertical réel */
+dragParam('image', { input: 'inArtY', axis: 'y', invert: true,
+  ref: () => {
+    const z = $('art').getBoundingClientRect(), im = $('elImg');
+    const fit = ($('inKeepRatio').checked ? Math.min : Math.max)(z.width / im.naturalWidth, z.height / im.naturalHeight);
+    return Math.abs(z.height - (+$('inZoom').value) * im.naturalHeight * fit);
+  } });
 /* frontière du bandeau : tirer vers le bas agrandit le bandeau */
 dragParam('band',  { input: 'inBand', axis: 'y' });
 /* coin du cadre : tirer vers l'intérieur (droite) élargit la marge */
 dragHandle('.ovl[data-el="frame"] .handle', { input: 'inFrameM', axis: 'x', dir: () => 1 });
 
-/* molette / trackpad sur l'image sélectionnée : échelle */
-document.querySelector('.ovl[data-el="image"]').addEventListener('wheel', e => {
+/* molette / trackpad sur l'image sélectionnée : échelle (le calque #overlay capte aussi
+   la molette au-dessus du bloc titre, qui n'a pas de listener propre) */
+$('overlay').addEventListener('wheel', e => {
   if (selected !== 'image') return;
   e.preventDefault();
-  setParam('inZoom', +$('inZoom').value - e.deltaY * 0.002);
+  const PX = {0:1, 1:16, 2:400}[e.deltaMode] ?? 1;
+  setParam('inZoom', +$('inZoom').value - e.deltaY * PX * 0.001);
 }, { passive: false });
 
 document.querySelectorAll('[data-preset]').forEach(b =>
