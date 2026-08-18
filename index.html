@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500;6..96,600;6..96,700;6..96,800;6..96,900&family=Playfair+Display:wght@400;500;600;700;800&family=Prata&family=Archivo:wght@400;600;700;800&family=Spectral:wght@300;400;500;600&family=EB+Garamond:wght@400;500;600&family=Libre+Baskerville:wght@400;700&family=Libre+Franklin:wght@400;600;800&family=Oswald:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <style>
 :root{
   --bench:#7a7b78;        /* carton gris 18 % — la surface neutre sur laquelle on juge une épreuve */
@@ -661,6 +662,8 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
         <label><span class="lab">Pages de l'intérieur — dos <span class="val" id="vDosMm">15,48 mm</span></span>
           <input type="number" id="inAsmPages" min="32" max="800" step="2" value="244"></label>
         <p class="note">Le dos est calculé d'après le nombre de pages. Si l'intérieur regénéré change de nombre de pages, reporte le nouveau nombre ici avant d'exporter la planche.</p>
+        <button class="btn" id="btnPlanche">Exporter la planche (PDF 300 dpi)</button>
+        <p class="note">PNG 300 dpi encapsulé dans un PDF aux dimensions exactes, fond perdu compris — le fichier attendu par le prestataire.</p>
       </fieldset>
       <fieldset id="fsDos" class="off">
         <legend>Dos</legend>
@@ -1667,6 +1670,40 @@ $('btnPng').addEventListener('click', async () => {
   }
   btn.textContent = old; btn.disabled = false;
   $('inMarks').checked = wasMarks; render();
+});
+
+/* ================= export planche (PDF 300 dpi) ================= */
+$('btnPlanche').addEventListener('click', async () => {
+  if (tab !== 'assemblage') setTab('assemblage'); /* l'export rend la planche : elle doit être construite */
+  /* dialogue avant le rendu : l'activation utilisateur expire pendant html2canvas */
+  const handle = await pickSaveFile(slug() + '-planche.pdf', 'PDF de la planche', 'application/pdf', '.pdf');
+  if (handle === 'aborted') return;
+  const btn = $('btnPlanche'), old = btn.textContent;
+  btn.textContent = 'Rendu en cours…'; btn.disabled = true;
+  try {
+    const P = PROVIDERS[$('inAsmProvider').value];
+    const pages = Math.min(800, Math.max(32, +$('inAsmPages').value || 244));
+    const dosMm = P.dos(pages);
+    const wMm = 2 * format[0] + dosMm + 2 * P.fondPerdu, hMm = format[1] + 2 * P.fondPerdu;
+    const wPx = wMm / 25.4 * 300;
+    buildPlanche(P, dosMm, (wPx / 2) * format[0] / wMm); /* scale 2 => 300 dpi ; jamais scale 1 (ombre peinte) */
+    const canvas = await html2canvas($('plancheFp'),
+      { scale: 2, backgroundColor: null, logging: false, onclone: preparePlancheClone });
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+    const png = new Uint8Array(await blob.arrayBuffer());
+    const MM2PT = 72 / 25.4;
+    const pdf = await PDFLib.PDFDocument.create();
+    const page = pdf.addPage([wMm * MM2PT, hMm * MM2PT]);
+    const image = await pdf.embedPng(png);
+    page.drawImage(image, { x: 0, y: 0, width: wMm * MM2PT, height: hMm * MM2PT });
+    const bytes = await pdf.save();
+    await saveBlob(handle, new Blob([bytes], { type: 'application/pdf' }), slug() + '-planche.pdf');
+    status(`PDF ${fr(wMm, 2)} × ${fr(hMm, 2)} mm — ${canvas.width}×${canvas.height} px, ${(bytes.length/1048576).toFixed(2)} Mo`, 'ok');
+  } catch (e) {
+    status('Export impossible : ' + e.message, 'err');
+  }
+  btn.textContent = old; btn.disabled = false;
+  render(); /* planche reconstruite à l'échelle écran */
 });
 
 /* ================= rechargement ================= */
