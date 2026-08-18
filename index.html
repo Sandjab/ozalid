@@ -141,24 +141,24 @@ body{display:flex;flex-direction:column;height:100vh}
 }
 .q4-pied div:empty{display:none}
 /* ---------- assemblage : planche 4ème + dos + 1ère ---------- */
-/* Les variables --fp/--dos-l/--dos-hauteur sont écrites par render() (tâche 2) ;
-   les fallbacks rendent le squelette visible d'ici là. */
+/* Les variables --fp/--dos-larg/--dos-hauteur sont écrites par render() ;
+   --cw est posée sur #plancheFp par buildPlanche() (tâche 4) — d'ici là les fallbacks s'appliquent. */
+/* guides et habillage écran seulement (hachures, ombre, tirets) : à neutraliser à l'export de la planche (lot 3) — html2canvas rend mal ces motifs. */
 .planche-fp{
   padding:calc(var(--cw,340px)*var(--fp,.03));
   background:repeating-linear-gradient(45deg, rgba(255,255,255,.08) 0 6px, rgba(255,255,255,0) 6px 12px);
   box-shadow:0 24px 48px -12px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.3);
 }
-/* guides écran seulement : à neutraliser à l'export de la planche (lot 3) */
 .planche{display:flex;align-items:stretch;outline:1px dashed rgba(255,255,255,.55)}
 .planche .cover{box-shadow:none}
 .dos{
   position:relative;overflow:hidden;
-  width:calc(var(--cw,340px)*var(--dos-l,.14));
+  width:calc(var(--cw,340px)*var(--dos-larg,.14));
   border-left:1px dashed rgba(255,255,255,.55);border-right:1px dashed rgba(255,255,255,.55);
 }
 .dos-texte{
   position:absolute;left:50%;top:50%;
-  width:calc(var(--cw,340px)*var(--dos-hauteur,1.65));height:calc(var(--cw,340px)*var(--dos-l,.14));
+  width:calc(var(--cw,340px)*var(--dos-hauteur,1.65));height:calc(var(--cw,340px)*var(--dos-larg,.14));
   transform:translate(-50%,-50%) rotate(-90deg);
   display:flex;align-items:center;gap:calc(var(--cw,340px)*.02);
   padding:0 calc(var(--cw,340px)*.03);
@@ -230,8 +230,8 @@ legend{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transfor
 label{display:block;margin:0 0 12px}
 .lab{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;font-weight:600;margin-bottom:5px}
 .val{font-family:var(--mono);font-size:10px;color:var(--muted);font-weight:400}
-input[type=text],select,textarea{width:100%;padding:7px 9px;border:1px solid var(--rule);background:#fff;font-family:var(--ui);font-size:13px;color:var(--ink);border-radius:2px}
-input[type=text]:focus,select:focus,textarea:focus,input[type=range]:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+input[type=text],input[type=number],select,textarea{width:100%;padding:7px 9px;border:1px solid var(--rule);background:#fff;font-family:var(--ui);font-size:13px;color:var(--ink);border-radius:2px}
+input[type=text]:focus,input[type=number]:focus,select:focus,textarea:focus,input[type=range]:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 textarea{resize:vertical}
 input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:2px;background:var(--rule);border-radius:2px;margin:9px 0}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--ink);border:3px solid var(--panel);cursor:pointer}
@@ -646,7 +646,14 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
         </div>
         <p class="note">Zone vide pour l'usage privé ; le code-barres est ajouté par le prestataire quand un ISBN existe.</p>
       </fieldset>
-      <fieldset id="fsAsm" class="off"><legend>Assemblage</legend></fieldset>
+      <fieldset id="fsAsm" class="off">
+        <legend>Assemblage</legend>
+        <label><span class="lab">Prestataire</span>
+          <select id="inAsmProvider"><option value="lulu" selected>Lulu (poche)</option></select></label>
+        <label><span class="lab">Pages de l'intérieur — dos : <span class="val" id="vDosMm">15,48 mm</span></span>
+          <input type="number" id="inAsmPages" min="32" max="800" step="2" value="244"></label>
+        <p class="note">Le dos est calculé du nombre de pages. Si l'intérieur regénéré change de compte de pages, reporte le nouveau nombre ici avant d'exporter la planche.</p>
+      </fieldset>
       <fieldset id="fsDos" class="off"><legend>Dos</legend></fieldset>
 
       <fieldset id="fsImage" class="off">
@@ -890,8 +897,20 @@ function render(){
   $('noteEmpty').classList.toggle('off',
     !selected || !ELEMENTS[selected].every(id => $(id).classList.contains('hide')));
 
+  /* --- assemblage : dimensions de la planche --- */
+  const P = PROVIDERS[$('inAsmProvider').value];
+  const dosMm = P.dos(+$('inAsmPages').value);
+  const sp = $('plancheFp').style;
+  sp.setProperty('--dos-larg', dosMm / format[0]);
+  sp.setProperty('--dos-hauteur', format[1] / format[0]);
+  sp.setProperty('--fp', P.fondPerdu / format[0]);
+  $('plancheDims').textContent = 'Planche ' + fr(2*format[0] + dosMm + 2*P.fondPerdu, 2) +
+    ' × ' + fr(format[1] + 2*P.fondPerdu, 2) + ' mm — dos ' + fr(dosMm, 2) +
+    ' mm — fond perdu ' + fr(P.fondPerdu, 2) + ' mm';
+
   /* --- lectures --- */
   const R = {
+    vDosMm:[dosMm, 2, ' mm'],
     vPadX:[padX,1,' %'], vBand:[bandH,1,' %'], vBlockY:[$('inBlockY').value,0,' %'],
     vFrameM:[fm,1,' %'], vRule1W:[r1w,2,' %'], vRule2Off:[r2o,1,' %'],
     vRule2W:[r2w,2,' %'], vRule2Gap:[r2g,1,' %'],
@@ -947,6 +966,15 @@ function fitCover(){
   cover.style.setProperty('--cw', w + 'px');
   cover4.style.setProperty('--cw', w + 'px');
 }
+
+/* ---------- prestataires d'impression ---------- */
+const PROVIDERS = {
+  lulu: {
+    nom: 'Lulu (poche)',
+    fondPerdu: 3.175,                     /* mm — 0,125 po */
+    dos: pages => pages / 17.48 + 1.524   /* mm — formule Lulu, vérifiée sur 244 p → 15,48 mm */
+  }
+};
 
 /* ---------- maquettes ---------- */
 const PRESETS = {
