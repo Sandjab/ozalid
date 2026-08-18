@@ -1,6 +1,6 @@
 # Lot 1 — Onglets et 4ème de couverture : plan d'implémentation
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal :** ajouter à `index.html` une navigation à deux onglets (1ère / 4ème de couverture) et l'éditeur complet de la 4ème (fond, texte de présentation, pied, zone ISBN), persistant automatiquement.
 
@@ -39,14 +39,14 @@ require('fs').writeFileSync('/tmp/ozalid-extrait.js', blocks.join('\n;\n'));
 **Files :**
 - Modify : `index.html` (topbar, stage, CSS, JS près de `setMode`)
 
-- [ ] **Step 1 : vérifier l'existence de la classe `.hide`**
+- [x] **Step 1 : vérifier l'existence de la classe `.hide`**
 
 ```bash
 grep -n "\.hide{" index.html
 ```
 Attendu : une règle du type `.hide{display:none !important}` (ou équivalent). Si elle n'existe pas, STOP : relire le CSS et adapter (le plan suppose `display:none`).
 
-- [ ] **Step 2 : ajouter la barre d'onglets dans la topbar**
+- [x] **Step 2 : ajouter la barre d'onglets dans la topbar**
 
 Juste après `<h1 class="tb-brand">Atelier — couverture</h1>` :
 
@@ -58,7 +58,7 @@ Juste après `<h1 class="tb-brand">Atelier — couverture</h1>` :
   </div>
 ```
 
-- [ ] **Step 3 : CSS de l'état enfoncé des onglets**
+- [x] **Step 3 : CSS de l'état enfoncé des onglets**
 
 À côté des règles `.topbar` existantes :
 
@@ -68,7 +68,7 @@ Juste après `<h1 class="tb-brand">Atelier — couverture</h1>` :
 
 (Vérifier que `--accent` existe : `grep -n "\-\-accent" index.html`. Sinon utiliser la couleur des boutons `aria-pressed` de `segMode`.)
 
-- [ ] **Step 4 : nommer le holder existant et ajouter le second**
+- [x] **Step 4 : nommer le holder existant et ajouter le second**
 
 Sur le holder existant : `<div class="holder">` → `<div class="holder" id="holderUne">`.
 Juste après la fermeture `</div>` de ce holder (celle qui suit `#overlay`), toujours dans `.stage` :
@@ -87,7 +87,7 @@ Juste après la fermeture `</div>` de ce holder (celle qui suit `#overlay`), tou
     </div>
 ```
 
-- [ ] **Step 5 : état `tab`, `setTab`, écouteurs**
+- [x] **Step 5 : état `tab`, `setTab`, écouteurs**
 
 Près de `let mode = 'band';` :
 
@@ -112,7 +112,7 @@ document.querySelectorAll('#segTab button').forEach(b =>
   b.addEventListener('click', () => setTab(b.dataset.tab)));
 ```
 
-- [ ] **Step 6 : `fitCover()` dimensionne aussi `#cover4`**
+- [x] **Step 6 : `fitCover()` dimensionne aussi `#cover4`**
 
 Après `cover.style.setProperty('--cw', w + 'px');` :
 
@@ -120,7 +120,7 @@ Après `cover.style.setProperty('--cw', w + 'px');` :
   cover4.style.setProperty('--cw', w + 'px');
 ```
 
-- [ ] **Step 7 : `render()` écrit format et fond de base sur `#cover4`**
+- [x] **Step 7 : `render()` écrit format et fond de base sur `#cover4`**
 
 Au début de `render()`, après `const s = cover.style;` :
 
@@ -136,11 +136,11 @@ Après les trois lignes `s.setProperty('--fw'/'--fh'/'--paper', …)` :
   s4.setProperty('--paper', $('inPaper').value);
 ```
 
-- [ ] **Step 8 : syntaxe**
+- [x] **Step 8 : syntaxe**
 
 Lancer l'extraction + `node --check` (commande en tête de plan). Attendu : `Syntaxe OK`.
 
-- [ ] **Step 9 : vérification navigateur**
+- [x] **Step 9 : vérification navigateur**
 
 Servir via `serve.sh`, ouvrir la page, exécuter :
 
@@ -155,7 +155,7 @@ JSON.stringify({
 ```
 Attendu : `uneCachee:true`, `quatreVisible:true`, `memeLargeur:true`, ratio = `108 / 178` (préréglage courant). Puis `setTab('une')` doit restaurer la 1ère. Vérifier aussi qu'un clic sur chaque onglet fonctionne à la souris.
 
-- [ ] **Step 10 : commit**
+- [x] **Step 10 : commit**
 
 ```bash
 git add index.html
@@ -169,7 +169,7 @@ git commit -m "Onglets 1ère/4ème et second support de couverture"
 **Files :**
 - Modify : `index.html` (panneau, `applyInspector`, `render()`, CSS)
 
-- [ ] **Step 1 : quatre fieldsets vides dans le panneau**
+- [x] **Step 1 : quatre fieldsets vides dans le panneau**
 
 Après la fermeture `</fieldset>` de `fsPastille` :
 
@@ -187,7 +187,7 @@ Après la fermeture `</fieldset>` de `fsPastille` :
       <fieldset id="fsQ4Isbn" class="off"><legend>Zone code-barres</legend></fieldset>
 ```
 
-- [ ] **Step 2 : `applyInspector()` tient compte de l'onglet**
+- [x] **Step 2 : `applyInspector()` tient compte de l'onglet**
 
 Remplacer le corps de `applyInspector()` par :
 
@@ -207,7 +207,7 @@ function applyInspector(){
 
 Attention : `applyInspector` est défini après `setTab` dans le fichier mais appelé par lui à l'exécution — pas de problème (hoisting de `function`).
 
-- [ ] **Step 3 : `render()` applique le fond**
+- [x] **Step 3 : `render()` applique le fond**
 
 Avec les autres écritures `s4` :
 
@@ -217,9 +217,9 @@ Avec les autres écritures `s4` :
 
 (`.cover` a `background:var(--paper)` ; l'écriture inline prime.)
 
-- [ ] **Step 4 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
+- [x] **Step 4 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
 
-- [ ] **Step 5 : vérification navigateur**
+- [x] **Step 5 : vérification navigateur**
 
 ```js
 setTab('quatre');
@@ -233,7 +233,7 @@ JSON.stringify({couleur: a, herite: b,
 ```
 Attendu : `couleur:"rgb(18, 52, 86)"`, `herite:true`, `fieldsetsQ4:true`, `generalCache:true`. Retour `setTab('une')` : panneau normal restauré, sélection d'élément (clic sur « Bloc titre ») fonctionne encore.
 
-- [ ] **Step 6 : commit**
+- [x] **Step 6 : commit**
 
 ```bash
 git add index.html
@@ -247,7 +247,7 @@ git commit -m "Onglet 4ème : fond hérité ou distinct, panneau par onglet"
 **Files :**
 - Modify : `index.html` (fieldset fsQ4Texte, CSS `.q4-texte`, `render()`, population des polices, objet `R`)
 
-- [ ] **Step 1 : contrôles du fieldset**
+- [x] **Step 1 : contrôles du fieldset**
 
 Remplacer `<fieldset id="fsQ4Texte" class="off"><legend>Texte de présentation</legend></fieldset>` par :
 
@@ -286,7 +286,7 @@ Si le CSS du panneau ne couvre pas `textarea`, ajouter près des styles des `inp
 ```
 (Adapter aux variables réellement présentes — copier le style des `input[type=text]` du panneau.)
 
-- [ ] **Step 2 : CSS de l'élément**
+- [x] **Step 2 : CSS de l'élément**
 
 Après le bloc `.pastille…` :
 
@@ -305,7 +305,7 @@ Après le bloc `.pastille…` :
 
 (Tout en fraction de `--cw`, y compris la position verticale — règle du projet : jamais de % de hauteur.)
 
-- [ ] **Step 3 : `render()`**
+- [x] **Step 3 : `render()`**
 
 Avec les écritures `s4` :
 
@@ -321,11 +321,11 @@ Avec les écritures `s4` :
   $('elQ4Texte').textContent = $('inQ4Text').value;
 ```
 
-- [ ] **Step 4 : population des polices**
+- [x] **Step 4 : population des polices**
 
 Dans la boucle `['inAuthorFace','inTitleFace','inGenreFace','inMonoFace','inEditorFace','inPastilleFace'].forEach(…)`, ajouter `'inQ4TextFace'` à la liste.
 
-- [ ] **Step 5 : lectures affichées**
+- [x] **Step 5 : lectures affichées**
 
 Dans l'objet `R` de `render()` :
 
@@ -334,9 +334,9 @@ Dans l'objet `R` de `render()` :
     vQ4PadX:[$('inQ4PadX').value,1,' %'], vQ4Top:[$('inQ4Top').value,1,' %'],
 ```
 
-- [ ] **Step 6 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
+- [x] **Step 6 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
 
-- [ ] **Step 7 : vérification navigateur**
+- [x] **Step 7 : vérification navigateur**
 
 ```js
 setTab('quatre');
@@ -350,7 +350,7 @@ JSON.stringify({
 ```
 Attendu : `texte:"Ligne un.\nLigne deux."` (retour à la ligne visible à l'écran), `corps:true`, `lecture:"4,0 %"`. Vérifier visuellement le rendu (capture) : texte posé sur le fond, marges symétriques.
 
-- [ ] **Step 8 : commit**
+- [x] **Step 8 : commit**
 
 ```bash
 git add index.html
@@ -364,7 +364,7 @@ git commit -m "4ème : texte de présentation réglable"
 **Files :**
 - Modify : `index.html` (fieldset fsQ4Pied, CSS `.q4-pied`, `render()`, polices, objet `R`)
 
-- [ ] **Step 1 : contrôles**
+- [x] **Step 1 : contrôles**
 
 Remplacer le fieldset vide `fsQ4Pied` par :
 
@@ -388,7 +388,7 @@ Remplacer le fieldset vide `fsQ4Pied` par :
       </fieldset>
 ```
 
-- [ ] **Step 2 : CSS**
+- [x] **Step 2 : CSS**
 
 Sous `.q4-texte{…}` :
 
@@ -402,7 +402,7 @@ Sous `.q4-texte{…}` :
 .q4-pied div:empty{display:none}
 ```
 
-- [ ] **Step 3 : `render()`**
+- [x] **Step 3 : `render()`**
 
 ```js
   s4.setProperty('--q4-pied-face', $('inQ4PiedFace').value);
@@ -415,7 +415,7 @@ Sous `.q4-texte{…}` :
   $('q4Pied').classList.toggle('hide', !$('inQ4PiedOn').checked);
 ```
 
-- [ ] **Step 4 : polices et lectures**
+- [x] **Step 4 : polices et lectures**
 
 Ajouter `'inQ4PiedFace'` à la boucle de population des polices, et dans `R` :
 
@@ -423,9 +423,9 @@ Ajouter `'inQ4PiedFace'` à la boucle de population des polices, et dans `R` :
     vQ4PiedSize:[$('inQ4PiedSize').value,1,' %'], vQ4PiedY:[$('inQ4PiedY').value,1,' %'],
 ```
 
-- [ ] **Step 5 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
+- [x] **Step 5 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
 
-- [ ] **Step 6 : vérification navigateur**
+- [x] **Step 6 : vérification navigateur**
 
 ```js
 setTab('quatre');
@@ -436,7 +436,7 @@ JSON.stringify({lignesVisibles: lignes, cacheApresDecoche: $('q4Pied').classList
 ```
 Attendu : `lignesVisibles:2` (mention + prix, le numéro vide est masqué), `cacheApresDecoche:true`. Recocher et vérifier visuellement.
 
-- [ ] **Step 7 : commit**
+- [x] **Step 7 : commit**
 
 ```bash
 git add index.html
@@ -450,7 +450,7 @@ git commit -m "4ème : pied (mention, numéro, prix)"
 **Files :**
 - Modify : `index.html` (fieldset fsQ4Isbn, CSS `.q4-isbn`, `render()`, objet `R`)
 
-- [ ] **Step 1 : contrôles**
+- [x] **Step 1 : contrôles**
 
 Remplacer le fieldset vide `fsQ4Isbn` par :
 
@@ -474,7 +474,7 @@ Remplacer le fieldset vide `fsQ4Isbn` par :
       </fieldset>
 ```
 
-- [ ] **Step 2 : CSS**
+- [x] **Step 2 : CSS**
 
 Sous `.q4-pied…` :
 
@@ -487,7 +487,7 @@ Sous `.q4-pied…` :
 }
 ```
 
-- [ ] **Step 3 : `render()`**
+- [x] **Step 3 : `render()`**
 
 ```js
   s4.setProperty('--q4-isbn-w', +$('inQ4IsbnW').value / 100);
@@ -497,16 +497,16 @@ Sous `.q4-pied…` :
   $('elQ4Isbn').classList.toggle('hide', !$('inQ4IsbnOn').checked);
 ```
 
-- [ ] **Step 4 : lectures** — dans `R` :
+- [x] **Step 4 : lectures** — dans `R` :
 
 ```js
     vQ4IsbnW:[$('inQ4IsbnW').value,1,' %'], vQ4IsbnH:[$('inQ4IsbnH').value,1,' %'],
     vQ4IsbnDx:[$('inQ4IsbnDx').value,1,' %'], vQ4IsbnDy:[$('inQ4IsbnDy').value,1,' %'],
 ```
 
-- [ ] **Step 5 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
+- [x] **Step 5 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
 
-- [ ] **Step 6 : vérification navigateur**
+- [x] **Step 6 : vérification navigateur**
 
 ```js
 setTab('quatre');
@@ -520,7 +520,7 @@ JSON.stringify({
 ```
 Attendu : les trois `true`. Décocher → zone masquée.
 
-- [ ] **Step 7 : commit**
+- [x] **Step 7 : commit**
 
 ```bash
 git add index.html
@@ -534,18 +534,18 @@ git commit -m "4ème : zone code-barres réservée"
 **Files :**
 - Modify : `index.html` (`collectConfig`, `PRESETS`)
 
-- [ ] **Step 1 : étendre `collectConfig` aux `textarea`**
+- [x] **Step 1 : étendre `collectConfig` aux `textarea`**
 
 ```js
   document.querySelectorAll('input[id^="in"], select[id^="in"], textarea[id^="in"]').forEach(el => {
 ```
 (`applyConfig` gère déjà `el.value` génériquement — rien d'autre à changer.)
 
-- [ ] **Step 2 : mettre à jour la doc du projet**
+- [x] **Step 2 : mettre à jour la doc du projet**
 
 Dans `CLAUDE.md`, section Sérialisation PNG, remplacer la mention `input[id^="in"]` par « `input`, `select` et `textarea` dont l'id commence par `in` ».
 
-- [ ] **Step 3 : valeurs dans les trois `PRESETS`**
+- [x] **Step 3 : valeurs dans les trois `PRESETS`**
 
 Ajouter à **chacune** des trois entrées (`folio`, `blanche`, `overlay`) :
 
@@ -559,9 +559,9 @@ Ajouter à **chacune** des trois entrées (`folio`, `blanche`, `overlay`) :
 ```
 (Vérifier dans le fichier que `F['Spectral']` et `F['Archivo']` existent — c'est le cas dans les presets actuels.)
 
-- [ ] **Step 4 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
+- [x] **Step 4 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
 
-- [ ] **Step 5 : round-trip complet dans le navigateur**
+- [x] **Step 5 : round-trip complet dans le navigateur**
 
 ```js
 setTab('quatre');
@@ -581,11 +581,11 @@ JSON.stringify(Object.entries(vals).map(([k,v]) => {
 ```
 Attendu : toutes les paires à `true` — y compris le `textarea` multiligne.
 
-- [ ] **Step 6 : non-régression 1ère**
+- [x] **Step 6 : non-régression 1ère**
 
 Appliquer les trois presets et les trois modes (`applyPreset('folio'|'blanche'|'overlay')`, `setMode('band'|'typo'|'overlay')` + `render()` à chaque fois) : aucune erreur console, rendu de la 1ère inchangé. Exporter un PNG par le bouton réel et le recharger par « Depuis un PNG exporté » : tous les contrôles (dont `inQ4*`) reviennent à l'identique.
 
-- [ ] **Step 7 : commit**
+- [x] **Step 7 : commit**
 
 ```bash
 git add index.html CLAUDE.md
@@ -596,6 +596,6 @@ git commit -m "4ème : persistance complète (textarea, presets, round-trip)"
 
 ### Tâche 7 : revue finale du lot
 
-- [ ] **Step 1 : passe visuelle** — capture de la 4ème remplie (fond distinct, texte, pied, zone ISBN) et de la 1ère (préréglage folio) ; comparer avec l'état attendu de la spec.
-- [ ] **Step 2 : session locale** — recharger la page : l'état (y compris l'onglet 1ère par défaut et les réglages 4ème) revient de `localStorage`. « Réinitialiser l'atelier » remet tout à zéro sans erreur.
-- [ ] **Step 3 : cocher les cases de ce plan**, noter tout écart dans le message de commit final s'il y en a un.
+- [x] **Step 1 : passe visuelle** — capture de la 4ème remplie (fond distinct, texte, pied, zone ISBN) et de la 1ère (préréglage folio) ; comparer avec l'état attendu de la spec.
+- [x] **Step 2 : session locale** — recharger la page : l'état (y compris l'onglet 1ère par défaut et les réglages 4ème) revient de `localStorage`. « Réinitialiser l'atelier » remet tout à zéro sans erreur.
+- [x] **Step 3 : cocher les cases de ce plan**, noter tout écart dans le message de commit final s'il y en a un.
