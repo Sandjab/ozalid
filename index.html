@@ -133,6 +133,13 @@ body{display:flex;flex-direction:column;height:100vh}
   color:var(--q4-color);text-align:var(--q4-align);
   white-space:pre-wrap;
 }
+.q4-pied{
+  position:absolute;left:calc(var(--cw)*var(--q4-pad));right:calc(var(--cw)*var(--q4-pad));
+  bottom:calc(var(--cw)*var(--q4-pied-y));
+  font-family:var(--q4-pied-face);font-size:calc(var(--cw)*var(--q4-pied-size));
+  color:var(--q4-pied-color);text-align:center;line-height:1.5;
+}
+.q4-pied div:empty{display:none}
 
 /* ---------- repères prépresse ---------- */
 .marks{position:absolute;inset:-26px;pointer-events:none;opacity:var(--marks-on)}
@@ -189,8 +196,9 @@ legend{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transfor
 label{display:block;margin:0 0 12px}
 .lab{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;font-weight:600;margin-bottom:5px}
 .val{font-family:var(--mono);font-size:10px;color:var(--muted);font-weight:400}
-input[type=text],select,textarea{width:100%;padding:7px 9px;border:1px solid var(--rule);background:#fff;font-family:var(--ui);font-size:13px;color:var(--ink);border-radius:2px;resize:vertical}
-input[type=text]:focus,select:focus,input[type=range]:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+input[type=text],select,textarea{width:100%;padding:7px 9px;border:1px solid var(--rule);background:#fff;font-family:var(--ui);font-size:13px;color:var(--ink);border-radius:2px}
+input[type=text]:focus,select:focus,textarea:focus,input[type=range]:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+textarea{resize:vertical}
 input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:2px;background:var(--rule);border-radius:2px;margin:9px 0}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--ink);border:3px solid var(--panel);cursor:pointer}
 input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--ink);border:3px solid var(--panel);cursor:pointer}
@@ -556,7 +564,23 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
         </div>
         <label><span class="lab">Couleur</span><input type="color" id="inQ4TextColor" value="#191917"></label>
       </fieldset>
-      <fieldset id="fsQ4Pied" class="off"><legend>Pied de 4ème</legend></fieldset>
+      <fieldset id="fsQ4Pied" class="off">
+        <legend>Pied de 4ème</legend>
+        <div class="check"><input type="checkbox" id="inQ4PiedOn" checked><span>Pied de 4ème</span></div>
+        <label><span class="lab">Mention</span><input type="text" id="inQ4Mention" value=""></label>
+        <div class="row">
+          <label><span class="lab">Numéro</span><input type="text" id="inQ4Coll" value=""></label>
+          <label><span class="lab">Prix</span><input type="text" id="inQ4Prix" value=""></label>
+        </div>
+        <label><span class="lab">Police</span><select id="inQ4PiedFace"></select></label>
+        <div class="row">
+          <label><span class="lab">Corps <span class="val" id="vQ4PiedSize">2,4 %</span></span>
+            <input type="range" id="inQ4PiedSize" min="1.5" max="5" step="0.1" value="2.4"></label>
+          <label><span class="lab">Hauteur <span class="val" id="vQ4PiedY">4,0 %</span></span>
+            <input type="range" id="inQ4PiedY" min="1" max="20" step="0.5" value="4"></label>
+        </div>
+        <label><span class="lab">Couleur</span><input type="color" id="inQ4PiedColor" value="#191917"></label>
+      </fieldset>
       <fieldset id="fsQ4Isbn" class="off"><legend>Zone code-barres</legend></fieldset>
 
       <fieldset id="fsImage" class="off">
@@ -604,7 +628,7 @@ const FACES = [
 ];
 const F = {}; FACES.forEach(([n,s]) => F[n.split(' (')[0]] = s);
 
-['inAuthorFace','inTitleFace','inGenreFace','inMonoFace','inEditorFace','inPastilleFace','inQ4TextFace'].forEach(id => {
+['inAuthorFace','inTitleFace','inGenreFace','inMonoFace','inEditorFace','inPastilleFace','inQ4TextFace','inQ4PiedFace'].forEach(id => {
   const sel = document.getElementById(id);
   FACES.forEach(([name, stack]) => {
     const o = document.createElement('option');
@@ -653,6 +677,14 @@ function render(){
   s4.setProperty('--q4-top', +$('inQ4Top').value / 100);
   s4.setProperty('--q4-color', $('inQ4TextColor').value);
   $('elQ4Texte').textContent = $('inQ4Text').value;
+  s4.setProperty('--q4-pied-face', $('inQ4PiedFace').value);
+  s4.setProperty('--q4-pied-size', +$('inQ4PiedSize').value / 100);
+  s4.setProperty('--q4-pied-y', +$('inQ4PiedY').value / 100);
+  s4.setProperty('--q4-pied-color', $('inQ4PiedColor').value);
+  $('elQ4Mention').textContent = $('inQ4Mention').value;
+  $('elQ4Coll').textContent = $('inQ4Coll').value;
+  $('elQ4Prix').textContent = $('inQ4Prix').value;
+  $('q4Pied').classList.toggle('hide', !$('inQ4PiedOn').checked);
   s.setProperty('--pad-x', padX + '%');
   s.setProperty('--align', align);
 
@@ -802,7 +834,8 @@ function render(){
     vArtX:[$('inArtX').value,0,' %'], vStretch:[$('inStretch').value,2,''],
     vZoom:[$('inZoom').value,2,''], vScrim:[$('inScrimOp').value,0,' %'],
     vQ4TextSize:[$('inQ4TextSize').value,1,' %'], vQ4Leading:[$('inQ4Leading').value,2,''],
-    vQ4PadX:[$('inQ4PadX').value,1,' %'], vQ4Top:[$('inQ4Top').value,1,' %']
+    vQ4PadX:[$('inQ4PadX').value,1,' %'], vQ4Top:[$('inQ4Top').value,1,' %'],
+    vQ4PiedSize:[$('inQ4PiedSize').value,1,' %'], vQ4PiedY:[$('inQ4PiedY').value,1,' %']
   };
   for (const [k,[v,d,u]] of Object.entries(R)) $(k).textContent = fr(v,d) + u;
   syncOverlay();
