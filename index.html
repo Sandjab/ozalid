@@ -123,6 +123,17 @@ body{display:flex;flex-direction:column;height:100vh}
 .pastille.verticale.anc-hd{transform-origin:100% 0;transform:rotate(-90deg) translateY(-100%)}
 .pastille.verticale.anc-hg{transform-origin:0 0;transform:rotate(-90deg) translateX(-100%)}
 
+/* ---------- 4ème de couverture ---------- */
+.q4-texte{
+  position:absolute;
+  left:calc(var(--cw)*var(--q4-pad));right:calc(var(--cw)*var(--q4-pad));
+  top:calc(var(--cw)*var(--q4-top));
+  font-family:var(--q4-face);font-weight:var(--q4-weight);
+  font-size:calc(var(--cw)*var(--q4-size));line-height:var(--q4-leading);
+  color:var(--q4-color);text-align:var(--q4-align);
+  white-space:pre-wrap;
+}
+
 /* ---------- repères prépresse ---------- */
 .marks{position:absolute;inset:-26px;pointer-events:none;opacity:var(--marks-on)}
 .marks i{position:absolute;background:rgba(255,255,255,.75)}
@@ -178,7 +189,7 @@ legend{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transfor
 label{display:block;margin:0 0 12px}
 .lab{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;font-weight:600;margin-bottom:5px}
 .val{font-family:var(--mono);font-size:10px;color:var(--muted);font-weight:400}
-input[type=text],select{width:100%;padding:7px 9px;border:1px solid var(--rule);background:#fff;font-family:var(--ui);font-size:13px;color:var(--ink);border-radius:2px}
+input[type=text],select,textarea{width:100%;padding:7px 9px;border:1px solid var(--rule);background:#fff;font-family:var(--ui);font-size:13px;color:var(--ink);border-radius:2px;resize:vertical}
 input[type=text]:focus,select:focus,input[type=range]:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:2px;background:var(--rule);border-radius:2px;margin:9px 0}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--ink);border:3px solid var(--panel);cursor:pointer}
@@ -520,7 +531,31 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
           <label><span class="lab">Couleur</span><input type="color" id="inQ4Bg" value="#fcf0d8"></label>
         </div>
       </fieldset>
-      <fieldset id="fsQ4Texte" class="off"><legend>Texte de présentation</legend></fieldset>
+      <fieldset id="fsQ4Texte" class="off">
+        <legend>Texte de présentation</legend>
+        <label><span class="lab">Texte</span>
+          <textarea id="inQ4Text" rows="8" placeholder="Extrait ou argumentaire…"></textarea></label>
+        <label><span class="lab">Police</span><select id="inQ4TextFace"></select></label>
+        <div class="row">
+          <label><span class="lab">Graisse</span>
+            <select id="inQ4TextWeight"><option>300</option><option selected>400</option><option>500</option><option>600</option><option>700</option></select></label>
+          <label><span class="lab">Corps <span class="val" id="vQ4TextSize">3,0 %</span></span>
+            <input type="range" id="inQ4TextSize" min="1.5" max="6" step="0.1" value="3"></label>
+        </div>
+        <div class="row">
+          <label><span class="lab">Interlignage <span class="val" id="vQ4Leading">1,45</span></span>
+            <input type="range" id="inQ4Leading" min="1" max="2" step="0.05" value="1.45"></label>
+          <label><span class="lab">Alignement</span>
+            <select id="inQ4Align"><option value="left" selected>Gauche</option><option value="justify">Justifié</option><option value="center">Centre</option></select></label>
+        </div>
+        <div class="row">
+          <label><span class="lab">Marge latérale <span class="val" id="vQ4PadX">10,0 %</span></span>
+            <input type="range" id="inQ4PadX" min="4" max="24" step="0.5" value="10"></label>
+          <label><span class="lab">Position haute <span class="val" id="vQ4Top">12,0 %</span></span>
+            <input type="range" id="inQ4Top" min="4" max="60" step="0.5" value="12"></label>
+        </div>
+        <label><span class="lab">Couleur</span><input type="color" id="inQ4TextColor" value="#191917"></label>
+      </fieldset>
       <fieldset id="fsQ4Pied" class="off"><legend>Pied de 4ème</legend></fieldset>
       <fieldset id="fsQ4Isbn" class="off"><legend>Zone code-barres</legend></fieldset>
 
@@ -569,7 +604,7 @@ const FACES = [
 ];
 const F = {}; FACES.forEach(([n,s]) => F[n.split(' (')[0]] = s);
 
-['inAuthorFace','inTitleFace','inGenreFace','inMonoFace','inEditorFace','inPastilleFace'].forEach(id => {
+['inAuthorFace','inTitleFace','inGenreFace','inMonoFace','inEditorFace','inPastilleFace','inQ4TextFace'].forEach(id => {
   const sel = document.getElementById(id);
   FACES.forEach(([name, stack]) => {
     const o = document.createElement('option');
@@ -608,7 +643,16 @@ function render(){
   s.setProperty('--paper', $('inPaper').value);
   s4.setProperty('--fw', format[0]);
   s4.setProperty('--fh', format[1]);
-  s4.background = $('inQ4BgMode').value === 'couleur' ? $('inQ4Bg').value : $('inPaper').value;
+  s4.backgroundColor = $('inQ4BgMode').value === 'couleur' ? $('inQ4Bg').value : $('inPaper').value;
+  s4.setProperty('--q4-face', $('inQ4TextFace').value);
+  s4.setProperty('--q4-weight', $('inQ4TextWeight').value);
+  s4.setProperty('--q4-size', +$('inQ4TextSize').value / 100);
+  s4.setProperty('--q4-leading', $('inQ4Leading').value);
+  s4.setProperty('--q4-align', $('inQ4Align').value);
+  s4.setProperty('--q4-pad', +$('inQ4PadX').value / 100);
+  s4.setProperty('--q4-top', +$('inQ4Top').value / 100);
+  s4.setProperty('--q4-color', $('inQ4TextColor').value);
+  $('elQ4Texte').textContent = $('inQ4Text').value;
   s.setProperty('--pad-x', padX + '%');
   s.setProperty('--align', align);
 
@@ -756,7 +800,9 @@ function render(){
     vPastilleDx:[$('inPastilleDx').value,1,' %'], vPastilleDy:[$('inPastilleDy').value,1,' %'],
     vEditorSize:[$('inEditorSize').value,1,' %'], vArtY:[$('inArtY').value,0,' %'],
     vArtX:[$('inArtX').value,0,' %'], vStretch:[$('inStretch').value,2,''],
-    vZoom:[$('inZoom').value,2,''], vScrim:[$('inScrimOp').value,0,' %']
+    vZoom:[$('inZoom').value,2,''], vScrim:[$('inScrimOp').value,0,' %'],
+    vQ4TextSize:[$('inQ4TextSize').value,1,' %'], vQ4Leading:[$('inQ4Leading').value,2,''],
+    vQ4PadX:[$('inQ4PadX').value,1,' %'], vQ4Top:[$('inQ4Top').value,1,' %']
   };
   for (const [k,[v,d,u]] of Object.entries(R)) $(k).textContent = fr(v,d) + u;
   syncOverlay();
@@ -1057,7 +1103,7 @@ $('inFormat').addEventListener('change', e => {
   fitCover(); render();
 });
 
-document.querySelectorAll('input, select').forEach(el => {
+document.querySelectorAll('input, select, textarea').forEach(el => {
   el.addEventListener('input', render);
   el.addEventListener('change', render);
 });
@@ -1148,7 +1194,7 @@ const CFG_KEY = 'atelier-couverture';
 
 function collectConfig(){
   const fields = {};
-  document.querySelectorAll('input[id^="in"], select[id^="in"]').forEach(el => {
+  document.querySelectorAll('input[id^="in"], select[id^="in"], textarea[id^="in"]').forEach(el => {
     if (el.type === 'file') return;
     fields[el.id] = (el.type === 'checkbox') ? el.checked : el.value;
   });
