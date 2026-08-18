@@ -167,6 +167,8 @@ body{display:flex;flex-direction:column;height:100vh}
   line-height:1;white-space:nowrap;
 }
 .dos-texte .esp{flex:1}
+.dos-texte #elDosAuthor{text-transform:var(--dos-author-case)}
+.dos-texte #elDosTitle{text-transform:var(--dos-title-case)}
 .planche-dims{color:rgba(255,255,255,.7);font-family:var(--mono);font-size:11px;text-align:center;margin-top:10px}
 .q4-isbn{
   position:absolute;
@@ -929,6 +931,8 @@ function render(){
   sp.setProperty('--dos-weight', $('inDosWeight').value);
   sp.setProperty('--dos-size', +$('inDosSize').value / 100);
   sp.setProperty('--dos-color', $('inDosColor').value);
+  sp.setProperty('--dos-author-case', $('inAuthorCase').value);
+  sp.setProperty('--dos-title-case', $('inTitleCase').value);
   $('dos').style.backgroundColor = $('inDosBgMode').value === 'couleur' ? $('inDosBg').value : $('inPaper').value;
   $('elDosAuthor').textContent = $('inAuthor').value.trim();
   $('elDosTitle').textContent = $('inTitle').value.trim();
