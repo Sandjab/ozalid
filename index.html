@@ -143,7 +143,7 @@ body{display:flex;flex-direction:column;height:100vh}
 /* ---------- assemblage : planche 4ème + dos + 1ère ---------- */
 /* Les variables --fp/--dos-larg/--dos-hauteur sont écrites par render() ;
    --cw est posée sur #plancheFp par buildPlanche() (tâche 4) — d'ici là les fallbacks s'appliquent. */
-/* guides et habillage écran seulement (hachures, ombre, tirets) : à neutraliser à l'export de la planche (lot 3) — html2canvas rend mal ces motifs. */
+/* guides et habillage écran seulement (hachures, ombre, tirets) : neutralisés à l'export par preparePlancheClone() + .export */
 .planche-fp{
   padding:calc(var(--cw,340px)*var(--fp,.03));
   background:repeating-linear-gradient(45deg, rgba(255,255,255,.08) 0 6px, rgba(255,255,255,0) 6px 12px);
@@ -170,6 +170,10 @@ body{display:flex;flex-direction:column;height:100vh}
 .dos-texte .esp{flex:1}
 .dos-texte #elDosAuthor{text-transform:var(--dos-author-case)}
 .dos-texte #elDosTitle{text-transform:var(--dos-title-case)}
+/* export : la classe .export est posée par preparePlancheClone() sur le clone html2canvas —
+   guides écran retirés ; border-color transparent (et pas border:none) pour ne pas changer la géométrie */
+.planche-fp.export .planche{outline:none}
+.planche-fp.export .dos{border-color:transparent}
 .planche-dims{color:rgba(255,255,255,.7);font-family:var(--mono);font-size:11px;text-align:center;margin-top:10px}
 .q4-isbn{
   position:absolute;
@@ -1600,6 +1604,25 @@ function freezeArtGeometry(doc){
   dst.style.cssText = 'position:absolute;' +
     'left:' + (ox - (ox - left) * sx) + 'px;top:' + (oy - (oy - top) * zoom) + 'px;' +
     'width:' + (dw * sx) + 'px;height:' + (dh * zoom) + 'px;transform:none;';
+}
+/* clone html2canvas de la planche : guides écran neutralisés, fond perdu rempli par les
+   fonds adjacents (arrêts durs en px résolus — html2canvas ne parse pas calc() dans un gradient) */
+function preparePlancheClone(doc){
+  const dst = doc.getElementById('plancheFp');
+  if (!dst) return;
+  dst.classList.add('export');
+  const cs = getComputedStyle($('plancheFp'));
+  const cw = parseFloat(cs.getPropertyValue('--cw'));
+  const x1 = cw * (parseFloat(cs.getPropertyValue('--fp')) + 1);
+  const x2 = x1 + cw * parseFloat(cs.getPropertyValue('--dos-larg'));
+  const q4 = cs.getPropertyValue('--q4-bg').trim() || '#fff';
+  const dosBg = cs.getPropertyValue('--dos-bg').trim() || '#fff';
+  const une = cs.getPropertyValue('--une-bg').trim() || '#fff';
+  dst.style.background = 'linear-gradient(90deg,' +
+    q4 + ' 0,' + q4 + ' ' + x1 + 'px,' +
+    dosBg + ' ' + x1 + 'px,' + dosBg + ' ' + x2 + 'px,' +
+    une + ' ' + x2 + 'px,' + une + ' 100%)';
+  dst.style.boxShadow = 'none';
 }
 $('btnPng').addEventListener('click', async () => {
   if (tab !== 'une') setTab('une'); /* l'export rend la 1ère : elle doit être affichée */
