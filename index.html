@@ -102,13 +102,25 @@ body{display:flex;flex-direction:column;height:100vh}
   letter-spacing:.10em;line-height:1;margin:calc(var(--cw)*.06) 0 0;
 }
 .pastille{
-  position:absolute;right:calc(var(--cw)*.045);bottom:calc(var(--cw)*.035);
+  position:absolute;
   background:var(--pastille-bg);color:var(--pastille-color);
   font-family:var(--pastille-face);font-weight:var(--pastille-weight);
   font-size:calc(var(--cw)*var(--pastille-size));
   letter-spacing:.02em;padding:calc(var(--cw)*.012) calc(var(--cw)*.028);
   border-radius:calc(var(--cw)*.02);line-height:1;
 }
+.pastille.carree{border-radius:0}
+.pastille.anc-bd{right:calc(var(--cw)*var(--pastille-dx));bottom:calc(var(--cw)*var(--pastille-dy))}
+.pastille.anc-bg{left:calc(var(--cw)*var(--pastille-dx));bottom:calc(var(--cw)*var(--pastille-dy))}
+.pastille.anc-hd{right:calc(var(--cw)*var(--pastille-dx));top:calc(var(--cw)*var(--pastille-dy))}
+.pastille.anc-hg{left:calc(var(--cw)*var(--pastille-dx));top:calc(var(--cw)*var(--pastille-dy))}
+/* verticale : quart de tour anti-horaire (lecture de bas en haut), la pastille
+   reste calée dans son coin d'ancrage ; transform plutôt que writing-mode,
+   que html2canvas rend mal */
+.pastille.verticale.anc-bd{transform-origin:100% 100%;transform:rotate(-90deg) translateX(100%)}
+.pastille.verticale.anc-bg{transform-origin:0 100%;transform:rotate(-90deg) translateY(100%)}
+.pastille.verticale.anc-hd{transform-origin:100% 0;transform:rotate(-90deg) translateY(-100%)}
+.pastille.verticale.anc-hg{transform-origin:0 0;transform:rotate(-90deg) translateX(-100%)}
 
 /* ---------- repères prépresse ---------- */
 .marks{position:absolute;inset:-26px;pointer-events:none;opacity:var(--marks-on)}
@@ -454,7 +466,7 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
 
       <fieldset id="fsPastille" class="off">
         <legend>Pastille collection</legend>
-        <div class="check"><input type="checkbox" id="inPastilleOn" checked><span>Pastille collection (bas droite)</span></div>
+        <div class="check"><input type="checkbox" id="inPastilleOn" checked><span>Pastille collection</span></div>
         <label><span class="lab">Texte</span><input type="text" id="inPastille" value="collection"></label>
         <label><span class="lab">Police</span><select id="inPastilleFace"></select></label>
         <div class="row">
@@ -466,6 +478,19 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
         <div class="row">
           <label><span class="lab">Couleur</span><input type="color" id="inPastilleColor" value="#ffffff"></label>
           <label><span class="lab">Fond</span><input type="color" id="inPastilleBg" value="#111111"></label>
+        </div>
+        <div class="row">
+          <label><span class="lab">Orientation</span>
+            <select id="inPastilleOrient"><option value="h" selected>horizontale</option><option value="v">verticale</option></select></label>
+          <label><span class="lab">Ancrage</span>
+            <select id="inPastilleAnchor"><option value="bd" selected>bas droite</option><option value="bg">bas gauche</option><option value="hd">haut droite</option><option value="hg">haut gauche</option></select></label>
+        </div>
+        <div class="check"><input type="checkbox" id="inPastilleRound" checked><span>Bords arrondis</span></div>
+        <div class="row">
+          <label><span class="lab">Retrait latéral <span class="val" id="vPastilleDx">4,5 %</span></span>
+            <input type="range" id="inPastilleDx" min="0" max="30" step="0.1" value="4.5"></label>
+          <label><span class="lab">Retrait vertical <span class="val" id="vPastilleDy">3,5 %</span></span>
+            <input type="range" id="inPastilleDy" min="0" max="30" step="0.1" value="3.5"></label>
         </div>
       </fieldset>
 
@@ -625,6 +650,8 @@ function render(){
   s.setProperty('--pastille-size', +$('inPastilleSize').value / 100);
   s.setProperty('--pastille-color', $('inPastilleColor').value);
   s.setProperty('--pastille-bg', $('inPastilleBg').value);
+  s.setProperty('--pastille-dx', +$('inPastilleDx').value / 100);
+  s.setProperty('--pastille-dy', +$('inPastilleDy').value / 100);
 
   s.setProperty('--art-y', $('inArtY').value + '%');
   s.setProperty('--art-x', $('inArtX').value + '%');
@@ -645,6 +672,10 @@ function render(){
   $('imprint').style.bottom = $('inImprintY').value + '%';
   $('elPastille').textContent = $('inPastille').value;
   $('elPastille').classList.toggle('hide', !$('inPastilleOn').checked);
+  $('elPastille').classList.toggle('verticale', $('inPastilleOrient').value === 'v');
+  $('elPastille').classList.toggle('carree', !$('inPastilleRound').checked);
+  for (const a of ['bd','bg','hd','hg'])
+    $('elPastille').classList.toggle('anc-' + a, $('inPastilleAnchor').value === a);
 
   $('fsBand').classList.toggle('hide', mode !== 'band');
   $('fsBlockY').classList.toggle('hide', mode === 'band');
@@ -676,6 +707,7 @@ function render(){
     vGenreGap:[$('inGenreGap').value,1,' %'], vGenreSize:[$('inGenreSize').value,1,' %'],
     vImprintY:[$('inImprintY').value,0,' %'], vMonoSize:[$('inMonoSize').value,1,' %'],
     vPastilleSize:[$('inPastilleSize').value,1,' %'],
+    vPastilleDx:[$('inPastilleDx').value,1,' %'], vPastilleDy:[$('inPastilleDy').value,1,' %'],
     vEditorSize:[$('inEditorSize').value,1,' %'], vArtY:[$('inArtY').value,0,' %'],
     vArtX:[$('inArtX').value,0,' %'], vStretch:[$('inStretch').value,2,''],
     vZoom:[$('inZoom').value,2,''], vScrim:[$('inScrimOp').value,0,' %']
@@ -729,6 +761,7 @@ const PRESETS = {
     inMonoFace:F['Spectral'], inMonoWeight:'600', inEditorFace:F['Archivo'], inEditorWeight:'400',
     inPastilleOn:true, inPastille:'folio', inPastilleFace:F['Archivo'], inPastilleWeight:'400',
     inPastilleSize:3.2, inPastilleColor:'#ffffff', inPastilleBg:'#111111',
+    inPastilleOrient:'h', inPastilleAnchor:'bd', inPastilleRound:true, inPastilleDx:4.5, inPastilleDy:3.5,
     inScrim:'none', inArtY:50, inArtX:50, inZoom:1, inKeepRatio:false, inStretch:1
   },
   blanche: {
@@ -744,7 +777,8 @@ const PRESETS = {
     inMonoSize:7, inEditorSize:3.2, inMonoColor:'#191917', inEditorColor:'#191917',
     inMonoFace:F['Bodoni Moda'], inMonoWeight:'600', inEditorFace:F['Bodoni Moda'], inEditorWeight:'400',
     inPastilleOn:false, inPastilleFace:F['Archivo'], inPastilleWeight:'400',
-    inPastilleSize:3.2, inPastilleColor:'#ffffff', inPastilleBg:'#111111'
+    inPastilleSize:3.2, inPastilleColor:'#ffffff', inPastilleBg:'#111111',
+    inPastilleOrient:'h', inPastilleAnchor:'bd', inPastilleRound:true, inPastilleDx:4.5, inPastilleDy:3.5
   },
   overlay: {
     mode:'overlay', inFormat:'110,180', inPaper:'#000000', inAlign:'center', inPadX:12,
@@ -758,6 +792,7 @@ const PRESETS = {
     inMonoFace:F['Playfair Display'], inMonoWeight:'600', inEditorFace:F['Archivo'], inEditorWeight:'400',
     inPastilleOn:false, inPastilleFace:F['Archivo'], inPastilleWeight:'400',
     inPastilleSize:3.2, inPastilleColor:'#ffffff', inPastilleBg:'#111111',
+    inPastilleOrient:'h', inPastilleAnchor:'bd', inPastilleRound:true, inPastilleDx:4.5, inPastilleDy:3.5,
     inScrim:'both', inScrimOp:62, inArtY:62, inArtX:50, inZoom:1.05, inKeepRatio:false, inStretch:1
   }
 };
