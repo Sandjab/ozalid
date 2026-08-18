@@ -753,12 +753,14 @@ function setTab(v){
    un cloneNode(true) rend donc à l'identique ; on retire seulement les ids
    (uniques dans le document) et on impose l'échelle de la planche
    (exception : les filets du cadre, en px inline, remis à l'échelle ci-dessous). ---------- */
-function buildPlanche(P, dosMm){
+function buildPlanche(P, dosMm, cwPl){
   const largeurMm = 2 * format[0] + dosMm + 2 * P.fondPerdu;
-  const stage = document.querySelector('.stage');
   const cwUne = parseFloat(getComputedStyle(cover).getPropertyValue('--cw')) || 340;
-  const MARGE_SCENE = 160; // respiration de la scène autour de la planche, gouttières comprises
-  const cwPl = Math.max(120, Math.min(cwUne, (stage.clientWidth - MARGE_SCENE) * format[0] / largeurMm));
+  if (cwPl === undefined) { /* échelle écran : la planche tient dans la scène */
+    const stage = document.querySelector('.stage');
+    const MARGE_SCENE = 160; // respiration de la scène autour de la planche, gouttières comprises
+    cwPl = Math.max(120, Math.min(cwUne, (stage.clientWidth - MARGE_SCENE) * format[0] / largeurMm));
+  }
   $('plancheFp').style.setProperty('--cw', cwPl + 'px');
   const c4 = cover4.cloneNode(true), c1 = cover.cloneNode(true);
   for (const c of [c4, c1]) {
