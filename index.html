@@ -512,6 +512,18 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
         </div>
       </fieldset>
 
+      <fieldset id="fsQ4Fond" class="off">
+        <legend>Fond de la 4ème</legend>
+        <div class="row">
+          <label><span class="lab">Fond</span>
+            <select id="inQ4BgMode"><option value="herite" selected>papier de la 1ère</option><option value="couleur">couleur distincte</option></select></label>
+          <label><span class="lab">Couleur</span><input type="color" id="inQ4Bg" value="#fcf0d8"></label>
+        </div>
+      </fieldset>
+      <fieldset id="fsQ4Texte" class="off"><legend>Texte de présentation</legend></fieldset>
+      <fieldset id="fsQ4Pied" class="off"><legend>Pied de 4ème</legend></fieldset>
+      <fieldset id="fsQ4Isbn" class="off"><legend>Zone code-barres</legend></fieldset>
+
       <fieldset id="fsImage" class="off">
         <legend>Image</legend>
         <label><span class="lab">Cadrage vertical <span class="val" id="vArtY">50 %</span></span>
@@ -575,7 +587,7 @@ let mode = 'band';
 let tab = 'une';
 function setTab(v){
   tab = v;
-  if (v === 'quatre') selectEl(null); /* applyInspector + render */
+  if (v === 'quatre') selected = null;
   [...$('segTab').children].forEach(b => {
     if (b.tagName === 'BUTTON') b.setAttribute('aria-pressed', b.dataset.tab === v);
   });
@@ -596,7 +608,7 @@ function render(){
   s.setProperty('--paper', $('inPaper').value);
   s4.setProperty('--fw', format[0]);
   s4.setProperty('--fh', format[1]);
-  s4.setProperty('--paper', $('inPaper').value);
+  s4.background = $('inQ4BgMode').value === 'couleur' ? $('inQ4Bg').value : $('inPaper').value;
   s.setProperty('--pad-x', padX + '%');
   s.setProperty('--align', align);
 
@@ -859,12 +871,15 @@ const ELEMENTS = {
 let selected = null;
 
 function applyInspector(){
-  const detail = !!selected;
-  $('fsGeneral').classList.toggle('off', detail);
-  $('fsNav').classList.toggle('off', detail);
+  const q4 = tab === 'quatre';
+  const detail = !!selected && !q4;
+  $('fsGeneral').classList.toggle('off', detail || q4);
+  $('fsNav').classList.toggle('off', detail || q4);
   $('btnBack').classList.toggle('off', !detail);
   for (const [name, ids] of Object.entries(ELEMENTS))
-    ids.forEach(id => $(id).classList.toggle('off', selected !== name));
+    ids.forEach(id => $(id).classList.toggle('off', q4 || selected !== name));
+  for (const id of ['fsQ4Fond','fsQ4Texte','fsQ4Pied','fsQ4Isbn'])
+    $(id).classList.toggle('off', !q4);
 }
 
 function selectEl(name){
@@ -879,6 +894,7 @@ document.querySelectorAll('#fsNav .nav button').forEach(b =>
 
 /* ---------- calque : positionné d'après la géométrie réelle ---------- */
 function syncOverlay(){
+  if (tab !== 'une') return; /* calque de la 1ère : sans objet quand elle est masquée */
   const hb = $('overlay').parentElement.getBoundingClientRect();
   const place = (name, el, visible) => {
     const o = document.querySelector(`.ovl[data-el="${name}"]`);
