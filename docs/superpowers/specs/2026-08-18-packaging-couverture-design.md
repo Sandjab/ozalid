@@ -46,7 +46,10 @@ que la 1ère, rendu par la même passe `render()` (qui reste l'unique endroit
 - **Pied de 4ème** : mention éditeur, prix, numéro de collection.
 - **Zone code-barres/ISBN** : cadre blanc aux dimensions du prestataire,
   activable, vide par défaut.
-- **Fond** : couleur de la 1ère reprise par défaut, ou couleur/image distincte.
+- **Fond** : couleur de la 1ère reprise par défaut, ou couleur distincte.
+  L'image de fond propre à la 4ème (ou le prolongement de celle de la 1ère)
+  est différée après le lot 3 : elle implique une seconde image à
+  sérialiser, hors du chemin critique du packaging.
 
 ## 3. Onglet « Assemblage »
 
