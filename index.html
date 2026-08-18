@@ -155,6 +155,7 @@ body{display:flex;flex-direction:column;height:100vh}
   position:relative;overflow:hidden;
   width:calc(var(--cw,340px)*var(--dos-larg,.14));
   border-left:1px dashed rgba(255,255,255,.55);border-right:1px dashed rgba(255,255,255,.55);
+  background:var(--dos-bg,#fff);
 }
 .dos-texte{
   position:absolute;left:50%;top:50%;
@@ -964,7 +965,9 @@ function render(){
   sp.setProperty('--dos-color', $('inDosColor').value);
   sp.setProperty('--dos-author-case', $('inAuthorCase').value);
   sp.setProperty('--dos-title-case', $('inTitleCase').value);
-  $('dos').style.backgroundColor = $('inDosBgMode').value === 'couleur' ? $('inDosBg').value : $('inPaper').value;
+  sp.setProperty('--dos-bg', $('inDosBgMode').value === 'couleur' ? $('inDosBg').value : $('inPaper').value);
+  sp.setProperty('--q4-bg', $('inQ4BgMode').value === 'couleur' ? $('inQ4Bg').value : $('inPaper').value);
+  sp.setProperty('--une-bg', $('inPaper').value);
   $('elDosAuthor').textContent = $('inAuthor').value.trim();
   $('elDosTitle').textContent = $('inTitle').value.trim();
   $('elDosEditor').textContent = $('inEditor').value.trim();
@@ -1328,6 +1331,12 @@ $('segMode').addEventListener('click', e => {
 $('inFormat').addEventListener('change', e => {
   format = e.target.value.split(',').map(Number);
   fitCover(); render();
+});
+
+/* le clamp de render() borne le calcul ; au blur, refléter la borne dans le champ */
+$('inAsmPages').addEventListener('change', e => {
+  const v = Math.min(800, Math.max(32, +e.target.value || 244));
+  if (+e.target.value !== v) e.target.value = v;
 });
 
 document.querySelectorAll('input, select, textarea').forEach(el => {
