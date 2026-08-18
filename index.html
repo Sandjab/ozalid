@@ -140,6 +140,34 @@ body{display:flex;flex-direction:column;height:100vh}
   color:var(--q4-pied-color);text-align:center;line-height:1.5;
 }
 .q4-pied div:empty{display:none}
+/* ---------- assemblage : planche 4ème + dos + 1ère ---------- */
+/* Les variables --fp/--dos-l/--dos-hauteur sont écrites par render() (tâche 2) ;
+   les fallbacks rendent le squelette visible d'ici là. */
+.planche-fp{
+  padding:calc(var(--cw,340px)*var(--fp,.03));
+  background:repeating-linear-gradient(45deg, rgba(255,255,255,.08) 0 6px, rgba(255,255,255,0) 6px 12px);
+  box-shadow:0 24px 48px -12px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.3);
+}
+/* guides écran seulement : à neutraliser à l'export de la planche (lot 3) */
+.planche{display:flex;align-items:stretch;outline:1px dashed rgba(255,255,255,.55)}
+.planche .cover{box-shadow:none}
+.dos{
+  position:relative;overflow:hidden;
+  width:calc(var(--cw,340px)*var(--dos-l,.14));
+  border-left:1px dashed rgba(255,255,255,.55);border-right:1px dashed rgba(255,255,255,.55);
+}
+.dos-texte{
+  position:absolute;left:50%;top:50%;
+  width:calc(var(--cw,340px)*var(--dos-hauteur,1.65));height:calc(var(--cw,340px)*var(--dos-l,.14));
+  transform:translate(-50%,-50%) rotate(-90deg);
+  display:flex;align-items:center;gap:calc(var(--cw,340px)*.02);
+  padding:0 calc(var(--cw,340px)*.03);
+  font-family:var(--dos-face);font-weight:var(--dos-weight);
+  font-size:calc(var(--cw,340px)*var(--dos-size,.026));color:var(--dos-color,#191917);
+  line-height:1;white-space:nowrap;
+}
+.dos-texte .esp{flex:1}
+.planche-dims{color:rgba(255,255,255,.7);font-family:var(--mono);font-size:11px;text-align:center;margin-top:10px}
 .q4-isbn{
   position:absolute;
   right:calc(var(--cw)*var(--q4-isbn-dx));bottom:calc(var(--cw)*var(--q4-isbn-dy));
@@ -260,6 +288,7 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
     <span class="tb-lab">Face</span>
     <button data-tab="une" aria-pressed="true">1ère</button>
     <button data-tab="quatre" aria-pressed="false">4ème</button>
+    <button data-tab="assemblage" aria-pressed="false">Assemblage</button>
   </div>
   <div class="tb-group" title="Chaque maquette recharge tous les réglages.">
     <span class="tb-lab">Maquettes</span>
@@ -347,6 +376,19 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
         </div>
         <div class="q4-isbn" id="elQ4Isbn"></div>
       </div>
+    </div>
+
+    <div class="holder hide" id="holderAsm">
+      <div class="planche-fp" id="plancheFp">
+        <div class="planche" id="planche">
+          <div class="dos" id="dos">
+            <div class="dos-texte" id="dosTexte">
+              <span id="elDosAuthor"></span><span id="elDosTitle"></span><i class="esp"></i><span id="elDosEditor"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="planche-dims" id="plancheDims"></p>
     </div>
   </div>
 
@@ -604,6 +646,8 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
         </div>
         <p class="note">Zone vide pour l'usage privé ; le code-barres est ajouté par le prestataire quand un ISBN existe.</p>
       </fieldset>
+      <fieldset id="fsAsm" class="off"><legend>Assemblage</legend></fieldset>
+      <fieldset id="fsDos" class="off"><legend>Dos</legend></fieldset>
 
       <fieldset id="fsImage" class="off">
         <legend>Image</legend>
@@ -668,12 +712,13 @@ let mode = 'band';
 let tab = 'une';
 function setTab(v){
   tab = v;
-  if (v === 'quatre') selected = null;
+  if (v !== 'une') selected = null;
   [...$('segTab').children].forEach(b => {
     if (b.tagName === 'BUTTON') b.setAttribute('aria-pressed', b.dataset.tab === v);
   });
   $('holderUne').classList.toggle('hide', v !== 'une');
   $('holderQuatre').classList.toggle('hide', v !== 'quatre');
+  $('holderAsm').classList.toggle('hide', v !== 'assemblage');
   applyInspector(); render();
 }
 
@@ -997,15 +1042,17 @@ const ELEMENTS = {
 let selected = null;
 
 function applyInspector(){
-  const q4 = tab === 'quatre';
-  const detail = !!selected && !q4;
-  $('fsGeneral').classList.toggle('off', detail || q4);
-  $('fsNav').classList.toggle('off', detail || q4);
+  const q4 = tab === 'quatre', asm = tab === 'assemblage';
+  const detail = !!selected && tab === 'une';
+  $('fsGeneral').classList.toggle('off', detail || q4 || asm);
+  $('fsNav').classList.toggle('off', detail || q4 || asm);
   $('btnBack').classList.toggle('off', !detail);
   for (const [name, ids] of Object.entries(ELEMENTS))
-    ids.forEach(id => $(id).classList.toggle('off', q4 || selected !== name));
+    ids.forEach(id => $(id).classList.toggle('off', q4 || asm || selected !== name));
   for (const id of ['fsQ4Fond','fsQ4Texte','fsQ4Pied','fsQ4Isbn'])
     $(id).classList.toggle('off', !q4);
+  for (const id of ['fsAsm','fsDos'])
+    $(id).classList.toggle('off', !asm);
 }
 
 function selectEl(name){
