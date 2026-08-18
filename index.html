@@ -1419,6 +1419,10 @@ function collectConfig(){
 
 function applyConfig(c){
   if (!c || c.app !== CFG_KEY || !c.fields) return false;
+  for (const [k, v] of Object.entries(DEFAULTS)) {
+    const el = $(k); if (!el || el.type === 'file') continue;
+    if (el.type === 'checkbox') el.checked = !!v; else el.value = v;
+  }
   for (const [k, v] of Object.entries(c.fields)) {
     const el = $(k); if (!el || el.type === 'file') continue;
     if (el.type === 'checkbox') el.checked = !!v; else el.value = v;
@@ -1717,6 +1721,9 @@ $('btnReset').addEventListener('click', () => {
   try { localStorage.removeItem(LOCAL_KEY); } catch (e) {}
   location.reload();
 });
+
+/* état neuf du panneau, capturé avant tout chargement : sert de base aux chargements partiels */
+const DEFAULTS = collectConfig().fields;
 
 /* premier chargement : valeurs par défaut génériques du HTML ; sinon la dernière session */
 if (!loadLocal()) { fitCover(); selectEl(null); }
