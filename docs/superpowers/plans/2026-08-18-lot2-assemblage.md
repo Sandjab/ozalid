@@ -36,7 +36,7 @@ require('fs').writeFileSync('/tmp/ozalid-extrait.js', blocks.join('\n;\n'));
 
 **Files :** Modify `index.html` (topbar, stage, CSS, `setTab`, `applyInspector`, panneau)
 
-- [ ] **Step 1 : troisième bouton d'onglet**
+- [x] **Step 1 : troisième bouton d'onglet**
 
 Dans `#segTab`, après le bouton `data-tab="quatre"` :
 
@@ -44,7 +44,7 @@ Dans `#segTab`, après le bouton `data-tab="quatre"` :
     <button data-tab="assemblage" aria-pressed="false">Assemblage</button>
 ```
 
-- [ ] **Step 2 : troisième holder dans `.stage`**
+- [x] **Step 2 : troisième holder dans `.stage`**
 
 Juste après la fermeture de `#holderQuatre` :
 
@@ -63,7 +63,7 @@ Juste après la fermeture de `#holderQuatre` :
     </div>
 ```
 
-- [ ] **Step 3 : CSS de la planche**
+- [x] **Step 3 : CSS de la planche**
 
 Après le bloc `.q4-isbn{…}` :
 
@@ -100,7 +100,7 @@ Après le bloc `.q4-isbn{…}` :
 
 (Vérifier que `--mono` existe : `grep -n "\-\-mono" index.html` — il est utilisé par `input[type=file]`.)
 
-- [ ] **Step 4 : deux fieldsets vides dans le panneau**
+- [x] **Step 4 : deux fieldsets vides dans le panneau**
 
 Après la fermeture `</fieldset>` de `fsQ4Isbn` :
 
@@ -109,7 +109,7 @@ Après la fermeture `</fieldset>` de `fsQ4Isbn` :
       <fieldset id="fsDos" class="off"><legend>Dos</legend></fieldset>
 ```
 
-- [ ] **Step 5 : `setTab` à trois états**
+- [x] **Step 5 : `setTab` à trois états**
 
 Remplacer le corps de `setTab` par :
 
@@ -129,7 +129,7 @@ function setTab(v){
 
 (La ligne `if (v === 'quatre') selected = null;` existante est généralisée en `v !== 'une'`.)
 
-- [ ] **Step 6 : `applyInspector` à trois états**
+- [x] **Step 6 : `applyInspector` à trois états**
 
 Remplacer le corps par :
 
@@ -149,9 +149,9 @@ function applyInspector(){
 }
 ```
 
-- [ ] **Step 7 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
+- [x] **Step 7 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
 
-- [ ] **Step 8 : vérification navigateur**
+- [x] **Step 8 : vérification navigateur**
 
 ```js
 setTab('assemblage');
@@ -164,7 +164,7 @@ JSON.stringify({
 ```
 Attendu : tout `true` (le dos s'affiche avec sa largeur de fallback). Retours `setTab('quatre')` et `setTab('une')` : états corrects, sélection d'élément intacte sur la 1ère. Terminer par `applyPreset('folio'); setTab('une'); render();`, serveur arrêté, onglet fermé.
 
-- [ ] **Step 9 : commit** — `git add index.html` ; message : « Onglet Assemblage : squelette de la planche et du dos ».
+- [x] **Step 9 : commit** — `git add index.html` ; message : « Onglet Assemblage : squelette de la planche et du dos ».
 
 ---
 
@@ -172,7 +172,7 @@ Attendu : tout `true` (le dos s'affiche avec sa largeur de fallback). Retours `s
 
 **Files :** Modify `index.html` (JS près de `PRESETS`, fieldset fsAsm, `render()`, objet `R`, CSS panneau)
 
-- [ ] **Step 1 : objet `PROVIDERS`**
+- [x] **Step 1 : objet `PROVIDERS`**
 
 Juste au-dessus de `const PRESETS = {` :
 
@@ -187,7 +187,7 @@ const PROVIDERS = {
 };
 ```
 
-- [ ] **Step 2 : contrôles du fieldset**
+- [x] **Step 2 : contrôles du fieldset**
 
 Remplacer `<fieldset id="fsAsm" class="off"><legend>Assemblage</legend></fieldset>` par :
 
@@ -202,11 +202,11 @@ Remplacer `<fieldset id="fsAsm" class="off"><legend>Assemblage</legend></fieldse
       </fieldset>
 ```
 
-- [ ] **Step 3 : CSS du champ nombre**
+- [x] **Step 3 : CSS du champ nombre**
 
 Ajouter `input[type=number]` à la règle partagée `input[type=text],select,textarea{…}` ET à la règle d'outline accent (`…:focus`).
 
-- [ ] **Step 4 : calculs dans `render()`**
+- [x] **Step 4 : calculs dans `render()`**
 
 Après le bloc des écritures `s4` (fin des réglages 4ème), ajouter :
 
@@ -225,7 +225,7 @@ Après le bloc des écritures `s4` (fin des réglages 4ème), ajouter :
 
 (`fr` est la fonction de formatage français déjà utilisée par les lectures `R` — vérifier sa signature avant usage.)
 
-- [ ] **Step 5 : lecture `R`** — ajouter dans l'objet `R` :
+- [x] **Step 5 : lecture `R`** — ajouter dans l'objet `R` :
 
 ```js
     vDosMm:[dosMm, 2, ' mm'],
@@ -233,9 +233,9 @@ Après le bloc des écritures `s4` (fin des réglages 4ème), ajouter :
 
 (`dosMm` est dans la portée de `render()` grâce au Step 4 — le bloc du Step 4 doit donc être AVANT l'objet `R` dans la fonction.)
 
-- [ ] **Step 6 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
+- [x] **Step 6 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
 
-- [ ] **Step 7 : vérification navigateur**
+- [x] **Step 7 : vérification navigateur**
 
 ```js
 setTab('assemblage');
@@ -248,7 +248,7 @@ JSON.stringify({dos244: a, dos400: b, caption: $('plancheDims').textContent,
 ```
 Attendu : `dos244:"15,48 mm"`, `dos400:"24,41 mm"`, caption « Planche 237,83 × 181,35 mm — dos 15,48 mm — fond perdu 3,18 mm » pour 244 p (au format 108×178 : 2×108+15,48+2×3,175 = 237,83), et la largeur écran du dos qui grandit entre 244 et 400 pages. Vérifier aussi que la frappe dans `inAsmPages` re-rend en direct (listener global input/select/textarea : le type number est un `input`, donc déjà couvert). Terminer par `applyPreset('folio'); setTab('une'); render();` (remettre 244 avant), serveur arrêté.
 
-- [ ] **Step 8 : commit** — « Assemblage : prestataire, pages et calcul du dos ».
+- [x] **Step 8 : commit** — « Assemblage : prestataire, pages et calcul du dos ».
 
 ---
 
@@ -256,7 +256,7 @@ Attendu : `dos244:"15,48 mm"`, `dos400:"24,41 mm"`, caption « Planche 237,83 ×
 
 **Files :** Modify `index.html` (fieldset fsDos, `render()`, boucle des polices, objet `R`)
 
-- [ ] **Step 1 : contrôles**
+- [x] **Step 1 : contrôles**
 
 Remplacer `<fieldset id="fsDos" class="off"><legend>Dos</legend></fieldset>` par :
 
@@ -280,7 +280,7 @@ Remplacer `<fieldset id="fsDos" class="off"><legend>Dos</legend></fieldset>` par
       </fieldset>
 ```
 
-- [ ] **Step 2 : `render()`**
+- [x] **Step 2 : `render()`**
 
 À la suite du bloc « assemblage : dimensions » (tâche 2) :
 
@@ -295,15 +295,15 @@ Remplacer `<fieldset id="fsDos" class="off"><legend>Dos</legend></fieldset>` par
   $('elDosEditor').textContent = $('inEditor').value.trim();
 ```
 
-- [ ] **Step 3 : polices et lecture** — ajouter `'inDosFace'` à la boucle de population des polices, et dans `R` :
+- [x] **Step 3 : polices et lecture** — ajouter `'inDosFace'` à la boucle de population des polices, et dans `R` :
 
 ```js
     vDosSize:[$('inDosSize').value,1,' %'],
 ```
 
-- [ ] **Step 4 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
+- [x] **Step 4 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
 
-- [ ] **Step 5 : vérification navigateur**
+- [x] **Step 5 : vérification navigateur**
 
 ```js
 applyPreset('folio'); setTab('assemblage');
@@ -318,7 +318,7 @@ JSON.stringify({
 ```
 Attendu : textes corrects, `pivote:true`, `dansLeDos:true`, `fondHerite:true`. Basculer `inDosBgMode` sur couleur → fond du dos = `inDosBg`. Screenshot du dos : texte lisible de bas en haut (auteur en bas, éditeur en haut). Terminer proprement (preset folio, onglet 1ère), serveur arrêté.
 
-- [ ] **Step 6 : commit** — « Assemblage : dos composé (auteur, titre, éditeur) ».
+- [x] **Step 6 : commit** — « Assemblage : dos composé (auteur, titre, éditeur) ».
 
 ---
 
@@ -326,7 +326,7 @@ Attendu : textes corrects, `pivote:true`, `dansLeDos:true`, `fondHerite:true`. B
 
 **Files :** Modify `index.html` (fonction `buildPlanche`, appel dans `render()`)
 
-- [ ] **Step 1 : fonction `buildPlanche`**
+- [x] **Step 1 : fonction `buildPlanche`**
 
 Juste avant `render()` (ou juste après, au même niveau) :
 
@@ -353,7 +353,7 @@ function buildPlanche(){
 }
 ```
 
-- [ ] **Step 2 : appel dans `render()`**
+- [x] **Step 2 : appel dans `render()`**
 
 À la fin du bloc assemblage (après les écritures du dos, avant l'objet `R`) :
 
@@ -361,13 +361,13 @@ function buildPlanche(){
   if (tab === 'assemblage') buildPlanche();
 ```
 
-- [ ] **Step 3 : redimensionnement**
+- [x] **Step 3 : redimensionnement**
 
 Vérifier (grep `addEventListener('resize'`) que le handler de resize enchaîne `fitCover()` puis `render()` — si oui, rien à faire (la planche se reconstruit via render). Si le handler n'appelle pas `render()`, l'y ajouter.
 
-- [ ] **Step 4 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
+- [x] **Step 4 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
 
-- [ ] **Step 5 : vérification navigateur**
+- [x] **Step 5 : vérification navigateur**
 
 ```js
 applyPreset('folio'); render(); setTab('assemblage');
@@ -386,7 +386,7 @@ JSON.stringify({
 ```
 Attendu : `troisPanneaux:true`, `ordre:true` (4ème à gauche, dos au centre, 1ère à droite), `couvEgales:true`, `pasDIdsDupliques:0 → true`, `tientDansLaScene:true`. Vérifier aussi la réactivité : modifier `inTitle` pendant l'onglet assemblage → le clone de la 1ère affiche le nouveau titre au render suivant (le listener global re-rend à la frappe). Screenshot de la planche complète. Vérifier que `document.getElementById('cover')` retourne toujours l'original (dans `#holderUne`). Terminer proprement, serveur arrêté.
 
-- [ ] **Step 6 : commit** — « Assemblage : planche complète par clones des deux couvertures ».
+- [x] **Step 6 : commit** — « Assemblage : planche complète par clones des deux couvertures ».
 
 ---
 
@@ -394,7 +394,7 @@ Attendu : `troisPanneaux:true`, `ordre:true` (4ème à gauche, dos au centre, 1�
 
 **Files :** Modify `index.html` (`applyConfig`, init)
 
-- [ ] **Step 1 : capture des défauts**
+- [x] **Step 1 : capture des défauts**
 
 Dans le bloc d'init en bas de script, JUSTE AVANT l'appel à `loadLocal()` (ou l'expression `loadLocal() || …`) :
 
@@ -403,7 +403,7 @@ Dans le bloc d'init en bas de script, JUSTE AVANT l'appel à `loadLocal()` (ou l
 const DEFAULTS = collectConfig().fields;
 ```
 
-- [ ] **Step 2 : remise aux défauts avant application**
+- [x] **Step 2 : remise aux défauts avant application**
 
 Dans `applyConfig`, juste avant la boucle `for (const [k, v] of Object.entries(c.fields))` :
 
@@ -416,9 +416,9 @@ Dans `applyConfig`, juste avant la boucle `for (const [k, v] of Object.entries(c
 
 (Un PNG/JSON d'avant le lot 1, sans clés `inQ4*`/`inDos*`/`inAsm*`, ramène désormais ces contrôles aux défauts au lieu de laisser l'état courant. `DEFAULTS` est un `const` top-level initialisé avant le premier appel réel d'`applyConfig` — `loadLocal()` est appelé après sa déclaration.)
 
-- [ ] **Step 3 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
+- [x] **Step 3 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
 
-- [ ] **Step 4 : vérification navigateur**
+- [x] **Step 4 : vérification navigateur**
 
 ```js
 $('inQ4Text').value = 'résidu'; $('inAsmPages').value = 500; render();
@@ -430,7 +430,7 @@ JSON.stringify({q4Reset: $('inQ4Text').value === '', pagesReset: $('inAsmPages')
 ```
 Attendu : les trois `true` (les clés absentes reviennent aux défauts, les présentes s'appliquent). Vérifier aussi qu'un rechargement de page restaure toujours la session normale. Terminer proprement, serveur arrêté.
 
-- [ ] **Step 5 : commit** — « applyConfig : chargements partiels ramenés aux défauts ».
+- [x] **Step 5 : commit** — « applyConfig : chargements partiels ramenés aux défauts ».
 
 ---
 
@@ -438,7 +438,7 @@ Attendu : les trois `true` (les clés absentes reviennent aux défauts, les pré
 
 **Files :** Modify `index.html` (`PRESETS`), `docs/superpowers/plans/2026-08-18-lot2-assemblage.md`
 
-- [ ] **Step 1 : valeurs dans les trois `PRESETS`**
+- [x] **Step 1 : valeurs dans les trois `PRESETS`**
 
 Ajouter à CHACUNE des trois entrées, après les clés `inQ4*` :
 
@@ -448,11 +448,15 @@ Ajouter à CHACUNE des trois entrées, après les clés `inQ4*` :
     inDosBgMode:'herite', inDosBg:'#fcf0d8',
 ```
 
+**Exception** : pour le preset `overlay` (papier `#000000` hérité par le dos),
+`inDosColor:'#f4efe4'` — texte crème sur dos noir, cohérent avec sa couverture ;
+`#191917` y serait illisible (relevé en revue qualité T3).
+
 (Ponctuation locale : virgule finale selon la position. Invariant à vérifier : chaque contrôle `inAsm*`/`inDos*` du panneau a sa clé — grep croisé `id="inAsm` / `id="inDos` vs les clés.)
 
-- [ ] **Step 2 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
+- [x] **Step 2 : syntaxe** — extraction + `node --check`. Attendu : `Syntaxe OK`.
 
-- [ ] **Step 3 : round-trip et non-régression**
+- [x] **Step 3 : round-trip et non-régression**
 
 En navigateur :
 a) Round-trip : régler `inAsmPages:320`, `inDosBgMode:'couleur'`, `inDosBg:'#101010'`, `inDosSize:'3.4'` ; `cfg = collectConfig()` ; `applyPreset('folio')` ; `applyConfig(cfg)` → les quatre valeurs reviennent.
@@ -461,6 +465,6 @@ c) Les trois presets × trois modes × trois onglets : aucune erreur console nou
 d) Depuis l'onglet assemblage, cliquer « Exporter PNG » n'est pas testé jusqu'au dialogue, mais vérifier que la garde du handler ramène bien sur la 1ère (`setTab('assemblage')` puis simuler la première ligne du handler : `if (tab !== 'une') setTab('une');` → `tab === 'une'`).
 e) Passe visuelle : screenshot de la planche au preset folio avec le pied et la zone ISBN de la 4ème activés — composition d'ensemble plausible, dos lisible, caption des dimensions exacte.
 
-- [ ] **Step 4 : cocher le plan** — passer toutes les cases de ce fichier à `- [x]`.
+- [x] **Step 4 : cocher le plan** — passer toutes les cases de ce fichier à `- [x]`.
 
-- [ ] **Step 5 : commit** — « Assemblage : persistance et presets ; lot 2 vérifié » (index.html + ce plan).
+- [x] **Step 5 : commit** — « Assemblage : persistance et presets ; lot 2 vérifié » (index.html + ce plan).
