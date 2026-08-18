@@ -781,6 +781,7 @@ function buildPlanche(P, dosMm, cwPl){
       if (v.endsWith('px')) el.style.setProperty(prop, parseFloat(v) * scale + 'px');
     }
   });
+  /* ordre porteur : preparePlancheClone repère la 1ère par lastElementChild */
   $('planche').replaceChildren(c4, $('dos'), c1);
 }
 
@@ -1630,8 +1631,8 @@ function preparePlancheClone(doc){
   /* la 1ère est le dernier enfant de #planche (4ème | dos | 1ère) ; ses ids ont été retirés
      par buildPlanche — on la retrouve par position, dans le document vivant comme dans le clone */
   const c1 = $('planche').lastElementChild;
-  const img = doc.getElementById('planche') &&
-              doc.getElementById('planche').lastElementChild.querySelector('.art img');
+  const p = doc.getElementById('planche');
+  const img = p && p.lastElementChild && p.lastElementChild.querySelector('.art img');
   if (c1 && img) {
     const zone = c1.querySelector('.art');
     const css = zone && artFreezeCss(zone.getBoundingClientRect());
