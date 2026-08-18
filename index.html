@@ -140,6 +140,12 @@ body{display:flex;flex-direction:column;height:100vh}
   color:var(--q4-pied-color);text-align:center;line-height:1.5;
 }
 .q4-pied div:empty{display:none}
+.q4-isbn{
+  position:absolute;
+  right:calc(var(--cw)*var(--q4-isbn-dx));bottom:calc(var(--cw)*var(--q4-isbn-dy));
+  width:calc(var(--cw)*var(--q4-isbn-w));height:calc(var(--cw)*var(--q4-isbn-h));
+  background:#fff;
+}
 
 /* ---------- repères prépresse ---------- */
 .marks{position:absolute;inset:-26px;pointer-events:none;opacity:var(--marks-on)}
@@ -576,12 +582,28 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
         <div class="row">
           <label><span class="lab">Corps <span class="val" id="vQ4PiedSize">2,4 %</span></span>
             <input type="range" id="inQ4PiedSize" min="1.5" max="5" step="0.1" value="2.4"></label>
-          <label><span class="lab">Hauteur <span class="val" id="vQ4PiedY">4,0 %</span></span>
+          <label><span class="lab">Retrait bas <span class="val" id="vQ4PiedY">4,0 %</span></span>
             <input type="range" id="inQ4PiedY" min="1" max="20" step="0.5" value="4"></label>
         </div>
         <label><span class="lab">Couleur</span><input type="color" id="inQ4PiedColor" value="#191917"></label>
       </fieldset>
-      <fieldset id="fsQ4Isbn" class="off"><legend>Zone code-barres</legend></fieldset>
+      <fieldset id="fsQ4Isbn" class="off">
+        <legend>Zone code-barres</legend>
+        <div class="check"><input type="checkbox" id="inQ4IsbnOn"><span>Réserver la zone (cadre blanc, bas droite)</span></div>
+        <div class="row">
+          <label><span class="lab">Largeur <span class="val" id="vQ4IsbnW">34,0 %</span></span>
+            <input type="range" id="inQ4IsbnW" min="15" max="50" step="0.5" value="34"></label>
+          <label><span class="lab">Hauteur <span class="val" id="vQ4IsbnH">21,0 %</span></span>
+            <input type="range" id="inQ4IsbnH" min="8" max="35" step="0.5" value="21"></label>
+        </div>
+        <div class="row">
+          <label><span class="lab">Retrait latéral <span class="val" id="vQ4IsbnDx">7,0 %</span></span>
+            <input type="range" id="inQ4IsbnDx" min="0" max="30" step="0.5" value="7"></label>
+          <label><span class="lab">Retrait bas <span class="val" id="vQ4IsbnDy">7,0 %</span></span>
+            <input type="range" id="inQ4IsbnDy" min="0" max="30" step="0.5" value="7"></label>
+        </div>
+        <p class="note">Zone vide pour l'usage privé ; le code-barres est ajouté par le prestataire quand un ISBN existe.</p>
+      </fieldset>
 
       <fieldset id="fsImage" class="off">
         <legend>Image</legend>
@@ -681,10 +703,15 @@ function render(){
   s4.setProperty('--q4-pied-size', +$('inQ4PiedSize').value / 100);
   s4.setProperty('--q4-pied-y', +$('inQ4PiedY').value / 100);
   s4.setProperty('--q4-pied-color', $('inQ4PiedColor').value);
-  $('elQ4Mention').textContent = $('inQ4Mention').value;
-  $('elQ4Coll').textContent = $('inQ4Coll').value;
-  $('elQ4Prix').textContent = $('inQ4Prix').value;
+  $('elQ4Mention').textContent = $('inQ4Mention').value.trim();
+  $('elQ4Coll').textContent = $('inQ4Coll').value.trim();
+  $('elQ4Prix').textContent = $('inQ4Prix').value.trim();
   $('q4Pied').classList.toggle('hide', !$('inQ4PiedOn').checked);
+  s4.setProperty('--q4-isbn-w', +$('inQ4IsbnW').value / 100);
+  s4.setProperty('--q4-isbn-h', +$('inQ4IsbnH').value / 100);
+  s4.setProperty('--q4-isbn-dx', +$('inQ4IsbnDx').value / 100);
+  s4.setProperty('--q4-isbn-dy', +$('inQ4IsbnDy').value / 100);
+  $('elQ4Isbn').classList.toggle('hide', !$('inQ4IsbnOn').checked);
   s.setProperty('--pad-x', padX + '%');
   s.setProperty('--align', align);
 
@@ -835,7 +862,9 @@ function render(){
     vZoom:[$('inZoom').value,2,''], vScrim:[$('inScrimOp').value,0,' %'],
     vQ4TextSize:[$('inQ4TextSize').value,1,' %'], vQ4Leading:[$('inQ4Leading').value,2,''],
     vQ4PadX:[$('inQ4PadX').value,1,' %'], vQ4Top:[$('inQ4Top').value,1,' %'],
-    vQ4PiedSize:[$('inQ4PiedSize').value,1,' %'], vQ4PiedY:[$('inQ4PiedY').value,1,' %']
+    vQ4PiedSize:[$('inQ4PiedSize').value,1,' %'], vQ4PiedY:[$('inQ4PiedY').value,1,' %'],
+    vQ4IsbnW:[$('inQ4IsbnW').value,1,' %'], vQ4IsbnH:[$('inQ4IsbnH').value,1,' %'],
+    vQ4IsbnDx:[$('inQ4IsbnDx').value,1,' %'], vQ4IsbnDy:[$('inQ4IsbnDy').value,1,' %'],
   };
   for (const [k,[v,d,u]] of Object.entries(R)) $(k).textContent = fr(v,d) + u;
   syncOverlay();
