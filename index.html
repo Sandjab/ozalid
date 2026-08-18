@@ -406,6 +406,7 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
         <label><span class="lab">Format</span>
           <select id="inFormat">
             <option value="108,178">Folio — 108 × 178 mm</option>
+            <option value="108,175">Poche Lulu — 108 × 175 mm</option>
             <option value="110,180" selected>Poche — 110 × 180 mm</option>
             <option value="128,198">Semi-poche — 128 × 198 mm</option>
             <option value="140,205">Blanche — 140 × 205 mm</option>
@@ -906,7 +907,7 @@ function render(){
   sp.setProperty('--fp', P.fondPerdu / format[0]);
   $('plancheDims').textContent = 'Planche ' + fr(2*format[0] + dosMm + 2*P.fondPerdu, 2) +
     ' × ' + fr(format[1] + 2*P.fondPerdu, 2) + ' mm — dos ' + fr(dosMm, 2) +
-    ' mm — fond perdu ' + fr(P.fondPerdu, 2) + ' mm';
+    ' mm — fond perdu ' + fr(P.fondPerdu, 3) + ' mm';
 
   /* --- lectures --- */
   const R = {
