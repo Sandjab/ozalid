@@ -1587,12 +1587,11 @@ const slug = () => ($('inTitle').value || 'couverture').trim().replace(/\s+/g, '
 /* html2canvas ignore object-fit/object-position (il étire l'image sur sa boîte) :
    on fige dans le clone la géométrie que le CSS produit à l'écran — cadrage
    (cover/contain), position verticale et zoom — en px, sans transform. */
-function freezeArtGeometry(doc){
-  const src = $('elImg'), dst = doc.getElementById('elImg');
-  if (!src || !dst || mode === 'typo') return;
-  const zone = $('art').getBoundingClientRect();
+function artFreezeCss(zone){
+  const src = $('elImg');
+  if (!src || mode === 'typo') return null;
   const nw = src.naturalWidth, nh = src.naturalHeight;
-  if (!nw || !nh || !zone.width || !zone.height) return;
+  if (!nw || !nh || !zone.width || !zone.height) return null;
   const keep = $('inKeepRatio').checked;
   const fit = (keep ? Math.min : Math.max)(zone.width / nw, zone.height / nh);
   const artX = +$('inArtX').value / 100, artY = +$('inArtY').value / 100, zoom = +$('inZoom').value;
@@ -1601,9 +1600,15 @@ function freezeArtGeometry(doc){
   const left = (zone.width - dw) * artX, top = (zone.height - dh) * artY;
   /* échelle repliée dans la géométrie, autour de l'origine (artX, artY) de la zone */
   const ox = zone.width * artX, oy = zone.height * artY;
-  dst.style.cssText = 'position:absolute;' +
+  return 'position:absolute;' +
     'left:' + (ox - (ox - left) * sx) + 'px;top:' + (oy - (oy - top) * zoom) + 'px;' +
     'width:' + (dw * sx) + 'px;height:' + (dh * zoom) + 'px;transform:none;';
+}
+function freezeArtGeometry(doc){
+  const dst = doc.getElementById('elImg');
+  if (!dst) return;
+  const css = artFreezeCss($('art').getBoundingClientRect());
+  if (css) dst.style.cssText = css;
 }
 /* clone html2canvas de la planche : guides écran neutralisés, fond perdu rempli par les
    fonds adjacents (arrêts durs en px résolus — html2canvas ne parse pas calc() dans un gradient) */
@@ -1622,6 +1627,16 @@ function preparePlancheClone(doc){
     q4 + ' 0,' + q4 + ' ' + x1 + 'px,' +
     dosBg + ' ' + x1 + 'px,' + dosBg + ' ' + x2 + 'px,' +
     une + ' ' + x2 + 'px,' + une + ' 100%)';
+  /* la 1ère est le dernier enfant de #planche (4ème | dos | 1ère) ; ses ids ont été retirés
+     par buildPlanche — on la retrouve par position, dans le document vivant comme dans le clone */
+  const c1 = $('planche').lastElementChild;
+  const img = doc.getElementById('planche') &&
+              doc.getElementById('planche').lastElementChild.querySelector('.art img');
+  if (c1 && img) {
+    const zone = c1.querySelector('.art');
+    const css = zone && artFreezeCss(zone.getBoundingClientRect());
+    if (css) img.style.cssText = css;
+  }
   dst.style.boxShadow = 'none';
 }
 $('btnPng').addEventListener('click', async () => {
