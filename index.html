@@ -651,11 +651,27 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
         <legend>Assemblage</legend>
         <label><span class="lab">Prestataire</span>
           <select id="inAsmProvider"><option value="lulu" selected>Lulu (poche)</option></select></label>
-        <label><span class="lab">Pages de l'intérieur — dos : <span class="val" id="vDosMm">15,48 mm</span></span>
+        <label><span class="lab">Pages de l'intérieur — dos <span class="val" id="vDosMm">15,48 mm</span></span>
           <input type="number" id="inAsmPages" min="32" max="800" step="2" value="244"></label>
-        <p class="note">Le dos est calculé du nombre de pages. Si l'intérieur regénéré change de compte de pages, reporte le nouveau nombre ici avant d'exporter la planche.</p>
+        <p class="note">Le dos est calculé d'après le nombre de pages. Si l'intérieur regénéré change de nombre de pages, reporte le nouveau nombre ici avant d'exporter la planche.</p>
       </fieldset>
-      <fieldset id="fsDos" class="off"><legend>Dos</legend></fieldset>
+      <fieldset id="fsDos" class="off">
+        <legend>Dos</legend>
+        <label><span class="lab">Police</span><select id="inDosFace"></select></label>
+        <div class="row">
+          <label><span class="lab">Graisse</span>
+            <select id="inDosWeight"><option>300</option><option>400</option><option>500</option><option selected>600</option><option>700</option></select></label>
+          <label><span class="lab">Corps <span class="val" id="vDosSize">2,6 %</span></span>
+            <input type="range" id="inDosSize" min="1.5" max="5" step="0.1" value="2.6"></label>
+        </div>
+        <div class="row">
+          <label><span class="lab">Couleur</span><input type="color" id="inDosColor" value="#191917"></label>
+          <label><span class="lab">Fond</span>
+            <select id="inDosBgMode"><option value="herite" selected>papier de la 1ère</option><option value="couleur">couleur distincte</option></select></label>
+        </div>
+        <label><span class="lab">Couleur du fond</span><input type="color" id="inDosBg" value="#fcf0d8"></label>
+        <p class="note">Le dos reprend l'auteur, le titre et l'éditeur de la 1ère, en lecture de bas en haut.</p>
+      </fieldset>
 
       <fieldset id="fsImage" class="off">
         <legend>Image</legend>
@@ -702,7 +718,7 @@ const FACES = [
 ];
 const F = {}; FACES.forEach(([n,s]) => F[n.split(' (')[0]] = s);
 
-['inAuthorFace','inTitleFace','inGenreFace','inMonoFace','inEditorFace','inPastilleFace','inQ4TextFace','inQ4PiedFace'].forEach(id => {
+['inAuthorFace','inTitleFace','inGenreFace','inMonoFace','inEditorFace','inPastilleFace','inQ4TextFace','inQ4PiedFace','inDosFace'].forEach(id => {
   const sel = document.getElementById(id);
   FACES.forEach(([name, stack]) => {
     const o = document.createElement('option');
@@ -900,7 +916,8 @@ function render(){
 
   /* --- assemblage : dimensions de la planche --- */
   const P = PROVIDERS[$('inAsmProvider').value];
-  const dosMm = P.dos(+$('inAsmPages').value);
+  const pages = Math.min(800, Math.max(32, +$('inAsmPages').value || 244));
+  const dosMm = P.dos(pages);
   const sp = $('plancheFp').style;
   sp.setProperty('--dos-larg', dosMm / format[0]);
   sp.setProperty('--dos-hauteur', format[1] / format[0]);
@@ -908,10 +925,19 @@ function render(){
   $('plancheDims').textContent = 'Planche ' + fr(2*format[0] + dosMm + 2*P.fondPerdu, 2) +
     ' × ' + fr(format[1] + 2*P.fondPerdu, 2) + ' mm — dos ' + fr(dosMm, 2) +
     ' mm — fond perdu ' + fr(P.fondPerdu, 3) + ' mm';
+  sp.setProperty('--dos-face', $('inDosFace').value);
+  sp.setProperty('--dos-weight', $('inDosWeight').value);
+  sp.setProperty('--dos-size', +$('inDosSize').value / 100);
+  sp.setProperty('--dos-color', $('inDosColor').value);
+  $('dos').style.backgroundColor = $('inDosBgMode').value === 'couleur' ? $('inDosBg').value : $('inPaper').value;
+  $('elDosAuthor').textContent = $('inAuthor').value.trim();
+  $('elDosTitle').textContent = $('inTitle').value.trim();
+  $('elDosEditor').textContent = $('inEditor').value.trim();
 
   /* --- lectures --- */
   const R = {
     vDosMm:[dosMm, 2, ' mm'],
+    vDosSize:[$('inDosSize').value,1,' %'],
     vPadX:[padX,1,' %'], vBand:[bandH,1,' %'], vBlockY:[$('inBlockY').value,0,' %'],
     vFrameM:[fm,1,' %'], vRule1W:[r1w,2,' %'], vRule2Off:[r2o,1,' %'],
     vRule2W:[r2w,2,' %'], vRule2Gap:[r2g,1,' %'],
@@ -971,7 +997,6 @@ function fitCover(){
 /* ---------- prestataires d'impression ---------- */
 const PROVIDERS = {
   lulu: {
-    nom: 'Lulu (poche)',
     fondPerdu: 3.175,                     /* mm — 0,125 po */
     dos: pages => pages / 17.48 + 1.524   /* mm — formule Lulu, vérifiée sur 244 p → 15,48 mm */
   }
