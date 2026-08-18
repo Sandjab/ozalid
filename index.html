@@ -589,7 +589,7 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
       </fieldset>
       <fieldset id="fsQ4Isbn" class="off">
         <legend>Zone code-barres</legend>
-        <div class="check"><input type="checkbox" id="inQ4IsbnOn"><span>Réserver la zone (cadre blanc, bas droite)</span></div>
+        <div class="check"><input type="checkbox" id="inQ4IsbnOn"><span>Réserver la zone (aplat blanc, bas droite)</span></div>
         <div class="row">
           <label><span class="lab">Largeur <span class="val" id="vQ4IsbnW">34,0 %</span></span>
             <input type="range" id="inQ4IsbnW" min="15" max="50" step="0.5" value="34"></label>
@@ -917,6 +917,12 @@ const PRESETS = {
     inPastilleOn:true, inPastille:'folio', inPastilleFace:F['Archivo'], inPastilleWeight:'400',
     inPastilleSize:3.2, inPastilleColor:'#ffffff', inPastilleBg:'#111111',
     inPastilleOrient:'h', inPastilleAnchor:'bd', inPastilleRound:true, inPastilleDx:4.5, inPastilleDy:3.5,
+    inQ4BgMode:'herite', inQ4Bg:'#fcf0d8', inQ4Text:'', inQ4TextFace:F['Spectral'],
+    inQ4TextWeight:'400', inQ4TextSize:3, inQ4Leading:1.45, inQ4Align:'left',
+    inQ4PadX:10, inQ4Top:12, inQ4TextColor:'#191917',
+    inQ4PiedOn:true, inQ4Mention:'', inQ4Coll:'', inQ4Prix:'', inQ4PiedFace:F['Archivo'],
+    inQ4PiedSize:2.4, inQ4PiedY:4, inQ4PiedColor:'#191917',
+    inQ4IsbnOn:false, inQ4IsbnW:34, inQ4IsbnH:21, inQ4IsbnDx:7, inQ4IsbnDy:7,
     inScrim:'none', inArtY:50, inArtX:50, inZoom:1, inKeepRatio:false, inStretch:1
   },
   blanche: {
@@ -933,7 +939,13 @@ const PRESETS = {
     inMonoFace:F['Bodoni Moda'], inMonoWeight:'600', inEditorFace:F['Bodoni Moda'], inEditorWeight:'400',
     inPastilleOn:false, inPastilleFace:F['Archivo'], inPastilleWeight:'400',
     inPastilleSize:3.2, inPastilleColor:'#ffffff', inPastilleBg:'#111111',
-    inPastilleOrient:'h', inPastilleAnchor:'bd', inPastilleRound:true, inPastilleDx:4.5, inPastilleDy:3.5
+    inPastilleOrient:'h', inPastilleAnchor:'bd', inPastilleRound:true, inPastilleDx:4.5, inPastilleDy:3.5,
+    inQ4BgMode:'herite', inQ4Bg:'#fcf0d8', inQ4Text:'', inQ4TextFace:F['Spectral'],
+    inQ4TextWeight:'400', inQ4TextSize:3, inQ4Leading:1.45, inQ4Align:'left',
+    inQ4PadX:10, inQ4Top:12, inQ4TextColor:'#191917',
+    inQ4PiedOn:true, inQ4Mention:'', inQ4Coll:'', inQ4Prix:'', inQ4PiedFace:F['Archivo'],
+    inQ4PiedSize:2.4, inQ4PiedY:4, inQ4PiedColor:'#191917',
+    inQ4IsbnOn:false, inQ4IsbnW:34, inQ4IsbnH:21, inQ4IsbnDx:7, inQ4IsbnDy:7
   },
   overlay: {
     mode:'overlay', inFormat:'110,180', inPaper:'#000000', inAlign:'center', inPadX:12,
@@ -948,6 +960,12 @@ const PRESETS = {
     inPastilleOn:false, inPastilleFace:F['Archivo'], inPastilleWeight:'400',
     inPastilleSize:3.2, inPastilleColor:'#ffffff', inPastilleBg:'#111111',
     inPastilleOrient:'h', inPastilleAnchor:'bd', inPastilleRound:true, inPastilleDx:4.5, inPastilleDy:3.5,
+    inQ4BgMode:'herite', inQ4Bg:'#fcf0d8', inQ4Text:'', inQ4TextFace:F['Spectral'],
+    inQ4TextWeight:'400', inQ4TextSize:3, inQ4Leading:1.45, inQ4Align:'left',
+    inQ4PadX:10, inQ4Top:12, inQ4TextColor:'#191917',
+    inQ4PiedOn:true, inQ4Mention:'', inQ4Coll:'', inQ4Prix:'', inQ4PiedFace:F['Archivo'],
+    inQ4PiedSize:2.4, inQ4PiedY:4, inQ4PiedColor:'#191917',
+    inQ4IsbnOn:false, inQ4IsbnW:34, inQ4IsbnH:21, inQ4IsbnDx:7, inQ4IsbnDy:7,
     inScrim:'both', inScrimOp:62, inArtY:62, inArtX:50, inZoom:1.05, inKeepRatio:false, inStretch:1
   }
 };

@@ -16,7 +16,7 @@ Trois blocs dans le `<script>` final :
 
 1. **`render()`** — fonction unique qui lit tous les contrôles et écrit des variables CSS sur `#cover`. Aucun autre endroit ne doit toucher au style de la couverture. Tout nouveau réglage passe par là.
 2. **Presets** — objet `PRESETS`, une clé par maquette, mappant `id de contrôle → valeur`. Ajouter une maquette = ajouter une entrée et un bouton.
-3. **Sérialisation PNG** — `collectConfig` / `applyConfig` balaient le DOM du panneau (`input[id^="in"]`), donc **tout contrôle nommé `inXxx` est automatiquement sauvegardé**. Un contrôle nommé autrement sera silencieusement perdu à l'export.
+3. **Sérialisation PNG** — `collectConfig` / `applyConfig` balaient le DOM du panneau (les `input`, `select` et `textarea` dont l'id commence par `in`), donc **tout contrôle nommé `inXxx` est automatiquement sauvegardé**. Un contrôle nommé autrement sera silencieusement perdu à l'export.
 
 ## Ajouter un réglage
 
