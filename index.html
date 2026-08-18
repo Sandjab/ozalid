@@ -1442,6 +1442,7 @@ function freezeArtGeometry(doc){
     'width:' + (dw * sx) + 'px;height:' + (dh * zoom) + 'px;transform:none;';
 }
 $('btnPng').addEventListener('click', async () => {
+  if (tab !== 'une') setTab('une'); /* l'export rend la 1ère : elle doit être affichée */
   /* dialogue avant le rendu : l'activation utilisateur expire pendant html2canvas */
   const handle = await pickSaveFile(slug() + '.png', 'Image PNG', 'image/png', '.png');
   if (handle === 'aborted') return;
