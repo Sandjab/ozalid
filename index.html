@@ -32,6 +32,7 @@ body{display:flex;flex-direction:column;height:100vh}
 .tb-group{display:flex;align-items:center;gap:6px}
 .tb-group button{padding:6px 10px;border:1px solid #4a4a46;background:transparent;color:#eee;cursor:pointer;font-family:var(--ui);font-size:11px;font-weight:700;border-radius:2px}
 .tb-group button:hover{background:#fff;color:var(--ink)}
+#segTab button[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
 .tb-right{margin-left:auto;display:flex;gap:8px}
 .topbar .status{margin:0;min-height:0;color:#aaa}
 .topbar .status.ok{color:#7fd18f}
@@ -230,6 +231,11 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
 <body>
 <header class="topbar">
   <h1 class="tb-brand">Atelier — couverture</h1>
+  <div class="tb-group" id="segTab">
+    <span class="tb-lab">Face</span>
+    <button data-tab="une" aria-pressed="true">1ère</button>
+    <button data-tab="quatre" aria-pressed="false">4ème</button>
+  </div>
   <div class="tb-group" title="Chaque maquette recharge tous les réglages.">
     <span class="tb-lab">Maquettes</span>
     <button data-preset="folio">Folio</button>
@@ -266,7 +272,7 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
 <div class="wrap">
 
   <div class="stage">
-    <div class="holder">
+    <div class="holder" id="holderUne">
       <div class="marks" id="marks">
         <i class="h" style="left:0;top:26px"></i><i class="v" style="left:26px;top:0"></i>
         <i class="h" style="right:0;top:26px"></i><i class="v" style="right:26px;top:0"></i>
@@ -303,6 +309,18 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
         <div class="ovl ovl-ring" data-el="frame"><i class="edge e-t"></i><i class="edge e-r"></i><i class="edge e-b"></i><i class="edge e-l"></i><i class="handle h-corner"></i></div>
         <div class="ovl" data-el="block"><i class="handle h-left"></i><i class="handle h-right"></i></div>
         <div class="ovl" data-el="imprint"><i class="handle h-left"></i><i class="handle h-right"></i></div>
+      </div>
+    </div>
+
+    <div class="holder hide" id="holderQuatre">
+      <div class="cover" id="cover4">
+        <div class="q4-texte" id="elQ4Texte"></div>
+        <div class="q4-pied" id="q4Pied">
+          <div id="elQ4Mention"></div>
+          <div id="elQ4Coll"></div>
+          <div id="elQ4Prix"></div>
+        </div>
+        <div class="q4-isbn" id="elQ4Isbn"></div>
       </div>
     </div>
   </div>
@@ -553,9 +571,21 @@ const fr = (n, d = 1) => (+n).toFixed(d).replace('.', ',');
 
 let format = [110, 180];
 let mode = 'band';
+let tab = 'une';
+function setTab(v){
+  tab = v;
+  if (v === 'quatre') selectEl(null); /* applyInspector + render */
+  [...$('segTab').children].forEach(b => {
+    if (b.tagName === 'BUTTON') b.setAttribute('aria-pressed', b.dataset.tab === v);
+  });
+  $('holderUne').classList.toggle('hide', v !== 'une');
+  $('holderQuatre').classList.toggle('hide', v !== 'quatre');
+  applyInspector(); render();
+}
 
 function render(){
   const s = cover.style;
+  const s4 = cover4.style;
   const padX = +$('inPadX').value;
   const align = $('inAlign').value;
   const bandH = +$('inBand').value;
@@ -563,6 +593,9 @@ function render(){
   s.setProperty('--fw', format[0]);
   s.setProperty('--fh', format[1]);
   s.setProperty('--paper', $('inPaper').value);
+  s4.setProperty('--fw', format[0]);
+  s4.setProperty('--fh', format[1]);
+  s4.setProperty('--paper', $('inPaper').value);
   s.setProperty('--pad-x', padX + '%');
   s.setProperty('--align', align);
 
@@ -746,6 +779,7 @@ function fitCover(){
   const maxW = Math.min(stage.clientWidth - 120, 520);
   const w = Math.max(180, Math.min(maxW, maxH * format[0] / format[1]));
   cover.style.setProperty('--cw', w + 'px');
+  cover4.style.setProperty('--cw', w + 'px');
 }
 
 /* ---------- maquettes ---------- */
@@ -992,6 +1026,9 @@ $('overlay').addEventListener('wheel', e => {
 
 document.querySelectorAll('[data-preset]').forEach(b =>
   b.addEventListener('click', () => applyPreset(b.dataset.preset)));
+
+document.querySelectorAll('#segTab button').forEach(b =>
+  b.addEventListener('click', () => setTab(b.dataset.tab)));
 
 $('segMode').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
