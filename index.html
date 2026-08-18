@@ -751,15 +751,14 @@ function setTab(v){
 /* ---------- assemblage : la planche est reconstruite à chaque render() de l'onglet.
    Clones : tout le style des couvertures vient de classes et de variables inline,
    un cloneNode(true) rend donc à l'identique ; on retire seulement les ids
-   (uniques dans le document) et on impose l'échelle de la planche. ---------- */
-function buildPlanche(){
-  const P = PROVIDERS[$('inAsmProvider').value];
-  const pages = Math.min(800, Math.max(32, +$('inAsmPages').value || 244));
-  const dosMm = P.dos(pages);
+   (uniques dans le document) et on impose l'échelle de la planche
+   (exception : les filets du cadre, en px inline, remis à l'échelle ci-dessous). ---------- */
+function buildPlanche(P, dosMm){
   const largeurMm = 2 * format[0] + dosMm + 2 * P.fondPerdu;
   const stage = document.querySelector('.stage');
   const cwUne = parseFloat(getComputedStyle(cover).getPropertyValue('--cw')) || 340;
-  const cwPl = Math.max(120, Math.min(cwUne, (stage.clientWidth - 160) * format[0] / largeurMm));
+  const MARGE_SCENE = 160; // respiration de la scène autour de la planche, gouttières comprises
+  const cwPl = Math.max(120, Math.min(cwUne, (stage.clientWidth - MARGE_SCENE) * format[0] / largeurMm));
   $('plancheFp').style.setProperty('--cw', cwPl + 'px');
   const c4 = cover4.cloneNode(true), c1 = cover.cloneNode(true);
   for (const c of [c4, c1]) {
@@ -767,6 +766,14 @@ function buildPlanche(){
     c.querySelectorAll('[id]').forEach(e => e.removeAttribute('id'));
     c.style.setProperty('--cw', cwPl + 'px');
   }
+  /* le cadre est en px inline calculés sur la largeur de la 1ère : remettre à l'échelle de la planche */
+  const scale = cwPl / cwUne;
+  c1.querySelectorAll('.frame,.frame-r1,.frame-r2').forEach(el => {
+    for (const prop of [...el.style]) {
+      const v = el.style.getPropertyValue(prop);
+      if (v.endsWith('px')) el.style.setProperty(prop, parseFloat(v) * scale + 'px');
+    }
+  });
   $('planche').replaceChildren(c4, $('dos'), c1);
 }
 
@@ -837,7 +844,7 @@ function render(){
   const on = $('inFrameOn').checked;
   const fm = +$('inFrameM').value, r1w = +$('inRule1W').value,
         r2o = +$('inRule2Off').value, r2w = +$('inRule2W').value, r2g = +$('inRule2Gap').value;
-  const px = v => (v / 100) * parseFloat(getComputedStyle(cover).width) + 'px';
+  const px = v => (v / 100) * parseFloat(getComputedStyle(cover).getPropertyValue('--cw')) + 'px';
   $('frame').classList.toggle('hide', !on);
   Object.assign($('frame').style, {
     top: fm + '%', left: fm + '%', right: fm + '%', bottom: fm + '%',
@@ -960,7 +967,7 @@ function render(){
   $('elDosTitle').textContent = $('inTitle').value.trim();
   $('elDosEditor').textContent = $('inEditor').value.trim();
 
-  if (tab === 'assemblage') buildPlanche();
+  if (tab === 'assemblage') buildPlanche(P, dosMm);
 
   /* --- lectures --- */
   const R = {
