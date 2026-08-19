@@ -144,7 +144,7 @@ body{display:flex;flex-direction:column;height:100vh}
 /* ---------- assemblage : planche 4ème + dos + 1ère ---------- */
 /* Les variables --fp/--dos-larg/--dos-hauteur sont écrites par render() ;
    --cw est posée sur #plancheFp par buildPlanche() (tâche 4) — d'ici là les fallbacks s'appliquent. */
-/* guides et habillage écran seulement (hachures, ombre, tirets) : neutralisés à l'export par preparePlancheClone() + .export */
+/* guides et habillage écran seulement (hachures, ombre, tirets) : neutralisés à l'export par capturePlancheExport()/applyPlancheExport() + .export */
 .planche-fp{
   padding:calc(var(--cw,340px)*var(--fp,.03));
   background:repeating-linear-gradient(45deg, rgba(255,255,255,.08) 0 6px, rgba(255,255,255,0) 6px 12px);
@@ -171,7 +171,7 @@ body{display:flex;flex-direction:column;height:100vh}
 .dos-texte .esp{flex:1}
 .dos-texte #elDosAuthor{text-transform:var(--dos-author-case)}
 .dos-texte #elDosTitle{text-transform:var(--dos-title-case)}
-/* export : la classe .export est posée par preparePlancheClone() sur le clone html2canvas —
+/* export : la classe .export est posée par applyPlancheExport() sur le clone html2canvas —
    guides écran retirés ; border-color transparent (et pas border:none) pour ne pas changer la géométrie */
 .planche-fp.export .planche{outline:none}
 .planche-fp.export .dos{border-color:transparent}
@@ -793,7 +793,7 @@ function buildPlanche(D, cwPl){
       if (v.endsWith('px')) el.style.setProperty(prop, parseFloat(v) * scale + 'px');
     }
   });
-  /* ordre porteur : preparePlancheClone repère la 1ère par lastElementChild */
+  /* ordre porteur : capturePlancheExport()/applyPlancheExport() repèrent la 1ère par lastElementChild */
   $('planche').replaceChildren(c4, $('dos'), c1);
 }
 
@@ -1620,12 +1620,11 @@ function freezeArtGeometry(doc){
   const css = artFreezeCss($('art').getBoundingClientRect());
   if (css) dst.style.cssText = css;
 }
-/* clone html2canvas de la planche : guides écran neutralisés, fond perdu rempli par les
-   fonds adjacents (arrêts durs en px résolus — html2canvas ne parse pas calc() dans un gradient) */
-function preparePlancheClone(doc){
-  const dst = doc.getElementById('plancheFp');
-  if (!dst) return;
-  dst.classList.add('export');
+/* export de la planche : tout ce que le clone devra recevoir est capturé sur le
+   document vivant JUSTE APRÈS buildPlanche (synchrone) — onclone n'applique que
+   des valeurs figées, un render() intercalé pendant la création du clone ne peut
+   plus fausser l'export */
+function capturePlancheExport(){
   const cs = getComputedStyle($('plancheFp'));
   const cw = parseFloat(cs.getPropertyValue('--cw'));
   const x1 = cw * (parseFloat(cs.getPropertyValue('--fp')) + 1);
@@ -1633,21 +1632,26 @@ function preparePlancheClone(doc){
   const q4 = cs.getPropertyValue('--q4-bg').trim() || '#fff';
   const dosBg = cs.getPropertyValue('--dos-bg').trim() || '#fff';
   const une = cs.getPropertyValue('--une-bg').trim() || '#fff';
-  dst.style.background = 'linear-gradient(90deg,' +
-    q4 + ' 0,' + q4 + ' ' + x1 + 'px,' +
-    dosBg + ' ' + x1 + 'px,' + dosBg + ' ' + x2 + 'px,' +
-    une + ' ' + x2 + 'px,' + une + ' 100%)';
   /* la 1ère est le dernier enfant de #planche (4ème | dos | 1ère) ; ses ids ont été retirés
      par buildPlanche — on la retrouve par position, dans le document vivant comme dans le clone */
   const c1 = $('planche').lastElementChild;
+  const zone = c1 && c1.querySelector('.art');
+  return {
+    fond: 'linear-gradient(90deg,' + q4 + ' 0,' + q4 + ' ' + x1 + 'px,' +
+      dosBg + ' ' + x1 + 'px,' + dosBg + ' ' + x2 + 'px,' +
+      une + ' ' + x2 + 'px,' + une + ' 100%)',
+    artCss: zone ? artFreezeCss(zone.getBoundingClientRect()) : null
+  };
+}
+function applyPlancheExport(doc, snap){
+  const dst = doc.getElementById('plancheFp');
+  if (!dst) return;
+  dst.classList.add('export');
+  dst.style.background = snap.fond;
+  dst.style.boxShadow = 'none';
   const p = doc.getElementById('planche');
   const img = p && p.lastElementChild && p.lastElementChild.querySelector('.art img');
-  if (c1 && img) {
-    const zone = c1.querySelector('.art');
-    const css = zone && artFreezeCss(zone.getBoundingClientRect());
-    if (css) img.style.cssText = css;
-  }
-  dst.style.boxShadow = 'none';
+  if (img && snap.artCss) img.style.cssText = snap.artCss;
 }
 $('btnPng').addEventListener('click', async () => {
   if (tab !== 'une') setTab('une'); /* l'export rend la 1ère : elle doit être affichée */
@@ -1690,8 +1694,9 @@ $('btnPlanche').addEventListener('click', async () => {
     const D = plancheDims();
     const wPx = D.wMm / 25.4 * 300;
     buildPlanche(D, (wPx / 2) * format[0] / D.wMm); /* scale 2 => 300 dpi ; jamais scale 1 (ombre peinte) */
+    const snap = capturePlancheExport();
     const canvas = await html2canvas($('plancheFp'),
-      { scale: 2, backgroundColor: null, logging: false, onclone: preparePlancheClone });
+      { scale: 2, backgroundColor: null, logging: false, onclone: doc => applyPlancheExport(doc, snap) });
     const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
     const png = new Uint8Array(await blob.arrayBuffer());
     const MM2PT = 72 / 25.4;
