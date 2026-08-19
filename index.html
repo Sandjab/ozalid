@@ -434,6 +434,9 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
             <option value="128,198">Semi-poche — 128 × 198 mm</option>
             <option value="140,205">Blanche — 140 × 205 mm</option>
             <option value="135,215">Roman — 135 × 215 mm</option>
+            <option value="127,203.2">KDP 5 × 8 po — 127 × 203,2 mm</option>
+            <option value="139.7,215.9">KDP 5,5 × 8,5 po — 139,7 × 215,9 mm</option>
+            <option value="152.4,228.6">KDP 6 × 9 po — 152,4 × 228,6 mm</option>
           </select></label>
         <div class="row">
           <label><span class="lab">Papier</span><input type="color" id="inPaper" value="#ffffff"></label>
@@ -703,7 +706,7 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
       <fieldset id="fsAsm" class="off">
         <legend>Assemblage</legend>
         <label><span class="lab">Prestataire</span>
-          <select id="inAsmProvider"><option value="lulu" selected>Lulu (poche)</option><option value="bod">BoD (crème 90 g)</option></select></label>
+          <select id="inAsmProvider"><option value="lulu" selected>Lulu (poche)</option><option value="bod">BoD (crème 90 g)</option><option value="kdp">KDP (crème)</option><option value="kdp-blanc">KDP (blanc)</option></select></label>
         <label><span class="lab">Pages de l'intérieur — dos <span class="val" id="vDosMm">15,48 mm</span></span>
           <input type="number" id="inAsmPages" min="32" max="800" step="2" value="244"></label>
         <p class="note">Le dos est calculé d'après le nombre de pages. Si l'intérieur regénéré change de nombre de pages, reporte le nouveau nombre ici avant d'exporter la planche.</p>
@@ -1205,6 +1208,20 @@ const PROVIDERS = {
     fondPerdu: 5,
     pagesMin: 24, pagesMax: 900,
     dos: pages => pages * 0.0675 + 0.6
+  },
+  /* KDP : dos = pages × épaisseur_page, sans terme additif — l'épaisseur de la couverture n'entre
+     pas dans le calcul, contrairement à Lulu et BoD. Deux papiers noir et blanc, définitifs après
+     publication : crème 0,0025 po/page, blanc 0,002252 po/page (page d'aide « Create a Paperback
+     Cover »). Texte sur le dos imprimé à partir de 80 pages seulement. */
+  kdp: {
+    fondPerdu: 3.175,                     /* mm — 0,125 po, comme Lulu */
+    pagesMin: 24, pagesMax: 828,
+    dos: pages => pages * 0.0635          /* mm — crème ; 280 p → 17,78 mm */
+  },
+  'kdp-blanc': {
+    fondPerdu: 3.175,
+    pagesMin: 24, pagesMax: 828,
+    dos: pages => pages * 0.0572          /* mm — blanc ; 280 p → 16,02 mm */
   }
 };
 
@@ -1505,9 +1522,11 @@ $('inFormat').addEventListener('change', e => {
   fitCover(); render();
 });
 
-/* le clamp de render() borne le calcul ; au blur, refléter la borne dans le champ */
+/* le clamp de render() borne le calcul ; au blur, refléter la borne dans le champ — bornes du
+   prestataire courant, sinon une pagination admise chez lui serait ramenée dans la plage d'un autre */
 $('inAsmPages').addEventListener('change', e => {
-  const v = Math.min(800, Math.max(32, +e.target.value || 244));
+  const P = PROVIDERS[$('inAsmProvider').value];
+  const v = Math.min(P.pagesMax, Math.max(P.pagesMin, +e.target.value || 244));
   if (+e.target.value !== v) e.target.value = v;
 });
 

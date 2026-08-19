@@ -1,6 +1,6 @@
 # Cookbook — publier un roman
 
-Marche à suivre complète, du manuscrit au fichier téléversé chez l'imprimeur. Un chapitre par prestataire ; **Lulu** et **BoD** sont outillés.
+Marche à suivre complète, du manuscrit au fichier téléversé chez l'imprimeur. Un chapitre par prestataire ; **Lulu**, **BoD** et **Amazon KDP** sont outillés.
 
 L'ordre n'est pas négociable : **l'intérieur d'abord, la couverture ensuite**. La largeur du dos se calcule à partir du nombre de pages, et ce nombre n'est connu qu'une fois l'intérieur composé. Toute recomposition qui change la pagination oblige à refaire la couverture.
 
@@ -221,6 +221,103 @@ Le détail des relevés est dans `build/in/editors/bod-specs.md`.
 
 ---
 
+## Amazon KDP — 5 × 8, 5,5 × 8,5 ou 6 × 9 pouces
+
+Même marche à suivre que Lulu ; seules les étapes qui changent sont détaillées. KDP a la
+documentation technique la plus complète du marché : gabarits de manuscrit officiels et
+formules de dos publiées. Sa contrepartie est commerciale — **imprimer oblige à publier**, et
+l'épreuve privée sort filigranée.
+
+### 0. Choisir le format, une fois pour toutes
+
+KDP propose dix-sept formats de rognage ; trois sont outillés ici, et le format choisi doit
+être **le même** dans le script et dans l'app :
+
+| Format | Millimètres | `--provider` | Format dans l'app |
+|---|---|---|---|
+| 5 × 8 po | 127 × 203,2 | `kdp-5x8` | KDP 5 × 8 po |
+| 5,5 × 8,5 po | 139,7 × 215,9 | `kdp-55x85` | KDP 5,5 × 8,5 po |
+| 6 × 9 po | 152,4 × 228,6 | `kdp-6x9` | KDP 6 × 9 po |
+
+Le 5,5 × 8,5 est à 5 mm près le « Roman » 135 × 215 de BoD : une maquette faite pour l'un se
+transpose presque telle quelle sur l'autre. Le 5 × 8 est le plus proche d'un poche français.
+
+### 1 à 3. Ressources, répertoire de travail, épreuve
+
+Identiques au chapitre Lulu — le `livre.toml` ne dépend pas du prestataire.
+
+### 4. Composer l'intérieur
+
+```
+python3 outils/gen_interieur.py build/mon-roman --provider kdp-55x85
+```
+
+Sort `build/mon-roman/out/kdp-55x85/interieur-kdp-55x85.pdf`, composé avec les marges des
+modèles de manuscrit officiels : **12,7 mm en tête, en pied et à l'extérieur, 19,05 mm côté
+reliure**, identiques aux trois formats.
+
+La gouttière ne bouge qu'une fois : 19,05 mm jusqu'à 700 pages, 22,23 mm au-delà, où le
+minimum imposé par KDP passe devant la valeur du modèle. Comme ailleurs, la parité est réglée
+seule par une page blanche de fin sans folio.
+
+### 5 et 6. Maquetter et exporter
+
+Dans l'app : le **format KDP correspondant** à celui composé à l'étape 4, puis onglet
+Assemblage, prestataire **« KDP (crème) »** ou **« KDP (blanc) »** selon le papier commandé, et
+le nombre de pages relevé.
+
+Le dos KDP est un simple produit, **sans le terme additif** de Lulu et de BoD : l'épaisseur de
+la couverture n'entre pas dans le calcul. À 178 pages en 5,5 × 8,5, le dos fait 11,30 mm sur
+crème et 10,18 mm sur blanc — plus d'un millimètre d'écart, assez pour faire mordre le texte du
+dos sur les plats.
+
+### 7. Téléverser chez KDP
+
+| Réglage | Valeur |
+|---|---|
+| Format | celui choisi à l'étape 0 — pas un autre |
+| Reliure | Paperback, dos carré collé |
+| Encre et papier | Black & white, **crème** ou **blanc** — celui sur lequel repose le calcul du dos |
+| Finition | mate, l'usage pour un roman |
+
+Puis les deux fichiers : l'intérieur PDF, la planche PDF comme couverture.
+
+### 8. Contrôler avant de valider
+
+Mêmes contrôles que chez Lulu, plus un : la marge extérieure des modèles KDP est de 12,7 mm,
+plus étroite que les 13 mm de Lulu et les 15 mm de BoD. L'aperçu en ligne signale toute
+composition qui déborde de la zone sûre.
+
+### Gabarit KDP, pour mémoire
+
+| Grandeur | Valeur | Source |
+|---|---|---|
+| Fond perdu | 3,175 mm (0,125 po) | page d'aide « Create a Paperback Cover » |
+| Dos, crème | pages × 0,0635 mm (0,0025 po) | idem — 280 p. → 17,78 mm |
+| Dos, blanc | pages × 0,0572 mm (0,002252 po) | idem — 280 p. → 16,02 mm |
+| Gouttière | 19,05 mm jusqu'à 700 p., puis 22,23 mm | modèles Word officiels et tableau des minimums |
+| Marges haut / bas / extérieur | 12,7 mm | modèles Word officiels |
+| Pagination | 24 à 828 pages | options d'impression |
+| Texte sur le dos | à partir de 80 pages | page d'aide couverture |
+
+Le détail des relevés est dans `build/in/editors/kdp-specs.md`, les modèles dans
+`kdp-paperback-manuscript-blank-templates.zip` du même répertoire.
+
+### Pièges propres à KDP
+
+- **Le papier est définitif après publication** : il détermine l'ISBN de fabrication. Changer
+  de crème à blanc impose un nouveau livre — et une couverture au dos refait.
+- **En deçà de 80 pages, KDP n'imprime pas le texte du dos.** L'app l'affiche quand même : la
+  planche est juste, l'imprimeur ignorera simplement ce qui s'y trouve.
+- **La justification est longue sur les grands formats.** Les modèles gardent 12,7 mm de marge
+  extérieure quel que soit le format : en 6 × 9, la colonne fait 120,6 mm, soit environ
+  90 signes par ligne au corps 9,5 pt de l'atelier, contre 53 en poche Lulu. Le gabarit suit les
+  modèles officiels ; élargir les marges ou grossir le corps se décide sur épreuve.
+- **Imprimer oblige à publier.** Pas d'équivalent du parcours myBoD : les exemplaires auteur
+  exigent un livre publié, et l'épreuve privée arrive filigranée.
+
+---
+
 ## Ajouter un prestataire
 
 Il faut compléter **deux** tables, l'une pour la couverture, l'autre pour l'intérieur :
@@ -237,7 +334,7 @@ Retenus depuis le comparatif POD du 19 août 2026 (`build/in/editors/comparator-
 | Rang | Prestataire | Pourquoi lui | Réserve connue |
 |---|---|---|---|
 | ~~1~~ | ~~BoD~~ — **implémenté**, voir son chapitre | | |
-| 2 | Amazon KDP | La documentation technique la plus complète du marché : calculateur de dos et gabarits publics. Implémentation la plus sûre. | Les exemplaires auteur exigent un livre publié ; l'épreuve privée est filigranée. |
+| ~~2~~ | ~~Amazon KDP~~ — **implémenté**, voir son chapitre | | |
 | 3 | TheBookEdition (Lille) | Meilleure fabrication du banc d'essai, contrôle manuel des fichiers, production française. | Le plus cher des trois grands, contrôles d'upload stricts, broché seul. |
 | 4 | CoolLibri (Toulouse) | Français, papiers crème et satin à l'unité, jusqu'à 648 pages. | Documentation technique à vérifier, pas de distribution. |
 | 5 | Bookvault (UK) | Finitions premium dès un exemplaire, papier intérieur 150 g. | Frais d'upload de 10 à 15 $, incertitudes post-Brexit. |

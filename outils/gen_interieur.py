@@ -58,6 +58,34 @@ PROVIDERS = {
         "gouttieres": [(24, 900, 20.0)],
         "corps_pt": 9.5, "interligne": 1.42, "folio_pt": 8,
     },
+    # Amazon KDP, trois formats de rognage sur les dix-sept du catalogue — les seuls proches du
+    # roman. Marges lues dans les modèles de manuscrit officiels (w:pgMar des .docx français) :
+    # 12,7 mm en tête, en pied et à l'extérieur, 19,05 mm côté reliure, identiques aux trois
+    # formats. La gouttière retenue est le plus grand des deux gabarits publiés — les 19,05 mm du
+    # modèle, sauf au-delà de 700 pages où le minimum de la tranche (0,875 po) passe devant.
+    # Le papier ne joue pas ici : il ne change que l'épaisseur du dos, donc la couverture.
+    # Détail des relevés : build/in/editors/kdp-specs.md.
+    "kdp-5x8": {
+        "format": (127.0, 203.2),
+        "marge_haut": 12.7, "marge_bas": 12.7,
+        "exterieur": 12.7,
+        "gouttieres": [(24, 700, 19.05), (701, 828, 22.23)],
+        "corps_pt": 9.5, "interligne": 1.42, "folio_pt": 8,
+    },
+    "kdp-55x85": {
+        "format": (139.7, 215.9),
+        "marge_haut": 12.7, "marge_bas": 12.7,
+        "exterieur": 12.7,
+        "gouttieres": [(24, 700, 19.05), (701, 828, 22.23)],
+        "corps_pt": 9.5, "interligne": 1.42, "folio_pt": 8,
+    },
+    "kdp-6x9": {
+        "format": (152.4, 228.6),
+        "marge_haut": 12.7, "marge_bas": 12.7,
+        "exterieur": 12.7,
+        "gouttieres": [(24, 700, 19.05), (701, 828, 22.23)],
+        "corps_pt": 9.5, "interligne": 1.42, "folio_pt": 8,
+    },
 }
 
 
