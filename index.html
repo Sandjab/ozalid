@@ -615,6 +615,7 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
         <label id="rowQ4File"><span class="lab">Choisir l'image</span><input type="file" id="inQ4File" accept="image/*"></label>
         <p class="note hide" id="noteQ4NoImg">Aucune image chargée : le fond reste papier en attendant.</p>
         <p class="note hide" id="noteQ4Pro">Cadrage piloté par la 1ère (prolongement) ; seule la 4ème règle son voile.</p>
+        <p class="note hide" id="noteQ4Typo">La 1ère n'a pas d'image (mode sans image) : le prolongement affiche le papier.</p>
         <p class="note hide" id="noteQ4Manque">La photo manque de matière à gauche : le papier apparaît sur la 4ème.</p>
         <div id="rowsQ4Cadrage">
           <label><span class="lab">Cadrage vertical <span class="val" id="vQ4ArtY">50 %</span></span>
@@ -943,6 +944,7 @@ function render(){
   }
   img4P.classList.toggle('hide', !proOn);
   if (!proOn) dosArt.classList.add('hide'); /* en prolongement, c'est buildPlanche qui la montre */
+  $('noteQ4Typo').classList.toggle('hide', q4m !== 'prolongement' || proOn);
   $('noteQ4Manque').classList.toggle('hide', !(proOn && pano.g.left + pano.dx4 > 0));
   const art4On = (q4m === 'image' && !!g4) || proOn;
   art4.classList.toggle('hide', !art4On);
@@ -1613,7 +1615,7 @@ function applyConfig(c){
   }
   if (Array.isArray(c.format)) format = c.format.map(Number);
   if (c.mode) setMode(c.mode);
-  if (c.image) $('elImg').src = c.image;
+  if (c.image) $('elImg').src = c.image; else $('elImg').src = DEFAULT_IMG;
   if (c.image4) $('elImg4').src = c.image4; else $('elImg4').removeAttribute('src');
   fitCover(); selectEl(null);
   return true;
@@ -1830,7 +1832,7 @@ $('btnPng').addEventListener('click', async () => {
         if (d4) cfg.image4 = d4;
       }
       bytes = pngInsertText(bytes, CFG_KEY, b64enc(JSON.stringify(cfg)));
-      note = ' — réglages' + (cfg.image ? ' et photo source embarqués' : ' embarqués');
+      note = ' — réglages' + (cfg.image || cfg.image4 ? ' et photo source embarqués' : ' embarqués');
     }
     await saveBlob(handle, new Blob([bytes], { type: 'image/png' }), slug() + '.png');
     status(`PNG ${canvas.width}×${canvas.height} px, ${(bytes.length/1048576).toFixed(2)} Mo${note}`, 'ok');
