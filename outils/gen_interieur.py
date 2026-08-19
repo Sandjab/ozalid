@@ -34,7 +34,7 @@ if sys.version_info < (3, 11):
 
 import tomllib
 
-# Gabarits par prestataire — miroir de PROVIDERS dans index.html.
+# Gabarits par prestataire — complète le PROVIDERS d'index.html (lui couvre la couverture, celui-ci l'intérieur).
 # Gouttières par tranche de pagination : seules les tranches vérifiées dans le
 # guide du prestataire figurent ici ; hors tranche, on refuse plutôt qu'inventer.
 PROVIDERS = {
@@ -217,8 +217,9 @@ def main():
     pdf = args.sortie or outdir / f'interieur-{args.provider}.pdf'
 
     corps_path = outdir / 'corps.html'
-    subprocess.run(['pandoc', str(manuscrit), '-f', 'markdown', '-t', 'html',
-                    '-o', str(corps_path)], check=True)
+    subprocess.run(['pandoc', str(manuscrit),
+                    '-f', 'markdown-yaml_metadata_block-simple_tables-multiline_tables-pipe_tables-grid_tables',
+                    '-t', 'html', '--wrap=none', '-o', str(corps_path)], check=True)
     chapters = decoupe_chapitres(corps_path.read_text(encoding='utf-8'), livre['chapitres'])
 
     gut = P["gouttieres"][0][2]   # hypothèse de départ : première tranche du gabarit
