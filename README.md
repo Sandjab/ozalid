@@ -82,7 +82,7 @@ outils/                 scripts Python trackés
 docs/superpowers/       specs et plans de développement
 versions/               jalons historiques, chaque fichier autonome
 build/<roman>/          manuscrits, livre.toml et sorties — jamais tracké
-HANDOFF.md              état du code, décisions, dettes, pistes
+NOTES.md                origine du projet, analyse de la Blanche, juridique
 CLAUDE.md               instructions pour Claude Code
 ```
 
@@ -101,7 +101,7 @@ build/mon-roman/
 ## Limites connues
 
 - Une conversion vers JPEG détruit les métadonnées. Conserver le JSON en parallèle si les fichiers passent dans un pipeline de compression.
-- Le rendu PNG passe par `html2canvas`, qui approxime certaines propriétés CSS. Voir `HANDOFF.md`.
+- Le rendu PNG passe par `html2canvas`, qui approxime certaines propriétés CSS. Voir `NOTES.md`.
 - Le Didot original de la collection Blanche n'existe pas en version numérique. Bodoni Moda sert de substitut.
 - Sur la planche, en mode image, le fond perdu reçoit la couleur papier : l'image ne s'étend pas dans la zone rognée.
 - L'image de la 4ème n'est embarquée dans le PNG qu'en mode « image propre ».
