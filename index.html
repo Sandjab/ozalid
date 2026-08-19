@@ -761,8 +761,17 @@ function setTab(v){
    un cloneNode(true) rend donc à l'identique ; on retire seulement les ids
    (uniques dans le document) et on impose l'échelle de la planche
    (exception : les filets du cadre, en px inline, remis à l'échelle ci-dessous). ---------- */
-function buildPlanche(P, dosMm, cwPl){
-  const largeurMm = 2 * format[0] + dosMm + 2 * P.fondPerdu;
+/* dimensions physiques de la planche : source unique pour render() et l'export */
+function plancheDims(){
+  const P = PROVIDERS[$('inAsmProvider').value];
+  const pages = Math.min(800, Math.max(32, +$('inAsmPages').value || 244));
+  const dosMm = P.dos(pages);
+  return { P, dosMm,
+           wMm: 2 * format[0] + dosMm + 2 * P.fondPerdu,
+           hMm: format[1] + 2 * P.fondPerdu };
+}
+function buildPlanche(D, cwPl){
+  const largeurMm = D.wMm;
   const cwUne = parseFloat(getComputedStyle(cover).getPropertyValue('--cw')) || 340;
   if (cwPl === undefined) { /* échelle écran : la planche tient dans la scène */
     const stage = document.querySelector('.stage');
@@ -957,16 +966,13 @@ function render(){
     !selected || !ELEMENTS[selected].every(id => $(id).classList.contains('hide')));
 
   /* --- assemblage : dimensions de la planche --- */
-  const P = PROVIDERS[$('inAsmProvider').value];
-  const pages = Math.min(800, Math.max(32, +$('inAsmPages').value || 244));
-  const dosMm = P.dos(pages);
+  const D = plancheDims();
   const sp = $('plancheFp').style;
-  sp.setProperty('--dos-larg', dosMm / format[0]);
+  sp.setProperty('--dos-larg', D.dosMm / format[0]);
   sp.setProperty('--dos-hauteur', format[1] / format[0]);
-  sp.setProperty('--fp', P.fondPerdu / format[0]);
-  $('plancheDims').textContent = 'Planche ' + fr(2*format[0] + dosMm + 2*P.fondPerdu, 2) +
-    ' × ' + fr(format[1] + 2*P.fondPerdu, 2) + ' mm — dos ' + fr(dosMm, 2) +
-    ' mm — fond perdu ' + fr(P.fondPerdu, 3) + ' mm';
+  sp.setProperty('--fp', D.P.fondPerdu / format[0]);
+  $('plancheDims').textContent = 'Planche ' + fr(D.wMm, 2) + ' × ' + fr(D.hMm, 2) +
+    ' mm — dos ' + fr(D.dosMm, 2) + ' mm — fond perdu ' + fr(D.P.fondPerdu, 3) + ' mm';
   sp.setProperty('--dos-face', $('inDosFace').value);
   sp.setProperty('--dos-weight', $('inDosWeight').value);
   sp.setProperty('--dos-size', +$('inDosSize').value / 100);
@@ -980,11 +986,11 @@ function render(){
   $('elDosTitle').textContent = $('inTitle').value.trim();
   $('elDosEditor').textContent = $('inEditor').value.trim();
 
-  if (tab === 'assemblage') buildPlanche(P, dosMm);
+  if (tab === 'assemblage') buildPlanche(D);
 
   /* --- lectures --- */
   const R = {
-    vDosMm:[dosMm, 2, ' mm'],
+    vDosMm:[D.dosMm, 2, ' mm'],
     vDosSize:[$('inDosSize').value,1,' %'],
     vPadX:[padX,1,' %'], vBand:[bandH,1,' %'], vBlockY:[$('inBlockY').value,0,' %'],
     vFrameM:[fm,1,' %'], vRule1W:[r1w,2,' %'], vRule2Off:[r2o,1,' %'],
@@ -1681,24 +1687,21 @@ $('btnPlanche').addEventListener('click', async () => {
   const btn = $('btnPlanche'), old = btn.textContent;
   btn.textContent = 'Rendu en cours…'; btn.disabled = true;
   try {
-    const P = PROVIDERS[$('inAsmProvider').value];
-    const pages = Math.min(800, Math.max(32, +$('inAsmPages').value || 244));
-    const dosMm = P.dos(pages);
-    const wMm = 2 * format[0] + dosMm + 2 * P.fondPerdu, hMm = format[1] + 2 * P.fondPerdu;
-    const wPx = wMm / 25.4 * 300;
-    buildPlanche(P, dosMm, (wPx / 2) * format[0] / wMm); /* scale 2 => 300 dpi ; jamais scale 1 (ombre peinte) */
+    const D = plancheDims();
+    const wPx = D.wMm / 25.4 * 300;
+    buildPlanche(D, (wPx / 2) * format[0] / D.wMm); /* scale 2 => 300 dpi ; jamais scale 1 (ombre peinte) */
     const canvas = await html2canvas($('plancheFp'),
       { scale: 2, backgroundColor: null, logging: false, onclone: preparePlancheClone });
     const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
     const png = new Uint8Array(await blob.arrayBuffer());
     const MM2PT = 72 / 25.4;
     const pdf = await PDFLib.PDFDocument.create();
-    const page = pdf.addPage([wMm * MM2PT, hMm * MM2PT]);
+    const page = pdf.addPage([D.wMm * MM2PT, D.hMm * MM2PT]);
     const image = await pdf.embedPng(png);
-    page.drawImage(image, { x: 0, y: 0, width: wMm * MM2PT, height: hMm * MM2PT });
+    page.drawImage(image, { x: 0, y: 0, width: D.wMm * MM2PT, height: D.hMm * MM2PT });
     const bytes = await pdf.save();
     await saveBlob(handle, new Blob([bytes], { type: 'application/pdf' }), slug() + '-planche.pdf');
-    status(`PDF ${fr(wMm, 2)} × ${fr(hMm, 2)} mm — ${canvas.width}×${canvas.height} px, ${(bytes.length/1048576).toFixed(2)} Mo`, 'ok');
+    status(`PDF ${fr(D.wMm, 2)} × ${fr(D.hMm, 2)} mm — ${canvas.width}×${canvas.height} px, ${(bytes.length/1048576).toFixed(2)} Mo`, 'ok');
   } catch (e) {
     status('Export impossible : ' + e.message, 'err');
   }
