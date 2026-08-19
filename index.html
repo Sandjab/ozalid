@@ -804,6 +804,24 @@ function plancheDims(){
            wMm: 2 * format[0] + dosMm + 2 * P.fondPerdu,
            hMm: format[1] + 2 * P.fondPerdu };
 }
+/* panorama « prolongement » : la zone image de la 1ère (position, hauteur, insets)
+   répliquée à l'identique, et la géométrie de l'image dans cette zone, à l'échelle
+   cw donnée. Retourne null si la 1ère n'a pas d'image (mode typo ou non chargée). */
+function panoGeom(cw){
+  if (mode === 'typo') return null;
+  const h = cw * format[1] / format[0];
+  const inset = $('inInset').checked ? +$('inPadX').value / 100 : 0;
+  const top = mode === 'band' ? h * +$('inBand').value / 100 : 0;
+  const left = mode === 'band' ? cw * inset : 0;
+  const bottom = mode === 'band' ? h * inset : 0;
+  const zone = { w: cw - 2 * left, h: h - top - bottom };
+  const g = artGeom(zone, artOptsUne());
+  if (!g) return null;
+  const D = plancheDims();
+  return { g, zoneTop: top, zoneLeft: left, zoneH: zone.h, zoneW: zone.w,
+           dxDos: cw * (D.dosMm / format[0]),        /* décalage 1ère → dos */
+           dx4: cw * (D.dosMm / format[0] + 1) };    /* décalage 1ère → 4ème */
+}
 function buildPlanche(D, cwPl){
   const largeurMm = D.wMm;
   const cwUne = parseFloat(getComputedStyle(cover).getPropertyValue('--cw')) || 340;
@@ -828,12 +846,25 @@ function buildPlanche(D, cwPl){
     }
   });
   /* l'image de la 4ème est en px inline calculés sur la largeur écran : même remise à l'échelle */
+  /* scale vaut aussi pour c4 : fitCover pose le même --cw sur les deux couvertures */
   c4.querySelectorAll('.art img').forEach(el => {
     for (const prop of [...el.style]) {
       const v = el.style.getPropertyValue(prop);
       if (v.endsWith('px')) el.style.setProperty(prop, parseFloat(v) * scale + 'px');
     }
   });
+  /* tranche du prolongement sur le dos : le dos est un élément vivant de la planche,
+     sa zone et son image se calculent directement à l'échelle cwPl */
+  const dosArt = $('dosArt');
+  if ($('inQ4BgMode').value === 'prolongement') {
+    const pano = panoGeom(cwPl);
+    if (pano) {
+      dosArt.style.top = pano.zoneTop + 'px';
+      dosArt.style.height = pano.zoneH + 'px';
+      $('elImgDos').style.cssText = artCss({ ...pano.g, left: pano.g.left + pano.dxDos });
+      dosArt.classList.remove('hide');
+    } else dosArt.classList.add('hide');
+  } else dosArt.classList.add('hide');
   /* ordre porteur : capturePlancheExport()/applyPlancheExport() repèrent la 1ère par lastElementChild */
   $('planche').replaceChildren(c4, $('dos'), c1);
 }
@@ -847,7 +878,7 @@ function scrimCss(kind, op){
     both:  `linear-gradient(to bottom, rgba(0,0,0,${op}) 0%, rgba(0,0,0,0) 40%, rgba(0,0,0,0) 60%, rgba(0,0,0,${op}) 100%)`,
     flat:  `linear-gradient(rgba(0,0,0,${op}), rgba(0,0,0,${op}))`,
     light: `linear-gradient(rgba(255,255,255,${op}), rgba(255,255,255,${op}))`
-  }[kind];
+  }[kind] || 'none';
 }
 
 function render(){
@@ -885,13 +916,29 @@ function render(){
   }
   $('noteQ4NoImg').classList.toggle('hide', q4m !== 'image' || !!g4);
   img4.classList.toggle('hide', q4m !== 'image' || !g4);
-  const proOn = false; /* tranches du prolongement : tâche 6 */
-  img4P.classList.add('hide'); dosArt.classList.add('hide');
-  $('noteQ4Manque').classList.add('hide');
-  art4.classList.toggle('hide', !(q4m === 'image' && g4) && !proOn);
+  let proOn = false, pano = null;
+  if (q4m === 'prolongement') {
+    pano = panoGeom(cw4);
+    if (pano) {
+      proOn = true;
+      const src1 = $('elImg').src;
+      if (img4P.src !== src1) img4P.src = src1;
+      if ($('elImgDos').src !== src1) $('elImgDos').src = src1;
+      art4.style.top = pano.zoneTop + 'px'; art4.style.bottom = '';
+      art4.style.left = pano.zoneLeft + 'px'; art4.style.right = '';
+      art4.style.width = pano.zoneW + 'px'; art4.style.height = pano.zoneH + 'px';
+      img4P.style.cssText = artCss({ ...pano.g, left: pano.g.left + pano.dx4 });
+      /* tranche du dos : positionnée par buildPlanche, qui connaît l'échelle de la planche */
+    }
+  }
+  img4P.classList.toggle('hide', !proOn);
+  if (!proOn) dosArt.classList.add('hide'); /* en prolongement, c'est buildPlanche qui la montre */
+  $('noteQ4Manque').classList.toggle('hide', !(proOn && pano.g.left + pano.dx4 > 0));
+  const art4On = (q4m === 'image' && !!g4) || proOn;
+  art4.classList.toggle('hide', !art4On);
   const op4 = +$('inQ4ScrimOp').value / 100, kind4 = $('inQ4Scrim').value;
-  $('scrim4').style.background = scrimCss(kind4, op4) || 'none';
-  $('scrim4').classList.toggle('hide', kind4 === 'none' || art4.classList.contains('hide'));
+  $('scrim4').style.background = scrimCss(kind4, op4);
+  $('scrim4').classList.toggle('hide', kind4 === 'none' || !art4On);
 
   s4.setProperty('--q4-face', $('inQ4TextFace').value);
   s4.setProperty('--q4-weight', $('inQ4TextWeight').value);
