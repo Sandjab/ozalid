@@ -1,6 +1,6 @@
 # Ozalid — instructions
 
-Atelier de packaging de couverture pour l'auto-édition : l'app est un seul fichier HTML autonome, sans build (trois onglets — 1ère, 4ème, Assemblage — et export PDF de la planche). La chaîne Python de composition de l'intérieur vit dans `outils/` (voir README) ; les manuscrits et sorties par roman vivent dans `build/<roman>/`, jamais tracké.
+Atelier de packaging de couverture pour l'auto-édition : l'app est un seul fichier HTML autonome, sans build (trois onglets — 1ère, 4ème, Assemblage — et export PDF de la planche). La chaîne Python de composition de l'intérieur vit dans `outils/` (voir README) ; `build/` n'est jamais tracké : ressources partagées dans `build/in/{covers,texts,editors}/`, un répertoire de travail par combinaison texte × couverture (au minimum un `livre.toml`, dont les chemins partent de `build/`), sorties dans son `out/` et packages éditeur dans `out/<éditeur>/`. Le `livre.toml` fait foi pour l'identité du livre ; le titre et l'auteur embarqués dans le PNG sont un rendu, jamais une source — aucun script ne lit ce chunk.
 
 ## Contraintes non négociables
 
@@ -33,7 +33,7 @@ Rien d'autre. La persistance suit automatiquement.
 - Round-trip métadonnées : exporter un PNG, le recharger, vérifier que tous les contrôles reviennent à l'identique.
 - Tester les trois presets × les trois onglets (1ère, 4ème, Assemblage) après toute modification de `render()`.
 - Vérifier le rendu à l'export, pas seulement à l'écran : `html2canvas` ne reproduit pas tout le CSS fidèlement.
-- `python3 -m py_compile outils/*.py` si un script d'`outils/` a changé ; `outils/gen_interieur.py build/heures-creuses` doit toujours régénérer 244 pages.
+- `python3 -m py_compile outils/*.py` si un script d'`outils/` a changé, et la chaîne doit régénérer un intérieur complet sur un répertoire de travail réel (`outils/gen_interieur.py build/<travail> --provider lulu`) : le compte de pages affiché est le témoin de non-régression, à comparer au précédent sur le même manuscrit.
 
 ## Pièges connus
 

@@ -4,10 +4,12 @@
 Usage : roman_pdf.py REPERTOIRE NB_CHAPITRES [-t TAILLE] [-o SORTIE]
 Exemple : roman_pdf.py build/mon-roman 8 -t 10
 
-REPERTOIRE contient livre.toml (métadonnées), qui désigne le manuscrit Markdown
-(titre en «# », chapitres en «## », séparateurs de scène «---», italiques *…*,
-gras **…**) et l'image de première de couverture, posée en pleine page. Pages
-numérotées en bas à droite, couverture exclue.
+REPERTOIRE est un répertoire de travail de build/ : il contient livre.toml, dont
+les chemins (manuscrit, couverture) partent de build/ — « in/texts/roman.md »
+désigne une ressource partagée, un chemin absolu est pris tel quel. Manuscrit :
+titre en «# », chapitres en «## », séparateurs de scène «---», italiques *…*,
+gras **…**. La couverture est posée en pleine page. Pages numérotées en bas à
+droite, couverture exclue. Sortie : REPERTOIRE/out/roman.pdf.
 """
 
 import argparse
@@ -83,13 +85,18 @@ def main():
                    help='fichier PDF de sortie (défaut : roman.pdf dans le répertoire)')
     args = p.parse_args()
 
-    toml_path = args.repertoire / 'livre.toml'
+    repertoire = args.repertoire.resolve()
+    toml_path = repertoire / 'livre.toml'
     if not toml_path.is_file():
         sys.exit(f"Fichier introuvable : {toml_path}")
     livre = tomllib.loads(toml_path.read_text(encoding='utf-8'))['livre']
 
-    manuscrit = args.repertoire / livre.get('manuscrit', 'text.md')
-    couverture = args.repertoire / livre.get('couverture', 'cover.png')
+    # Les chemins du livre.toml partent de build/, le parent du répertoire de
+    # travail : « in/covers/face.png » désigne la ressource partagée. Un chemin
+    # absolu est pris tel quel (pathlib ignore alors la racine).
+    racine = repertoire.parent
+    manuscrit = racine / livre.get('manuscrit', 'text.md')
+    couverture = racine / livre.get('couverture', 'cover.png')
     for f in (manuscrit, couverture):
         if not f.is_file():
             sys.exit(f"Fichier introuvable : {f}")
@@ -136,7 +143,10 @@ def main():
                            new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             premier = False
 
-    sortie = args.sortie or args.repertoire / 'roman.pdf'
+    # L'épreuve de lecture ne vise aucun éditeur : elle sort dans out/, à côté
+    # des out/<éditeur>/ qui reçoivent les packages.
+    sortie = args.sortie or repertoire / 'out' / 'roman.pdf'
+    sortie.parent.mkdir(parents=True, exist_ok=True)
     pdf.output(str(sortie))
     print(f"{sortie} — {pdf.page_no()} pages, {len(chapitres)} chapitres, "
           f"Times New Roman {args.taille} pt, {PAGE[0]}x{PAGE[1]} mm")

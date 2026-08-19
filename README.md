@@ -32,7 +32,7 @@ Corps de texte, filets et marges sont exprimés en pourcentage de la largeur de 
 
 ## Outils Python
 
-Prérequis : `brew install pandoc weasyprint` et `pip install fpdf2 pillow`. `gen_interieur.py` exige Python ≥ 3.11 (`tomllib`) et bascule seul sur `python3.11` ou plus récent si le `python3` système est plus vieux.
+Prérequis : `brew install pandoc weasyprint` et `pip install fpdf2 pillow`. Les deux scripts lisent `livre.toml` : `gen_interieur.py` exige Python ≥ 3.11 (`tomllib`) et bascule seul sur `python3.11` ou plus récent si le `python3` système est plus vieux ; `roman_pdf.py` reste sur l'interpréteur qui porte `fpdf2` et se rabat sur `tomli` (`pip install tomli`) quand `tomllib` manque.
 
 ### Intérieur du roman
 
@@ -40,7 +40,7 @@ Prérequis : `brew install pandoc weasyprint` et `pip install fpdf2 pillow`. `ge
 python3 outils/gen_interieur.py build/mon-roman --provider lulu
 ```
 
-Compose l'intérieur (pandoc → weasyprint) d'après `build/mon-roman/livre.toml` et le manuscrit qu'il désigne. Format du manuscrit : titre en `# `, chapitres en `## NN - Titre`, séparateurs de scène `---`. Sortie : `build/mon-roman/lulu/interieur-lulu.pdf`. La gouttière dépend de la tranche de pagination : une seconde passe recompose automatiquement si le compte de pages sort de la tranche supposée. Le nombre de pages final est affiché — à reporter dans l'onglet Assemblage pour le calcul du dos.
+Compose l'intérieur (pandoc → weasyprint) d'après `build/mon-roman/livre.toml` et le manuscrit qu'il désigne. Format du manuscrit : titre en `# `, chapitres en `## NN - Titre`, séparateurs de scène `---`. Sortie : `build/mon-roman/out/lulu/interieur-lulu.pdf`. La gouttière dépend de la tranche de pagination : une seconde passe recompose automatiquement si le compte de pages sort de la tranche supposée. Le nombre de pages final est affiché — à reporter dans l'onglet Assemblage pour le calcul du dos.
 
 Exemple de `livre.toml` :
 
@@ -52,12 +52,14 @@ auteur = "Prénom Nom"
 genre = "roman"
 copyright = """© Prénom Nom, 2026.
 Tous droits réservés."""
-chapitres = 40
-manuscrit = "text.md"
-couverture = "cover.png"
+chapitres = 40                          # facultatif ; contrôle d'intégrité au gel
+manuscrit = "in/texts/mon-roman.md"     # depuis build/ ; chemin absolu accepté
+couverture = "in/covers/mon-roman.png"
 ```
 
-`manuscrit` et `couverture` sont les seules entrées que lisent les scripts : pour tirer une épreuve d'un autre état du texte, on change la clé, pas le script.
+`chapitres` se déduit du texte : la clé ne sert qu'à figer le compte quand le manuscrit ne doit plus bouger, et le script refuse alors de composer s'il en trouve un autre. Tant qu'on écrit, autant l'omettre — le compte trouvé est affiché à chaque composition.
+
+`manuscrit` et `couverture` sont les seules entrées que lisent les scripts : pour tirer une épreuve d'un autre état du texte, on change la clé, pas le script. Leurs chemins partent de `build/`, ce qui permet à plusieurs répertoires de travail de partager le même manuscrit ; un chemin absolu est pris tel quel.
 
 ### Épreuve de lecture
 
@@ -65,7 +67,7 @@ couverture = "cover.png"
 python3 outils/roman_pdf.py build/mon-roman 12 -t 10
 ```
 
-Génère un PDF de lecture au format poche (fpdf2) depuis le manuscrit et la couverture désignés par `livre.toml` : couverture + les 12 premiers chapitres. Sortie : `roman.pdf` dans le répertoire ; `-t` règle le corps du texte en points.
+Génère un PDF de lecture au format poche (fpdf2) depuis le manuscrit et la couverture désignés par `livre.toml` : couverture + les 12 premiers chapitres. Sortie : `build/mon-roman/out/roman.pdf` — l'épreuve ne vise aucun éditeur, elle reste à la racine de `out/` ; `-t` règle le corps du texte en points.
 
 ### Planche d'images
 
@@ -84,22 +86,31 @@ index.html              l'application, autonome
 outils/                 scripts Python trackés
 docs/superpowers/       specs et plans de développement
 versions/               jalons historiques, chaque fichier autonome
-build/<roman>/          manuscrits, livre.toml et sorties — jamais tracké
+build/                  ressources et répertoires de travail — jamais tracké
 NOTES.md                origine du projet, analyse de la Blanche, juridique
 CLAUDE.md               instructions pour Claude Code
 ```
 
-Le code est versionné, pas les romans : `build/` reste hors git. Arborescence type d'un roman :
+Le code est versionné, pas les romans : `build/` reste hors git. Il se lit en deux temps — les ressources partagées d'un côté, les répertoires de travail de l'autre :
 
 ```
-build/mon-roman/
-  text.md          manuscrit complet — l'entrée des scripts
-  WIP.md           états gelés, archive de ce qui est parti en relecture
-  cover.png        couverture exportée depuis l'app
-  livre.toml       métadonnées du livre, et les fichiers qu'il désigne
-  lulu/            intérieur composé pour Lulu
-  rox/  delf/      épreuves destinées aux relecteurs
+build/
+  in/                     ressources partagées
+    covers/               premières de couverture exportées depuis l'app (PNG)
+    texts/                manuscrits (Markdown)
+    editors/              guides de composition des éditeurs (PDF)
+  mon-roman/              un répertoire de travail…
+    livre.toml            …contient au minimum son livre.toml
+    out/                  tout ce qui est produit
+      roman.pdf           épreuve de lecture, sans éditeur visé
+      lulu/               package d'un éditeur : intérieur, HTML intermédiaires
 ```
+
+Un répertoire de travail est une **combinaison** : le même manuscrit et deux couvertures différentes font deux répertoires, chacun avec son `livre.toml`. Ce qui est partagé vit dans `in/`, ce qui est produit vit dans `out/`, ce qui est spécifique à un éditeur vit dans `out/<éditeur>/`.
+
+### Qui porte quoi
+
+Le `livre.toml` fait foi pour l'identité du livre : titre, auteur, genre, copyright, nombre de chapitres. Le PNG de couverture embarque lui aussi un titre et un auteur, mais **comme rendu, pas comme source** — sa casse est celle de la maquette (`inTitleCase`), et les scripts ne le lisent jamais. Un titre corrigé se corrige dans le TOML ; la couverture, elle, se refait dans l'app.
 
 ## Limites connues
 

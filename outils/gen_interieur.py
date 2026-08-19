@@ -4,10 +4,12 @@
 Usage : gen_interieur.py REPERTOIRE [--provider lulu] [-o SORTIE]
 Exemple : outils/gen_interieur.py build/heures-creuses --provider lulu
 
-REPERTOIRE contient livre.toml (métadonnées) et le manuscrit Markdown qu'il
-désigne (titre en « # », chapitres en « ## NN - Titre »). Chaîne orchestrée :
-pandoc (Markdown → HTML) → composition (liminaires, chapitres, gabarit @page
-du prestataire) → weasyprint (HTML → PDF). Sorties dans REPERTOIRE/<provider>/ :
+REPERTOIRE est un répertoire de travail de build/ : il contient livre.toml, dont
+les chemins (manuscrit, couverture) partent de build/ — « in/texts/roman.md »
+désigne une ressource partagée, un chemin absolu est pris tel quel. Manuscrit :
+titre en « # », chapitres en « ## NN - Titre ». Chaîne orchestrée : pandoc
+(Markdown → HTML) → composition (liminaires, chapitres, gabarit @page du
+prestataire) → weasyprint (HTML → PDF). Sorties dans REPERTOIRE/out/<provider>/ :
 interieur-<provider>.pdf + les HTML intermédiaires (corps.html, interieur.html).
 La gouttière dépend de la pagination : seconde passe automatique si le compte
 de pages sort de la tranche supposée. Le nombre de pages final est affiché —
@@ -84,7 +86,9 @@ def decoupe_chapitres(corps, attendu):
         if not m:
             sys.exit(f"Titre de chapitre inattendu : « {heading} » (attendu : « NN - Titre »).")
         chapters.append((int(m.group(1)), (m.group(2) or "").strip(), body))
-    if len(chapters) != attendu:
+    # « chapitres » est un contrôle d'intégrité facultatif : il n'a de sens qu'au
+    # gel, quand le compte ne doit plus bouger. Absent, on compose ce qu'on trouve.
+    if attendu is not None and len(chapters) != attendu:
         sys.exit(f"{attendu} chapitres attendus (livre.toml), {len(chapters)} trouvés.")
     return chapters
 
@@ -202,25 +206,30 @@ def main():
         if not shutil.which(outil):
             sys.exit(f"{outil} introuvable dans le PATH (brew install {outil}).")
 
-    toml_path = args.repertoire / 'livre.toml'
+    repertoire = args.repertoire.resolve()
+    toml_path = repertoire / 'livre.toml'
     if not toml_path.is_file():
         sys.exit(f"Fichier introuvable : {toml_path}")
     livre = tomllib.loads(toml_path.read_text(encoding='utf-8'))['livre']
 
-    manuscrit = args.repertoire / livre.get('manuscrit', 'text.md')
+    # Les chemins du livre.toml partent de build/, le parent du répertoire de
+    # travail : « in/texts/roman.md » désigne la ressource partagée. Un chemin
+    # absolu est pris tel quel (pathlib ignore alors la racine).
+    racine = repertoire.parent
+    manuscrit = racine / livre.get('manuscrit', 'text.md')
     if not manuscrit.is_file():
         sys.exit(f"Manuscrit introuvable : {manuscrit}")
 
     P = PROVIDERS[args.provider]
-    outdir = args.repertoire / args.provider
-    outdir.mkdir(exist_ok=True)
+    outdir = repertoire / 'out' / args.provider
+    outdir.mkdir(parents=True, exist_ok=True)
     pdf = args.sortie or outdir / f'interieur-{args.provider}.pdf'
 
     corps_path = outdir / 'corps.html'
     subprocess.run(['pandoc', str(manuscrit),
                     '-f', 'markdown-yaml_metadata_block-simple_tables-multiline_tables-pipe_tables-grid_tables',
                     '-t', 'html', '--wrap=none', '-o', str(corps_path)], check=True)
-    chapters = decoupe_chapitres(corps_path.read_text(encoding='utf-8'), livre['chapitres'])
+    chapters = decoupe_chapitres(corps_path.read_text(encoding='utf-8'), livre.get('chapitres'))
 
     gut = P["gouttieres"][0][2]   # hypothèse de départ : première tranche du gabarit
     for _ in range(2):
@@ -235,8 +244,8 @@ def main():
     else:
         sys.exit("La gouttière ne converge pas (pagination oscillante entre deux tranches).")
 
-    print(f"{pdf} — {pages} pages, gouttière {gut} mm ({args.provider}). "
-          f"Reporte {pages} pages dans l'app (onglet Assemblage) pour le dos.")
+    print(f"{pdf} — {pages} pages, {len(chapters)} chapitres, gouttière {gut} mm "
+          f"({args.provider}). Reporte {pages} pages dans l'app (onglet Assemblage) pour le dos.")
 
 
 if __name__ == '__main__':
