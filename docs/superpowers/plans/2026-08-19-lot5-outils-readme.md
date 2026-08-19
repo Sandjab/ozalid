@@ -113,7 +113,7 @@ git commit -m "Outils : roman_pdf et planche déménagent dans outils/"
 
 - [x] **Step 1 : le script**
 
-Créer `outils/gen_interieur.py` (exécutable, `chmod +x`) avec ce contenu — le gabarit HTML/CSS reprend À L'IDENTIQUE celui de `build/lulu/src/gen_interieur.py` (lis-le d'abord ; seuls le `@page` et les textes des liminaires deviennent paramétriques) :
+Créer `outils/gen_interieur.py` (exécutable, `chmod +x`) avec ce contenu — le gabarit HTML/CSS reprend À L'IDENTIQUE celui de `build/lulu/src/gen_interieur.py` (lis-le d'abord ; seuls le `@page` et les textes des liminaires deviennent paramétriques). **Attention : l'appel pandoc de ce bloc est PRÉ-CORRECTIF** — la version correcte (extensions désactivées + `--wrap=none`, commit `b240d96`) est consignée au journal ; ne pas ré-exécuter ce bloc à la lettre :
 
 ```python
 #!/usr/bin/env python3

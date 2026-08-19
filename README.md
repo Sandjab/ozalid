@@ -32,7 +32,7 @@ Corps de texte, filets et marges sont exprimés en pourcentage de la largeur de 
 
 ## Outils Python
 
-Prérequis : `brew install pandoc weasyprint` et `pip install fpdf2 pillow`. `gen_interieur.py` exige Python ≥ 3.11 (`tomllib`) et bascule seul sur `python3.12` ou plus récent si le `python3` système est plus vieux.
+Prérequis : `brew install pandoc weasyprint` et `pip install fpdf2 pillow`. `gen_interieur.py` exige Python ≥ 3.11 (`tomllib`) et bascule seul sur `python3.11` ou plus récent si le `python3` système est plus vieux.
 
 ### Intérieur du roman
 
@@ -40,7 +40,7 @@ Prérequis : `brew install pandoc weasyprint` et `pip install fpdf2 pillow`. `ge
 python3 outils/gen_interieur.py build/mon-roman --provider lulu
 ```
 
-Compose l'intérieur (pandoc → weasyprint) d'après `build/mon-roman/livre.toml` et le manuscrit qu'il désigne. Sortie : `build/mon-roman/lulu/interieur-lulu.pdf`. La gouttière dépend de la tranche de pagination : une seconde passe recompose automatiquement si le compte de pages sort de la tranche supposée. Le nombre de pages final est affiché — à reporter dans l'onglet Assemblage pour le calcul du dos.
+Compose l'intérieur (pandoc → weasyprint) d'après `build/mon-roman/livre.toml` et le manuscrit qu'il désigne. Format du manuscrit : titre en `# `, chapitres en `## NN - Titre`, séparateurs de scène `---`. Sortie : `build/mon-roman/lulu/interieur-lulu.pdf`. La gouttière dépend de la tranche de pagination : une seconde passe recompose automatiquement si le compte de pages sort de la tranche supposée. Le nombre de pages final est affiché — à reporter dans l'onglet Assemblage pour le calcul du dos.
 
 Exemple de `livre.toml` :
 

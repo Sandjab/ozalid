@@ -2,7 +2,7 @@
 """Génère le PDF d'un roman au format poche depuis un répertoire de travail.
 
 Usage : roman_pdf.py REPERTOIRE NB_CHAPITRES [-t TAILLE] [-o SORTIE]
-Exemple : roman_pdf.py build 8 -t 10
+Exemple : roman_pdf.py build/mon-roman 8 -t 10
 
 Attend dans REPERTOIRE : WIP.md (titre en «# », chapitres en «## », séparateurs
 de scène «---», italiques *…*, gras **…**) et cover.png (première de
