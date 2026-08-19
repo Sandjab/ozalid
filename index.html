@@ -434,6 +434,9 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
             <option value="128,198">Semi-poche — 128 × 198 mm</option>
             <option value="140,205">Blanche — 140 × 205 mm</option>
             <option value="135,215">Roman — 135 × 215 mm</option>
+            <option value="110,170">CoolLibri poche — 110 × 170 mm</option>
+            <option value="148,210">A5 — 148 × 210 mm</option>
+            <option value="160,240">CoolLibri roman — 160 × 240 mm</option>
             <option value="127,203.2">KDP 5 × 8 po — 127 × 203,2 mm</option>
             <option value="139.7,215.9">KDP 5,5 × 8,5 po — 139,7 × 215,9 mm</option>
             <option value="152.4,228.6">KDP 6 × 9 po — 152,4 × 228,6 mm</option>
@@ -706,10 +709,17 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
       <fieldset id="fsAsm" class="off">
         <legend>Assemblage</legend>
         <label><span class="lab">Prestataire</span>
-          <select id="inAsmProvider"><option value="lulu" selected>Lulu (poche)</option><option value="bod">BoD (crème 90 g)</option><option value="kdp">KDP (crème)</option><option value="kdp-blanc">KDP (blanc)</option></select></label>
+          <select id="inAsmProvider"><option value="lulu" selected>Lulu (poche)</option><option value="bod">BoD (crème 90 g)</option><option value="kdp">KDP (crème)</option><option value="kdp-blanc">KDP (blanc)</option><option value="mesure">Dos mesuré (gabarit fourni)</option></select></label>
         <label><span class="lab">Pages de l'intérieur — dos <span class="val" id="vDosMm">15,48 mm</span></span>
           <input type="number" id="inAsmPages" min="32" max="800" step="2" value="244"></label>
-        <p class="note">Le dos est calculé d'après le nombre de pages. Si l'intérieur regénéré change de nombre de pages, reporte le nouveau nombre ici avant d'exporter la planche.</p>
+        <div class="row hide" id="rowAsmMesure">
+          <label><span class="lab">Dos relevé (mm)</span>
+            <input type="number" id="inAsmDos" min="0" max="80" step="0.1" value="12"></label>
+          <label><span class="lab">Fond perdu (mm)</span>
+            <input type="number" id="inAsmFp" min="0" max="30" step="0.5" value="3"></label>
+        </div>
+        <p class="note" id="noteAsmFormule">Le dos est calculé d'après le nombre de pages. Si l'intérieur regénéré change de nombre de pages, reporte le nouveau nombre ici avant d'exporter la planche.</p>
+        <p class="note hide" id="noteAsmMesure">CoolLibri, TheBookEdition et Bookvault ne publient pas de formule : relève le dos et le fond perdu sur le gabarit ou le calculateur du prestataire, et saisis-les ici. Le nombre de pages ne sert plus qu'à retrouver la bonne ligne de leur gabarit.</p>
         <button class="btn" id="btnPlanche">Exporter la planche (PDF 300 dpi)</button>
         <p class="note">PNG 300 dpi encapsulé dans un PDF aux dimensions exactes, fond perdu compris — le fichier attendu par le prestataire.</p>
       </fieldset>
@@ -814,9 +824,11 @@ function plancheDims(){
   const P = PROVIDERS[$('inAsmProvider').value];
   const pages = Math.min(P.pagesMax, Math.max(P.pagesMin, +$('inAsmPages').value || 244));
   const dosMm = P.dos(pages);
-  return { P, dosMm,
-           wMm: 2 * format[0] + dosMm + 2 * P.fondPerdu,
-           hMm: format[1] + 2 * P.fondPerdu };
+  /* fondPerdu null = prestataire à gabarit : la valeur est celle qu'on a relevée, pas une constante */
+  const fp = P.fondPerdu ?? Math.max(0, +$('inAsmFp').value || 0);
+  return { P, fp, dosMm,
+           wMm: 2 * format[0] + dosMm + 2 * fp,
+           hMm: format[1] + 2 * fp };
 }
 /* panorama « prolongement » : la zone image de la 1ère (position, hauteur, insets)
    répliquée à l'identique, et la géométrie de l'image dans cette zone, à l'échelle
@@ -1109,13 +1121,18 @@ function render(){
   const sp = $('plancheFp').style;
   sp.setProperty('--dos-larg', D.dosMm / format[0]);
   sp.setProperty('--dos-hauteur', format[1] / format[0]);
-  sp.setProperty('--fp', D.P.fondPerdu / format[0]);
+  sp.setProperty('--fp', D.fp / format[0]);
   $('plancheDims').textContent = 'Planche ' + fr(D.wMm, 2) + ' × ' + fr(D.hMm, 2) +
-    ' mm — dos ' + fr(D.dosMm, 2) + ' mm — fond perdu ' + fr(D.P.fondPerdu, 3) + ' mm';
+    ' mm — dos ' + fr(D.dosMm, 2) + ' mm — fond perdu ' + fr(D.fp, 3) + ' mm';
   /* les bornes de pagination changent avec le prestataire : sans ça, plancheDims() ramènerait
      silencieusement la saisie dans la plage du précédent et le dos serait faux */
   $('inAsmPages').min = D.P.pagesMin;
   $('inAsmPages').max = D.P.pagesMax;
+  /* prestataire à gabarit : le dos et le fond perdu se saisissent au lieu de se calculer */
+  const dosSaisi = D.P.fondPerdu === null;
+  $('rowAsmMesure').classList.toggle('hide', !dosSaisi);
+  $('noteAsmMesure').classList.toggle('hide', !dosSaisi);
+  $('noteAsmFormule').classList.toggle('hide', dosSaisi);
   sp.setProperty('--dos-face', $('inDosFace').value);
   sp.setProperty('--dos-weight', $('inDosWeight').value);
   sp.setProperty('--dos-size', +$('inDosSize').value / 100);
@@ -1222,6 +1239,16 @@ const PROVIDERS = {
     fondPerdu: 3.175,
     pagesMin: 24, pagesMax: 828,
     dos: pages => pages * 0.0572          /* mm — blanc ; 280 p → 16,02 mm */
+  },
+  /* Prestataire à gabarit — CoolLibri, TheBookEdition, Bookvault. Aucun des trois ne publie de
+     formule de dos : leur gabarit ou leur calculateur fait foi, et TheBookEdition rejette les
+     fichiers qui s'en écartent. On saisit donc le dos et le fond perdu tels que relevés chez eux
+     plutôt que de reconstituer une formule invérifiable. fondPerdu null : la valeur vient du
+     champ, pas de la table — c'est ce qui distingue cette entrée des trois autres. */
+  mesure: {
+    fondPerdu: null,
+    pagesMin: 1, pagesMax: 9999,          /* la pagination ne calcule plus rien ici */
+    dos: () => Math.max(0, +$('inAsmDos').value || 0)
   }
 };
 
@@ -1247,7 +1274,7 @@ const PRESETS = {
     inQ4IsbnOn:false, inQ4IsbnW:34, inQ4IsbnH:21, inQ4IsbnDx:7, inQ4IsbnDy:7,
     inQ4ArtX:50, inQ4ArtY:50, inQ4Zoom:1, inQ4KeepRatio:false, inQ4Stretch:1,
     inQ4Scrim:'none', inQ4ScrimOp:55,
-    inAsmProvider:'lulu', inAsmPages:244,
+    inAsmProvider:'lulu', inAsmPages:244, inAsmDos:12, inAsmFp:3,
     inDosFace:F['Archivo'], inDosWeight:'600', inDosSize:2.6, inDosColor:'#191917',
     inDosBgMode:'herite', inDosBg:'#fcf0d8',
     inScrim:'none', inArtY:50, inArtX:50, inZoom:1, inKeepRatio:false, inStretch:1
@@ -1275,7 +1302,7 @@ const PRESETS = {
     inQ4IsbnOn:false, inQ4IsbnW:34, inQ4IsbnH:21, inQ4IsbnDx:7, inQ4IsbnDy:7,
     inQ4ArtX:50, inQ4ArtY:50, inQ4Zoom:1, inQ4KeepRatio:false, inQ4Stretch:1,
     inQ4Scrim:'none', inQ4ScrimOp:55,
-    inAsmProvider:'lulu', inAsmPages:244,
+    inAsmProvider:'lulu', inAsmPages:244, inAsmDos:12, inAsmFp:3,
     inDosFace:F['Archivo'], inDosWeight:'600', inDosSize:2.6, inDosColor:'#191917',
     inDosBgMode:'herite', inDosBg:'#fcf0d8'
   },
@@ -1300,7 +1327,7 @@ const PRESETS = {
     inQ4IsbnOn:false, inQ4IsbnW:34, inQ4IsbnH:21, inQ4IsbnDx:7, inQ4IsbnDy:7,
     inQ4ArtX:50, inQ4ArtY:50, inQ4Zoom:1, inQ4KeepRatio:false, inQ4Stretch:1,
     inQ4Scrim:'none', inQ4ScrimOp:55,
-    inAsmProvider:'lulu', inAsmPages:244,
+    inAsmProvider:'lulu', inAsmPages:244, inAsmDos:12, inAsmFp:3,
     inDosFace:F['Archivo'], inDosWeight:'600', inDosSize:2.6, inDosColor:'#f4efe4',
     inDosBgMode:'herite', inDosBg:'#fcf0d8',
     inScrim:'both', inScrimOp:62, inArtY:62, inArtX:50, inZoom:1.05, inKeepRatio:false, inStretch:1

@@ -86,6 +86,35 @@ PROVIDERS = {
         "gouttieres": [(24, 700, 19.05), (701, 828, 22.23)],
         "corps_pt": 9.5, "interligne": 1.42, "folio_pt": 8,
     },
+    # CoolLibri, trois formats sur sept — les seuls destinés au roman. Marges lues dans les
+    # gabarits Word officiels (sprm de section des .doc) : 20 mm sur les quatre côtés, sans
+    # distinction entre reliure et extérieur et sans variation selon la pagination, ce que la FAQ
+    # confirme (« 2 cm de marges tout autour »). D'où une tranche unique, bornée par les
+    # paginations admises en dos carré collé : 60 pages au moins, 700 au plus selon le papier.
+    # CoolLibri ne publie pas de formule de dos utilisable — la « main » de ses papiers manque —
+    # donc pas d'entrée couverture : côté planche, prestataire « Dos mesuré ».
+    # Détail des relevés : build/in/editors/coollibri-specs.md.
+    "coollibri-110x170": {
+        "format": (110.0, 170.0),
+        "marge_haut": 20.0, "marge_bas": 20.0,
+        "exterieur": 20.0,
+        "gouttieres": [(60, 700, 20.0)],
+        "corps_pt": 9.5, "interligne": 1.42, "folio_pt": 8,
+    },
+    "coollibri-148x210": {
+        "format": (148.0, 210.0),
+        "marge_haut": 20.0, "marge_bas": 20.0,
+        "exterieur": 20.0,
+        "gouttieres": [(60, 700, 20.0)],
+        "corps_pt": 9.5, "interligne": 1.42, "folio_pt": 8,
+    },
+    "coollibri-160x240": {
+        "format": (160.0, 240.0),
+        "marge_haut": 20.0, "marge_bas": 20.0,
+        "exterieur": 20.0,
+        "gouttieres": [(60, 700, 20.0)],
+        "corps_pt": 9.5, "interligne": 1.42, "folio_pt": 8,
+    },
 }
 
 

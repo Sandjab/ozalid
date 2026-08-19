@@ -1,6 +1,6 @@
 # Cookbook — publier un roman
 
-Marche à suivre complète, du manuscrit au fichier téléversé chez l'imprimeur. Un chapitre par prestataire ; **Lulu**, **BoD** et **Amazon KDP** sont outillés.
+Marche à suivre complète, du manuscrit au fichier téléversé chez l'imprimeur. Un chapitre par prestataire : **Lulu**, **BoD** et **Amazon KDP** sont outillés de bout en bout, **CoolLibri** pour son intérieur seulement, **TheBookEdition** et **Bookvault** se maquettent d'après le gabarit qu'ils fournissent.
 
 L'ordre n'est pas négociable : **l'intérieur d'abord, la couverture ensuite**. La largeur du dos se calcule à partir du nombre de pages, et ce nombre n'est connu qu'une fois l'intérieur composé. Toute recomposition qui change la pagination oblige à refaire la couverture.
 
@@ -318,6 +318,102 @@ Le détail des relevés est dans `build/in/editors/kdp-specs.md`, les modèles d
 
 ---
 
+## CoolLibri — 11 × 17, A5 ou 16 × 24 cm
+
+Imprimeur toulousain. Son intérieur est outillé ; **sa couverture ne l'est pas**, faute d'une
+formule de dos calculable — voir plus bas.
+
+### 1 à 3. Ressources, répertoire de travail, épreuve
+
+Identiques au chapitre Lulu.
+
+### 4. Composer l'intérieur
+
+```
+python3 outils/gen_interieur.py build/mon-roman --provider coollibri-160x240
+```
+
+Trois formats outillés, les seuls destinés au roman :
+
+| Format | `--provider` | Format dans l'app |
+|---|---|---|
+| 11 × 17 cm | `coollibri-110x170` | CoolLibri poche |
+| A5 14,8 × 21 cm | `coollibri-148x210` | A5 |
+| 16 × 24 cm | `coollibri-160x240` | CoolLibri roman |
+
+Marges : **20 mm sur les quatre côtés**, lues dans les gabarits Word officiels. CoolLibri ne
+module pas la reliure selon l'épaisseur, et ne distingue pas la marge intérieure de
+l'extérieure — la composition est donc symétrique, contrairement à tous les autres prestataires
+outillés ici. Pagination admise en dos carré collé : 60 à 700 pages selon le papier.
+
+### 5 et 6. Maquetter et exporter — le dos se relève, il ne se calcule pas
+
+CoolLibri publie sa formule de dos, `(grammage / 1000) × main × (pages / 2)`, mais **pas la
+« main » de ses papiers** : la formule est donc incalculable de l'extérieur. Ses gabarits de
+couverture publiés ne couvrent que le dos carré rigide, en 21 × 21 et A4.
+
+La marche à suivre :
+
+1. Monter le projet dans le parcours en ligne de CoolLibri jusqu'à l'étape « couverture et
+   dos » — c'est là que le dos s'affiche, pour le papier et la pagination retenus.
+2. Dans l'app : le format CoolLibri correspondant, onglet Assemblage, prestataire
+   **« Dos mesuré (gabarit fourni) »**.
+3. Saisir le **dos relevé** et le **fond perdu** (3 mm chez CoolLibri). Le nombre de pages ne
+   sert plus qu'à retrouver la bonne ligne de leur gabarit.
+
+**Au-delà de 180 pages**, CoolLibri prévient lui-même que l'épaisseur peut changer : reprendre
+le dos affiché à cette étape avant d'exporter la planche.
+
+Le détail des relevés est dans `build/in/editors/coollibri-specs.md`.
+
+---
+
+## TheBookEdition — non outillé, et pourquoi
+
+Meilleure fabrication du comparatif, production française, contrôle manuel des fichiers. Mais
+**aucune dimension n'est publiée** : ni format de rognage en millimètres, ni fond perdu, ni
+marges, ni formule de dos. Le gabarit de couverture est généré par leur simulateur à partir de
+la reliure, du format, du grammage et de la pagination, et leur aide en fait une condition de
+recevabilité — un fichier qui s'en écarte est rejeté par leur système.
+
+Reconstituer une formule en sondant leur simulateur donnerait un résultat invérifiable, qui
+casserait sans préavis. Le dépôt préfère refuser une valeur plutôt que l'inventer.
+
+La marche à suivre :
+
+1. Composer l'intérieur avec le gabarit outillé le plus proche du format visé.
+2. Télécharger le gabarit de couverture depuis le compte auteur (« Télécharger un gabarit de
+   couverture »), pour la reliure, le format, le papier et la pagination retenus.
+3. Y relever le dos et le fond perdu, et les saisir dans l'app avec le prestataire
+   **« Dos mesuré (gabarit fourni) »**.
+
+Paginations admises : 40 à 750 pages en dos carré collé, 24 à 300 en rigide (nombre pair
+obligatoire). Voir `build/in/editors/thebookedition-specs.md`.
+
+---
+
+## Bookvault — non outillé, et pourquoi
+
+Finitions premium dès un exemplaire, formats libres de l'A6 au carré 297 mm. Son guide PDF
+publie le fond perdu (**3 mm** partout), la marge de sécurité de la couverture (15 mm) et la
+gouttière de l'intérieur (20 mm) — mais **ni les trois autres marges, ni la formule du dos**,
+calculé par leur serveur. Le seul point chiffré du guide est un exemple : 100 pages en 80 g
+bond → 5,6 mm.
+
+Deux singularités à connaître avant de s'y engager :
+
+- **Pagination en multiple de 12 moins un** (11, 23, 35, 47…) : leur système imprime un
+  code-barres en dernière page, et c'est ainsi qu'on évite les blanches de fin. Cette règle est
+  incompatible avec la parité que la chaîne impose partout ailleurs.
+- **5 mm blancs de part et d'autre du dos** si l'intérieur de la couverture est imprimé, pour
+  que la colle prenne.
+
+La marche à suivre : composer l'intérieur avec un gabarit voisin (l'A5 de CoolLibri convient),
+relever le dos dans leur calculateur, puis maquetter la planche avec le prestataire **« Dos
+mesuré »**, fond perdu 3 mm. Voir `build/in/editors/bookvault-specs.md`.
+
+---
+
 ## Ajouter un prestataire
 
 Il faut compléter **deux** tables, l'une pour la couverture, l'autre pour l'intérieur :
@@ -327,6 +423,14 @@ Il faut compléter **deux** tables, l'une pour la couverture, l'autre pour l'int
 
 Ne reporter que des tranches de gouttière effectivement lues dans le guide du prestataire : le script préfère refuser une pagination hors tranche plutôt que d'extrapoler. Ranger le guide dans `build/in/editors/` pour la prochaine fois.
 
+**Les deux tables sont indépendantes**, et il est normal de n'en compléter qu'une. Un prestataire
+qui publie ses gabarits d'intérieur mais pas sa formule de dos (CoolLibri) n'entre que dans
+`gen_interieur.py` ; un prestataire qui ne publie rien de numérique (TheBookEdition, Bookvault)
+n'entre nulle part. Dans les deux cas, sa planche se maquette avec le prestataire **« Dos
+mesuré (gabarit fourni) »** : le dos et le fond perdu se saisissent tels que relevés sur le
+gabarit officiel. C'est la porte de sortie pour tout imprimeur dont le gabarit fait foi — mieux
+vaut saisir une valeur lue qu'inscrire une formule devinée dans la table.
+
 ### File d'attente
 
 Retenus depuis le comparatif POD du 19 août 2026 (`build/in/editors/comparator-pod-livres-*.html`), par ordre de traitement :
@@ -335,8 +439,12 @@ Retenus depuis le comparatif POD du 19 août 2026 (`build/in/editors/comparator-
 |---|---|---|---|
 | ~~1~~ | ~~BoD~~ — **implémenté**, voir son chapitre | | |
 | ~~2~~ | ~~Amazon KDP~~ — **implémenté**, voir son chapitre | | |
-| 3 | TheBookEdition (Lille) | Meilleure fabrication du banc d'essai, contrôle manuel des fichiers, production française. | Le plus cher des trois grands, contrôles d'upload stricts, broché seul. |
-| 4 | CoolLibri (Toulouse) | Français, papiers crème et satin à l'unité, jusqu'à 648 pages. | Documentation technique à vérifier, pas de distribution. |
-| 5 | Bookvault (UK) | Finitions premium dès un exemplaire, papier intérieur 150 g. | Frais d'upload de 10 à 15 $, incertitudes post-Brexit. |
+| ~~3~~ | ~~TheBookEdition (Lille)~~ — **traité** : non outillable, voir son chapitre | | Ne publie aucune dimension ; gabarit généré, à respecter au pixel près. |
+| ~~4~~ | ~~CoolLibri (Toulouse)~~ — **intérieur outillé**, couverture au dos mesuré, voir son chapitre | | La réserve du comparatif était fondée : la « main » de ses papiers n'est pas publiée. |
+| ~~5~~ | ~~Bookvault (UK)~~ — **traité** : non outillable, voir son chapitre | | Formule de dos côté serveur, formats libres, pagination en multiple de 12 moins un. |
+
+La file est épuisée. Les trois derniers prestataires ont en commun de faire du gabarit qu'ils
+fournissent la référence, plutôt que de publier les grandeurs qui permettraient de le
+reconstruire — d'où le prestataire « Dos mesuré », qui les couvre tous les trois.
 
 Lulu reste implémenté, mais le comparatif le classe en tier B : papier fin, rainage mou, coût à l'exemplaire le plus élevé des grands POD. Son intérêt tient à l'étendue de son catalogue de reliures.
