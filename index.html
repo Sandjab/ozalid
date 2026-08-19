@@ -143,7 +143,7 @@ body{display:flex;flex-direction:column;height:100vh}
 .q4-pied div:empty{display:none}
 /* ---------- assemblage : planche 4ème + dos + 1ère ---------- */
 /* Les variables --fp/--dos-larg/--dos-hauteur sont écrites par render() ;
-   --cw est posée sur #plancheFp par buildPlanche() (tâche 4) — d'ici là les fallbacks s'appliquent. */
+   --cw est posée sur #plancheFp par buildPlanche() — d'ici là les fallbacks s'appliquent. */
 /* guides et habillage écran seulement (hachures, ombre, tirets) : neutralisés à l'export par capturePlancheExport()/applyPlancheExport() + .export */
 .planche-fp{
   padding:calc(var(--cw,340px)*var(--fp,.03));
@@ -809,7 +809,7 @@ function render(){
   s.setProperty('--paper', $('inPaper').value);
   s4.setProperty('--fw', format[0]);
   s4.setProperty('--fh', format[1]);
-  s4.backgroundColor = $('inQ4BgMode').value === 'couleur' ? $('inQ4Bg').value : $('inPaper').value;
+  s4.setProperty('--paper', $('inQ4BgMode').value === 'couleur' ? $('inQ4Bg').value : $('inPaper').value);
   s4.setProperty('--q4-face', $('inQ4TextFace').value);
   s4.setProperty('--q4-weight', $('inQ4TextWeight').value);
   s4.setProperty('--q4-size', +$('inQ4TextSize').value / 100);
