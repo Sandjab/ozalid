@@ -37,7 +37,7 @@ require('fs').writeFileSync('/tmp/ozalid-extrait.js', blocks.join('\n;\n'));
 
 **Files :** Modify `index.html` (`buildPlanche`, `render()`, écouteur `btnPlanche`)
 
-- [ ] **Step 1 : le helper**
+- [x] **Step 1 : le helper**
 
 Juste avant `buildPlanche`, ajouter :
 
@@ -53,11 +53,11 @@ function plancheDims(){
 }
 ```
 
-- [ ] **Step 2 : `buildPlanche(D, cwPl)`**
+- [x] **Step 2 : `buildPlanche(D, cwPl)`**
 
 Changer la signature `function buildPlanche(P, dosMm, cwPl)` en `function buildPlanche(D, cwPl)` ; dans le corps, remplacer la ligne `const largeurMm = 2 * format[0] + dosMm + 2 * P.fondPerdu;` par `const largeurMm = D.wMm;`. Rien d'autre ne référence `P`/`dosMm` dans la fonction — vérifier par lecture.
 
-- [ ] **Step 3 : `render()` consomme `plancheDims()`**
+- [x] **Step 3 : `render()` consomme `plancheDims()`**
 
 Dans le bloc `/* --- assemblage : dimensions de la planche --- */`, remplacer les lignes qui calculent `P`, `pages`, `dosMm` par `const D = plancheDims();`, puis adapter les usages : `sp.setProperty('--dos-larg', D.dosMm / format[0]); … sp.setProperty('--fp', D.P.fondPerdu / format[0]);` ; le texte `plancheDims` devient :
 
@@ -68,7 +68,7 @@ Dans le bloc `/* --- assemblage : dimensions de la planche --- */`, remplacer le
 
 l'appel devient `if (tab === 'assemblage') buildPlanche(D);` et la lecture `vDosMm` dans `R` devient `[D.dosMm, 2, ' mm']`.
 
-- [ ] **Step 4 : `btnPlanche` consomme `plancheDims()`**
+- [x] **Step 4 : `btnPlanche` consomme `plancheDims()`**
 
 Dans l'écouteur, remplacer les cinq lignes `const P = …` à `const wPx = …` par :
 
@@ -80,11 +80,11 @@ Dans l'écouteur, remplacer les cinq lignes `const P = …` à `const wPx = …`
 
 et adapter les usages suivants (`wMm` → `D.wMm`, `hMm` → `D.hMm`) dans la création de page PDF et le message `status`.
 
-- [ ] **Step 5 : syntaxe + sonde de non-régression**
+- [x] **Step 5 : syntaxe + sonde de non-régression**
 
 `node --check` (en-tête). Puis sonde : onglet Assemblage, relever `$('plancheDims').textContent` et la largeur de `#planche` — identiques à avant le refactor (valeurs de référence : les relever sur `git stash` ou simplement vérifier « Planche 237,83 × 184,35 mm — dos 15,48 mm » pour le folio 108×178 à 244 pages). Rejouer aussi un export planche par reproduction du flux (mêmes appels que `btnPlanche`) et vérifier le MediaBox inchangé.
 
-- [ ] **Step 6 : commit**
+- [x] **Step 6 : commit**
 
 ```bash
 git add index.html
@@ -99,7 +99,7 @@ git commit -m "plancheDims : dimensions de la planche en un seul endroit"
 
 **Files :** Modify `index.html` (`preparePlancheClone` → deux fonctions, `btnPlanche`, commentaires CSS)
 
-- [ ] **Step 1 : remplacer `preparePlancheClone` par capture + application**
+- [x] **Step 1 : remplacer `preparePlancheClone` par capture + application**
 
 Remplacer intégralement la fonction (commentaire compris) par :
 
@@ -139,19 +139,19 @@ function applyPlancheExport(doc, snap){
 }
 ```
 
-- [ ] **Step 2 : `btnPlanche` câble la fermeture**
+- [x] **Step 2 : `btnPlanche` câble la fermeture**
 
 Après l'appel `buildPlanche(D, …);`, ajouter `const snap = capturePlancheExport();` et remplacer `onclone: preparePlancheClone` par `onclone: doc => applyPlancheExport(doc, snap)`.
 
-- [ ] **Step 3 : commentaires**
+- [x] **Step 3 : commentaires**
 
 Mettre à jour les deux commentaires CSS qui citent `preparePlancheClone` (en-tête du bloc planche et bloc `.planche-fp.export`) pour citer `capturePlancheExport()/applyPlancheExport()`. Vérifier par grep qu'aucune référence à `preparePlancheClone` ne subsiste.
 
-- [ ] **Step 4 : syntaxe + sonde**
+- [x] **Step 4 : syntaxe + sonde**
 
 `node --check`, puis export planche par reproduction du flux (avec la capture) : rendu identique à la tâche précédente (dimensions canvas, contrôle visuel rapide, fond perdu rempli).
 
-- [ ] **Step 5 : commit**
+- [x] **Step 5 : commit**
 
 ```bash
 git add index.html
@@ -164,7 +164,7 @@ git commit -m "Export planche : valeurs capturées avant le rendu, onclone sans 
 
 **Files :** Modify `index.html` (`render()`, commentaire CSS)
 
-- [ ] **Step 1 : fond de la 4ème par variable**
+- [x] **Step 1 : fond de la 4ème par variable**
 
 Dans `render()`, remplacer `s4.backgroundColor = $('inQ4BgMode').value === 'couleur' ? $('inQ4Bg').value : $('inPaper').value;` par :
 
@@ -174,11 +174,11 @@ Dans `render()`, remplacer `s4.backgroundColor = $('inQ4BgMode').value === 'coul
 
 (`.cover{background:var(--paper)}` existe déjà : `#cover4` porte la classe `cover`, sa variable inline prime sur celle héritée — vérifier qu'aucun style inline `background-color` résiduel ne reste posé sur `#cover4` au chargement d'une session antérieure : l'ancienne écriture n'était pas sérialisée, rien à migrer, mais le confirmer par grep `backgroundColor`.)
 
-- [ ] **Step 2 : commentaire l.~145**
+- [x] **Step 2 : commentaire l.~145**
 
 Le commentaire CSS `/* Les variables … --cw est posée sur #plancheFp par buildPlanche() (tâche 4) — d'ici là les fallbacks s'appliquent. */` perd sa référence de tâche : `… par buildPlanche() — d'ici là les fallbacks s'appliquent. */`
 
-- [ ] **Step 3 : syntaxe + sonde + commit**
+- [x] **Step 3 : syntaxe + sonde + commit**
 
 `node --check` ; sonde : fond de la 4ème correct dans les deux modes (`herite`/`couleur`) à l'écran ET dans la planche (le clone copie la variable inline). Commit :
 
@@ -193,7 +193,7 @@ git commit -m "4ème : fond papier par variable CSS ; commentaire planche toilet
 
 **Files :** Modify `index.html` (HTML `#cover4`/`#dos`/panneau, CSS, `applyInspector`)
 
-- [ ] **Step 1 : couches image dans `#cover4`**
+- [x] **Step 1 : couches image dans `#cover4`**
 
 Dans `#cover4`, AVANT `<div class="q4-texte" …>`, insérer :
 
@@ -204,7 +204,7 @@ Dans `#cover4`, AVANT `<div class="q4-texte" …>`, insérer :
 
 (`elImg4` = image propre uploadée ; `elImg4P` = tranche du prolongement, src synchronisé sur la 1ère — deux éléments pour ne jamais écraser l'upload propre. Un seul est visible à la fois, géré par `render()` à la tâche 5/6.)
 
-- [ ] **Step 2 : tranche du dos**
+- [x] **Step 2 : tranche du dos**
 
 Dans `#dos`, AVANT `<div class="dos-texte" …>`, insérer :
 
@@ -221,7 +221,7 @@ et ajouter au CSS, dans le bloc planche (après `.dos{…}`) :
 
 (le conteneur `dosArt` réplique le rôle de zone clippante de `.art` — indispensable en mode bandeau pour que la tranche du dos s'arrête à la hauteur de la bande ; `top`/`height` posés en px par `buildPlanche`. Le `.dos-texte` déjà présent passe au-dessus par ordre de document + `position:absolute`.)
 
-- [ ] **Step 3 : sélecteur de fond étendu**
+- [x] **Step 3 : sélecteur de fond étendu**
 
 Dans `fsQ4Fond`, le `<select id="inQ4BgMode">` reçoit deux options après `couleur` :
 
@@ -229,7 +229,7 @@ Dans `fsQ4Fond`, le `<select id="inQ4BgMode">` reçoit deux options après `coul
 <option value="image">image propre</option><option value="prolongement">prolongement de la 1ère</option>
 ```
 
-- [ ] **Step 4 : fieldset `fsQ4Image`**
+- [x] **Step 4 : fieldset `fsQ4Image`**
 
 Après la fermeture `</fieldset>` de `fsQ4Fond`, insérer (miroir de `fsImage`, variantes Q4, mêmes bornes) :
 
@@ -265,11 +265,11 @@ Après la fermeture `</fieldset>` de `fsQ4Fond`, insérer (miroir de `fsImage`, 
       </fieldset>
 ```
 
-- [ ] **Step 5 : visibilité**
+- [x] **Step 5 : visibilité**
 
 Dans `applyInspector()`, la liste `['fsQ4Fond','fsQ4Texte','fsQ4Pied','fsQ4Isbn']` devient `['fsQ4Fond','fsQ4Image','fsQ4Texte','fsQ4Pied','fsQ4Isbn']`. (Le masquage fin — fieldset caché hors modes image/prolongement, lignes de cadrage cachées en prolongement — arrive à la tâche 5 dans `render()`, comme `fsImage`/`mode typo`.)
 
-- [ ] **Step 6 : upload et rechargement d'image**
+- [x] **Step 6 : upload et rechargement d'image**
 
 À côté de l'écouteur `$('inFile')` existant, ajouter (même idiome) :
 
@@ -285,7 +285,7 @@ for (const id of ['elImg4', 'elImg4P', 'elImgDos']) $(id).addEventListener('load
 
 (Vérifier comment `elImg` déclenche son re-rendu au chargement — s'il a déjà un écouteur `load`, suivre le même motif ; sinon celui-ci suffit pour les nouveaux éléments.)
 
-- [ ] **Step 7 : syntaxe + sonde + commit**
+- [x] **Step 7 : syntaxe + sonde + commit**
 
 `node --check` ; sonde : onglet 4ème → le fieldset apparaît (encore inerte), aucune erreur console, aucune régression sur les trois presets × trois onglets (les nouveaux contrôles ont leurs valeurs par défaut, `DEFAULTS` les capture au démarrage — vérifier `DEFAULTS.inQ4ArtX === '50'` en console). Commit :
 
@@ -300,7 +300,7 @@ git commit -m "4ème : couches image, tranche du dos et contrôles (inertes)"
 
 **Files :** Modify `index.html` (`artFreezeCss` → `artGeom` + wrapper, bloc voile factorisé, `render()`, `buildPlanche`, `PRESETS`)
 
-- [ ] **Step 1 : extraire `artGeom` (calcul pur, formules STRICTEMENT identiques)**
+- [x] **Step 1 : extraire `artGeom` (calcul pur, formules STRICTEMENT identiques)**
 
 Remplacer `artFreezeCss` par :
 
@@ -335,7 +335,7 @@ function artFreezeCss(zone){
 
 (`freezeArtGeometry` et `capturePlancheExport` continuent d'appeler `artFreezeCss(rect)` sans changement. Contrainte forte : comparer terme à terme avec l'ancienne version — seul le découpage bouge, pas une formule.)
 
-- [ ] **Step 2 : factoriser le dégradé de voile**
+- [x] **Step 2 : factoriser le dégradé de voile**
 
 Sortir l'objet `G` du bloc `/* --- voile --- */` en fonction :
 
@@ -354,7 +354,7 @@ function scrimCss(kind, op){
 
 et faire consommer le bloc voile existant : `scrim.style.background = scrimCss(kind, op);`.
 
-- [ ] **Step 3 : bloc de rendu 4ème dans `render()`**
+- [x] **Step 3 : bloc de rendu 4ème dans `render()`**
 
 Après le bloc q4 existant (après l'écriture de `--paper`, tâche 3), ajouter :
 
@@ -390,7 +390,7 @@ Après le bloc q4 existant (après l'écriture de `--paper`, tâche 3), ajouter 
 
 et compléter l'objet `R` : `vQ4ArtY:[$('inQ4ArtY').value,0,' %'], vQ4ArtX:[$('inQ4ArtX').value,0,' %'], vQ4Zoom:[$('inQ4Zoom').value,2,''], vQ4Stretch:[$('inQ4Stretch').value,2,''], vQ4Scrim:[$('inQ4ScrimOp').value,0,' %'],`
 
-- [ ] **Step 4 : remise à l'échelle dans la planche**
+- [x] **Step 4 : remise à l'échelle dans la planche**
 
 Dans `buildPlanche`, la boucle de remise à l'échelle des px inline (aujourd'hui `c1.querySelectorAll('.frame,.frame-r1,.frame-r2')`) s'applique aussi aux images en px du clone de la 4ème : ajouter après elle :
 
@@ -403,7 +403,7 @@ Dans `buildPlanche`, la boucle de remise à l'échelle des px inline (aujourd'hu
   });
 ```
 
-- [ ] **Step 5 : presets**
+- [x] **Step 5 : presets**
 
 Dans chacune des trois entrées de `PRESETS`, à côté des clés `inQ4…` existantes, ajouter :
 
@@ -412,11 +412,11 @@ Dans chacune des trois entrées de `PRESETS`, à côté des clés `inQ4…` exis
     inQ4Scrim:'none', inQ4ScrimOp:55,
 ```
 
-- [ ] **Step 6 : syntaxe + sondes**
+- [x] **Step 6 : syntaxe + sondes**
 
 `node --check`. Sondes (session sauvegardée/restaurée) : (1) onglet 4ème, mode `image`, injecter une image de test (`$('elImg4').src = $('elImg').src` en console de sonde pour éviter un upload), vérifier cadrage/zoom/voile réactifs et cohérents visuellement (capture) ; (2) l'export 1ère est inchangé (gel intact — capture scale 3 comparée à l'écran) ; (3) la planche écran montre l'image de la 4ème à la bonne échelle (capture) ; (4) sans image chargée : fond papier + note visible ; (5) trois presets sans changement d'aspect (mode `herite`).
 
-- [ ] **Step 7 : commit**
+- [x] **Step 7 : commit**
 
 ```bash
 git add index.html
@@ -429,7 +429,7 @@ git commit -m "4ème : mode image propre (artGeom factorisé, voile, presets)"
 
 **Files :** Modify `index.html` (`render()` — bloc 4ème, `buildPlanche` — tranche du dos)
 
-- [ ] **Step 1 : géométrie partagée du panorama**
+- [x] **Step 1 : géométrie partagée du panorama**
 
 Avant `render()` (près de `plancheDims`), ajouter :
 
@@ -454,7 +454,7 @@ function panoGeom(cw){
 }
 ```
 
-- [ ] **Step 2 : la tranche de la 4ème dans `render()`**
+- [x] **Step 2 : la tranche de la 4ème dans `render()`**
 
 Dans le bloc 4ème (tâche 5), remplacer les lignes `const proOn = false; … $('noteQ4Manque').classList.add('hide');` par :
 
@@ -481,7 +481,7 @@ Dans le bloc 4ème (tâche 5), remplacer les lignes `const proOn = false; … $(
 
 et adapter la ligne d'affichage de `art4` : `art4.classList.toggle('hide', !(q4m === 'image' && g4) && !proOn);` (déjà en place — vérifier). Le mode `image` de la tâche 5 remet `top/left/right/bottom = '0'` et doit maintenant aussi vider `width/height` (`art4.style.width = art4.style.height = '';`) — l'ajouter à la branche `image`.
 
-- [ ] **Step 3 : la tranche du dos dans `buildPlanche`**
+- [x] **Step 3 : la tranche du dos dans `buildPlanche`**
 
 Après la boucle de remise à l'échelle du clone `c4`, ajouter :
 
@@ -502,7 +502,7 @@ Après la boucle de remise à l'échelle du clone `c4`, ajouter :
 
 Attention : le clone `c4` a été fabriqué avec les px écran (`cw4`) puis remis à l'échelle par la boucle — cohérent. Le dos, lui, est calculé directement à `cwPl` : pas de double échelle. La zone `dosArt` clippe la tranche à la hauteur de la bande en mode bandeau (même rôle que `.art` sur les couvertures) ; l'image y est positionnée relativement à la zone, comme sur la 4ème. En mode `image` de la tâche 5 et hors prolongement, `dosArt` reste cachée (le `render()` de la tâche 6 la cache déjà via `dosImg`/`dosArt` — harmoniser : c'est `dosArt` qu'on montre/cache, l'`img` n'a plus de classe `hide` propre ; adapter les lignes correspondantes des tâches 4-6 : l'écouteur `load` cible toujours `elImgDos`, mais les `classList` du bloc `render()` visent `dosArt`).
 
-- [ ] **Step 4 : syntaxe + sondes**
+- [x] **Step 4 : syntaxe + sondes**
 
 `node --check`. Sondes (preset Surimpression puis preset Folio — les deux géométries de zone, session restaurée ensuite) :
 1. Onglet 4ème, `inQ4BgMode = 'prolongement'` : la 4ème montre la continuation gauche de la photo, à la même hauteur de bande (Folio) ou plein fond (Surimpression) — captures.
@@ -511,7 +511,7 @@ Attention : le clone `c4` a été fabriqué avec les px écran (`cw4`) puis remi
 4. Mode typo sur la 1ère + prolongement : fond papier, pas d'erreur.
 5. L'onglet 1ère est strictement inchangé (1ère maître).
 
-- [ ] **Step 5 : commit**
+- [x] **Step 5 : commit**
 
 ```bash
 git add index.html
@@ -524,11 +524,11 @@ git commit -m "4ème : prolongement panoramique de la 1ère (tranches 4ème et d
 
 **Files :** Modify `index.html` (`shrinkSource`, export PNG, sauvegarde locale, `applyConfig`)
 
-- [ ] **Step 1 : `shrinkSource` paramétré**
+- [x] **Step 1 : `shrinkSource` paramétré**
 
 Signature `function shrinkSource(maxDim = 1600)` → `function shrinkSource(img = $('elImg'), maxDim = 1600)` ; le corps utilise le paramètre `img` au lieu de `const img = $('elImg')`. Vérifier par grep que les appels existants (`shrinkSource()`) restent valides.
 
-- [ ] **Step 2 : export PNG**
+- [x] **Step 2 : export PNG**
 
 Dans l'écouteur `btnPng`, après la ligne `if ($('inEmbedImg').checked && mode !== 'typo') cfg.image = await shrinkSource();`, ajouter :
 
@@ -539,7 +539,7 @@ Dans l'écouteur `btnPng`, après la ligne `if ($('inEmbedImg').checked && mode 
       }
 ```
 
-- [ ] **Step 3 : sauvegarde locale**
+- [x] **Step 3 : sauvegarde locale**
 
 Dans le bloc localStorage (ancre `DEFAULT_IMG`), après la ligne conditionnelle `cfg.image`, ajouter le pendant :
 
@@ -549,7 +549,7 @@ Dans le bloc localStorage (ancre `DEFAULT_IMG`), après la ligne conditionnelle 
 
 (vérifier le contexte : si le bloc supprime `cfg.image` dans un `else`, faire pareil pour `cfg.image4`).
 
-- [ ] **Step 4 : restauration**
+- [x] **Step 4 : restauration**
 
 Dans `applyConfig`, après `if (c.image) $('elImg').src = c.image;` :
 
@@ -559,11 +559,11 @@ Dans `applyConfig`, après `if (c.image) $('elImg').src = c.image;` :
 
 (déterminisme : un chargement sans `image4` efface l'image propre — cohérent avec le correctif `DEFAULTS` du lot 2 ; l'`img` sans `src` ne rend rien et `artGeom` renvoie null → fond papier + note).
 
-- [ ] **Step 5 : syntaxe + sonde round-trip**
+- [x] **Step 5 : syntaxe + sonde round-trip**
 
 `node --check`. Sonde : mode `image` avec image chargée → `collectConfig`+`cfg.image4` → `applyConfig` → tous les champs identiques ET l'image restaurée (`$('elImg4').naturalWidth > 0`) ; puis round-trip d'une config SANS image4 → `elImg4` vidé. Mesurer la taille de la session localStorage avec les deux images (`localStorage['atelier-couverture-session'].length`) : attendu ≪ 5 Mo (le consigner au journal). Session restaurée à l'identique après sonde.
 
-- [ ] **Step 6 : commit**
+- [x] **Step 6 : commit**
 
 ```bash
 git add index.html
@@ -576,15 +576,15 @@ git commit -m "4ème : image propre sérialisée (PNG, session, applyConfig)"
 
 **Files :** aucun a priori (sondes) — Modify `index.html` seulement si un défaut est trouvé
 
-- [ ] **Step 1 : sonde export mode `image`**
+- [x] **Step 1 : sonde export mode `image`**
 
 Preset Folio, 4ème en mode `image` (image de test injectée), reproduction du flux `btnPlanche` (avec `capturePlancheExport`) → PDF au scratchpad, conversion PNG, contrôle visuel : image de la 4ème nette, bien cadrée, voile rendu, fond perdu correct. MediaBox inchangé.
 
-- [ ] **Step 2 : sonde export mode `prolongement`**
+- [x] **Step 2 : sonde export mode `prolongement`**
 
 Preset Surimpression puis Folio, prolongement actif : PDF → PNG, contrôle des raccords aux jonctions 4ème/dos/1ère à 300 dpi (découper les jonctions au zoom), voile de la 4ème, texte du dos lisible par-dessus la tranche. Vérifier notamment le rendu html2canvas des `<img>` positionnées en px inline (aucun `object-fit` en jeu — le risque est faible, mais c'est le contrôle « rendu à l'export, pas seulement à l'écran » du CLAUDE.md).
 
-- [ ] **Step 3 : correctifs éventuels**
+- [x] **Step 3 : correctifs éventuels**
 
 Tout défaut trouvé se corrige ici (commit dédié avec sonde re-jouée). Si le rendu est propre du premier coup, consigner les mesures au journal, pas de commit.
 
@@ -594,11 +594,11 @@ Tout défaut trouvé se corrige ici (commit dédié avec sonde re-jouée). Si le
 
 **Files :** Modify `docs/superpowers/plans/2026-08-19-lot4-image-quatrieme.md`
 
-- [ ] **Step 1 : syntaxe** — extraction + `node --check`.
-- [ ] **Step 2 : trois presets × trois onglets** — aucune erreur console, aucun changement d'aspect des maquettes (mode `herite` par défaut).
-- [ ] **Step 3 : round-trip complet** — avec et sans `image4` ; export 1ère intact (gel) ; export PNG 1ère relu → contrôles restaurés.
-- [ ] **Step 4 : exports planche** — les trois presets en `herite` (non-régression lot 3) + un export par nouveau mode.
-- [ ] **Step 5 : plan coché, journal rempli** (mesures des sondes, taille de session avec deux images, écarts au plan éventuels), commit :
+- [x] **Step 1 : syntaxe** — extraction + `node --check`.
+- [x] **Step 2 : trois presets × trois onglets** — aucune erreur console, aucun changement d'aspect des maquettes (mode `herite` par défaut).
+- [x] **Step 3 : round-trip complet** — avec et sans `image4` ; export 1ère intact (gel) ; export PNG 1ère relu → contrôles restaurés.
+- [x] **Step 4 : exports planche** — les trois presets en `herite` (non-régression lot 3) + un export par nouveau mode.
+- [x] **Step 5 : plan coché, journal rempli** (mesures des sondes, taille de session avec deux images, écarts au plan éventuels), commit :
 
 ```bash
 git add docs/superpowers/plans/2026-08-19-lot4-image-quatrieme.md
@@ -609,4 +609,14 @@ git commit -m "Lot 4 : plan coché, sondes consignées"
 
 ## Journal des sondes
 
-(Rempli pendant l'exécution.)
+- **T1** : texte planche et largeur identiques après factorisation (« Planche 237,83 × 184,35 mm — dos 15,48 mm — fond perdu 3,175 mm » pour le folio 108×178 à 244 pages) ; export 2810×2178.
+- **T2** : export bit à bit identique (SHA-256) avec un `render()` parasite intercalé — course éliminée ; preuve du correctif de la dette b.
+- **T5** : mode image vérifié (cadrage/zoom/voile) ; remise à l'échelle clone prouvée (283,507 = 567,015/2) ; export 1ère aligné sur le motif capture-avant/application (écart au plan demandé en revue).
+- **T6** : géométrie panorama prouvée formellement (revue) ; correctif critique `e872912` (la zone `.art` du clone 4ème n'était pas remise à l'échelle — invisible à l'écran car scale≈1, cassait l'export) ; alignements mesurés Δ ≤ 0.02 px.
+- **T7** : round-trip 0 diff ; session avec deux images = 285 799 chars (0,273 Mo) ≪ quota.
+- **T8** : défaut trouvé — couture 1 px aux jonctions du dos en prolongement (bordures-guides) ; correctif `d93565c` (overlay `dos-guides` réel, neutralisé à l'export ; deux impasses documentées : overflow padding-box, pseudos matérialisés avant onclone) ; après correctif : 0 colonne blanche/noire pure sur 120 testées, alignement Δ ≤ 0.009 px. Résidu connu : 1 colonne d'antialiasing sous-pixel (~6-16 %) par jonction, frontières flex fractionnaires, préexistant.
+- **T9 (clôture)** : `node --check` OK sur le JS extrait. Trois presets × trois onglets : 0 erreur console (hors 404 favicon), aspect inchangé, planches « 237,83 × 184,35 », « 301,83 × 211,35 », « 241,83 × 186,35 mm — dos 15,48 mm ». Round-trip `collectConfig` → `applyConfig` → `collectConfig` : 111 champs, 0 divergence, AVEC image4 (141 687 chars, image restaurée) puis SANS (elImg4 vidé, `noteQ4NoImg` visible) ; round-trip via métadonnées PNG (`pngInsertText`/`pngReadText`) : 0 divergence, `image4` identique caractère à caractère. Export 1ère (scale 3, gel `artFreezeCss` pré-rendu) : 1560×2574 px, haut de la photo mesuré à 29,992 % de la hauteur pour 30 % attendu — cadrage identique à l'aperçu. Exports planche `herite` : folio 2810×2178, blanche 3566×2498, overlay 2858×2202 px (attendus 2809×2177 / 3565×2496 / 2856×2201 — Δ ≤ 2 px, non-régression lot 3). Export mode `image` : 2810×2178, image de la 4ème nette, voile `flat` rendu. Export mode `prolongement` (folio bandeau, zoom 2,2, cadrage horizontal 100 %, `noteQ4Manque` éteinte) : panorama continu 4ème → dos → 1ère, 0 colonne blanche/noire pure et 0 colonne quasi-pure (> 5 %) sur 122 colonnes testées autour des deux jonctions (fenêtre y 55-90 % de la planche). Session localStorage relevée avant sondes (2 499 chars) et restaurée à l'identique.
+
+**Écarts au plan** : step 1bis (export 1ère) ; micro-retouches T6 (`art4On`, `scrimCss` garde interne, commentaires) ; `else` du plan omis en T6 (prouvé sans effet) ; correctifs `e872912` et `d93565c`.
+
+**Limitations connues (pour mémoire)** : en bandeau + retrait latéral coché, la tranche du dos suit la formule du plan (décalage théorique = largeur du retrait, invisible car les marges papier séparent alors les panneaux) ; l'upload de la 4ème n'est sérialisé qu'en mode `image` (sémantique identique à la 1ère en typo) ; la note de l'export PNG ne mentionne pas la photo quand seule `image4` est embarquée.
