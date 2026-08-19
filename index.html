@@ -1604,6 +1604,7 @@ function applyConfig(c){
   if (Array.isArray(c.format)) format = c.format.map(Number);
   if (c.mode) setMode(c.mode);
   if (c.image) $('elImg').src = c.image;
+  if (c.image4) $('elImg4').src = c.image4; else $('elImg4').removeAttribute('src');
   fitCover(); selectEl(null);
   return true;
 }
@@ -1695,9 +1696,8 @@ function pngReadText(bytes, keyword){
 }
 
 /* photo source rééchantillonnée avant embarquement */
-function shrinkSource(maxDim = 1600){
+function shrinkSource(img = $('elImg'), maxDim = 1600){
   return new Promise(res => {
-    const img = $('elImg');
     const w = img.naturalWidth, h = img.naturalHeight;
     if (!w || !h) return res(null);
     const k = Math.min(1, maxDim / Math.max(w, h));
@@ -1815,6 +1815,10 @@ $('btnPng').addEventListener('click', async () => {
     if ($('inEmbedCfg').checked) {
       const cfg = collectConfig();
       if ($('inEmbedImg').checked && mode !== 'typo') cfg.image = await shrinkSource();
+      if ($('inEmbedImg').checked && $('inQ4BgMode').value === 'image' && $('elImg4').naturalWidth) {
+        const d4 = await shrinkSource($('elImg4'));
+        if (d4) cfg.image4 = d4;
+      }
       bytes = pngInsertText(bytes, CFG_KEY, b64enc(JSON.stringify(cfg)));
       note = ' — réglages' + (cfg.image ? ' et photo source embarqués' : ' embarqués');
     }
@@ -1954,9 +1958,11 @@ function scheduleLocalSave(){
   saveTimer = setTimeout(async () => {
     const cfg = collectConfig();
     if ($('elImg').src !== DEFAULT_IMG && mode !== 'typo') cfg.image = await shrinkSource();
+    if ($('inQ4BgMode').value === 'image' && $('elImg4').naturalWidth) cfg.image4 = await shrinkSource($('elImg4'));
     try { localStorage.setItem(LOCAL_KEY, JSON.stringify(cfg)); }
     catch (e) { /* quota dépassé : réglages sans la photo plutôt que rien */
       delete cfg.image;
+      delete cfg.image4;
       try { localStorage.setItem(LOCAL_KEY, JSON.stringify(cfg)); } catch (e2) {}
     }
   }, 400);
