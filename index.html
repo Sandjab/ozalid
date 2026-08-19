@@ -158,6 +158,8 @@ body{display:flex;flex-direction:column;height:100vh}
   border-left:1px dashed rgba(255,255,255,.55);border-right:1px dashed rgba(255,255,255,.55);
   background:var(--dos-bg,#fff);
 }
+.dos-art{position:absolute;left:0;right:0;overflow:hidden}
+.dos-art img{position:absolute}
 .dos-texte{
   position:absolute;left:50%;top:50%;
   width:calc(var(--cw,340px)*var(--dos-hauteur,1.65));height:calc(var(--cw,340px)*var(--dos-larg,.14));
@@ -376,6 +378,8 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
 
     <div class="holder hide" id="holderQuatre">
       <div class="cover" id="cover4">
+        <div class="art hide" id="art4"><img id="elImg4" alt=""><img id="elImg4P" alt=""></div>
+        <div class="scrim hide" id="scrim4"></div>
         <div class="q4-texte" id="elQ4Texte"></div>
         <div class="q4-pied" id="q4Pied">
           <div id="elQ4Mention"></div>
@@ -390,6 +394,7 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
       <div class="planche-fp" id="plancheFp">
         <div class="planche" id="planche">
           <div class="dos" id="dos">
+            <div class="dos-art hide" id="dosArt"><img id="elImgDos" alt=""></div>
             <div class="dos-texte" id="dosTexte">
               <span id="elDosAuthor"></span><span id="elDosTitle"></span><i class="esp"></i><span id="elDosEditor"></span>
             </div>
@@ -592,9 +597,38 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
         <legend>Fond de la 4ème</legend>
         <div class="row">
           <label><span class="lab">Fond</span>
-            <select id="inQ4BgMode"><option value="herite" selected>papier de la 1ère</option><option value="couleur">couleur distincte</option></select></label>
+            <select id="inQ4BgMode"><option value="herite" selected>papier de la 1ère</option><option value="couleur">couleur distincte</option><option value="image">image propre</option><option value="prolongement">prolongement de la 1ère</option></select></label>
           <label><span class="lab">Couleur</span><input type="color" id="inQ4Bg" value="#fcf0d8"></label>
         </div>
+      </fieldset>
+      <fieldset id="fsQ4Image" class="off">
+        <legend>Image de la 4ème</legend>
+        <label id="rowQ4File"><span class="lab">Choisir l'image</span><input type="file" id="inQ4File" accept="image/*"></label>
+        <p class="note hide" id="noteQ4NoImg">Aucune image chargée : le fond reste papier en attendant.</p>
+        <p class="note hide" id="noteQ4Pro">Cadrage piloté par la 1ère (prolongement) ; seule la 4ème règle son voile.</p>
+        <p class="note hide" id="noteQ4Manque">La photo manque de matière à gauche : le papier apparaît sur la 4ème.</p>
+        <div id="rowsQ4Cadrage">
+          <label><span class="lab">Cadrage vertical <span class="val" id="vQ4ArtY">50 %</span></span>
+            <input type="range" id="inQ4ArtY" min="0" max="100" step="1" value="50"></label>
+          <label><span class="lab">Cadrage horizontal <span class="val" id="vQ4ArtX">50 %</span></span>
+            <input type="range" id="inQ4ArtX" min="0" max="100" step="1" value="50"></label>
+          <label><span class="lab">Échelle <span class="val" id="vQ4Zoom">1,00</span></span>
+            <input type="range" id="inQ4Zoom" min="1" max="2.2" step="0.01" value="1"></label>
+          <div class="check"><input type="checkbox" id="inQ4KeepRatio"><span>Conserver les proportions de l'image (sans recadrage)</span></div>
+          <label id="rowQ4Stretch"><span class="lab">Déformation horizontale <span class="val" id="vQ4Stretch">1,00</span></span>
+            <input type="range" id="inQ4Stretch" min="0.5" max="2" step="0.01" value="1"></label>
+        </div>
+        <label><span class="lab">Voile de lisibilité</span>
+          <select id="inQ4Scrim">
+            <option value="none" selected>Aucun</option>
+            <option value="top">Assombrir le haut</option>
+            <option value="bottom">Assombrir le bas</option>
+            <option value="both">Assombrir haut et bas</option>
+            <option value="flat">Voile uni sombre</option>
+            <option value="light">Voile uni clair</option>
+          </select></label>
+        <label><span class="lab">Intensité du voile <span class="val" id="vQ4Scrim">55 %</span></span>
+          <input type="range" id="inQ4ScrimOp" min="0" max="100" step="1" value="55"></label>
       </fieldset>
       <fieldset id="fsQ4Texte" class="off">
         <legend>Texte de présentation</legend>
@@ -1166,7 +1200,7 @@ function applyInspector(){
   $('btnBack').classList.toggle('off', !detail);
   for (const [name, ids] of Object.entries(ELEMENTS))
     ids.forEach(id => $(id).classList.toggle('off', q4 || asm || selected !== name));
-  for (const id of ['fsQ4Fond','fsQ4Texte','fsQ4Pied','fsQ4Isbn'])
+  for (const id of ['fsQ4Fond','fsQ4Image','fsQ4Texte','fsQ4Pied','fsQ4Isbn'])
     $(id).classList.toggle('off', !q4);
   for (const id of ['fsAsm','fsDos'])
     $(id).classList.toggle('off', !asm);
@@ -1438,6 +1472,14 @@ $('inFile').addEventListener('change', e => {
   r.onload = () => { $('elImg').src = r.result; };
   r.readAsDataURL(f);
 });
+
+$('inQ4File').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { $('elImg4').src = r.result; };
+  r.readAsDataURL(f);
+});
+for (const id of ['elImg4', 'elImg4P', 'elImgDos']) $(id).addEventListener('load', () => render());
 
 /* ================= réglages : sérialisation ================= */
 const CFG_KEY = 'atelier-couverture';
