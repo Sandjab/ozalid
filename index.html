@@ -911,6 +911,7 @@ function render(){
   const h4 = cw4 * format[1] / format[0];
   $('fsQ4Image').classList.toggle('hide', q4m !== 'image' && q4m !== 'prolongement');
   $('rowsQ4Cadrage').classList.toggle('hide', q4m !== 'image');
+  $('rowQ4Stretch').classList.toggle('hide', $('inQ4KeepRatio').checked);
   $('rowQ4File').classList.toggle('hide', q4m !== 'image');
   $('noteQ4Pro').classList.toggle('hide', q4m !== 'prolongement');
   let g4 = null;
@@ -1760,7 +1761,7 @@ function artGeom(zone, o){
            width: dw * sx, height: dh * o.zoom };
 }
 const artCss = g => g && ('position:absolute;left:' + g.left + 'px;top:' + g.top +
-  'px;width:' + g.width + 'px;height:' + g.height + 'px;transform:none;');
+  'px;width:' + g.width + 'px;height:' + g.height + 'px;transform:none;object-fit:fill;');
 /* réglages de la 1ère, sous la forme attendue par artGeom */
 function artOptsUne(){
   const src = $('elImg');
