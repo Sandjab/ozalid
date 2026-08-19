@@ -155,8 +155,16 @@ body{display:flex;flex-direction:column;height:100vh}
 .dos{
   position:relative;overflow:hidden;
   width:calc(var(--cw,340px)*var(--dos-larg,.14));
-  border-left:1px dashed rgba(255,255,255,.55);border-right:1px dashed rgba(255,255,255,.55);
   background:var(--dos-bg,#fff);
+}
+/* tirets-guides du pli en overlay (.dos-guides, vrai élément) : des border-left/right sur
+   .dos occuperaient 1 px de largeur que dosArt, rogné au padding-box par overflow:hidden,
+   ne pourrait pas recouvrir en prolongement — couture de 1 px aux jonctions à l'écran et à
+   l'export. Vrai élément et non ::after : html2canvas matérialise les pseudo-éléments AVANT
+   onclone, la classe .export ne peut donc plus les neutraliser. */
+.dos-guides{
+  position:absolute;inset:0;pointer-events:none;
+  border-left:1px dashed rgba(255,255,255,.55);border-right:1px dashed rgba(255,255,255,.55);
 }
 .dos-art{position:absolute;left:0;right:0;overflow:hidden}
 .dos-art img{position:absolute}
@@ -174,9 +182,9 @@ body{display:flex;flex-direction:column;height:100vh}
 .dos-texte #elDosAuthor{text-transform:var(--dos-author-case)}
 .dos-texte #elDosTitle{text-transform:var(--dos-title-case)}
 /* export : la classe .export est posée par applyPlancheExport() sur le clone html2canvas —
-   guides écran retirés ; border-color transparent (et pas border:none) pour ne pas changer la géométrie */
+   guides écran retirés (les tirets du dos vivent sur .dos-guides, hors flux : les retirer ne change pas la géométrie) */
 .planche-fp.export .planche{outline:none}
-.planche-fp.export .dos{border-color:transparent}
+.planche-fp.export .dos-guides{display:none}
 .planche-dims{color:rgba(255,255,255,.7);font-family:var(--mono);font-size:11px;text-align:center;margin-top:10px}
 .q4-isbn{
   position:absolute;
@@ -398,6 +406,7 @@ input[type=file]{font-size:11px;width:100%;font-family:var(--mono)}
             <div class="dos-texte" id="dosTexte">
               <span id="elDosAuthor"></span><span id="elDosTitle"></span><i class="esp"></i><span id="elDosEditor"></span>
             </div>
+            <div class="dos-guides"></div>
           </div>
         </div>
       </div>
