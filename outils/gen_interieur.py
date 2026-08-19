@@ -47,6 +47,17 @@ PROVIDERS = {
         "gouttieres": [(151, 400, 25.0)],   # (pages min, pages max, marge intérieure mm) — guide Lulu
         "corps_pt": 9.5, "interligne": 1.42, "folio_pt": 8,
     },
+    # BoD, format 13,5 × 21,5 cm (roman moyen). Marges lues dans le modèle Word officiel
+    # « Roman » de ce format (archive des modèles BoD, w:pgMar) : 18,8 / 28 / 20 / 15 mm.
+    # BoD ne module pas la marge de reliure selon l'épaisseur — d'où une tranche unique,
+    # couvrant les 24 à 900 pages que sa couverture souple admet.
+    "bod": {
+        "format": (135.0, 215.0),
+        "marge_haut": 18.8, "marge_bas": 28.0,
+        "exterieur": 15.0,
+        "gouttieres": [(24, 900, 20.0)],
+        "corps_pt": 9.5, "interligne": 1.42, "folio_pt": 8,
+    },
 }
 
 
@@ -93,7 +104,7 @@ def decoupe_chapitres(corps, attendu):
     return chapters
 
 
-def compose(livre, P, gut, chapters):
+def compose(livre, P, gut, chapters, blanche=False):
     e = html.escape
     fw, fh = P["format"]
     ext = P["exterieur"]
@@ -109,6 +120,10 @@ def compose(livre, P, gut, chapters):
             f'{body}\n</section>'
         )
     corps_html = "\n".join(sections)
+    # Page blanche de fin, pour ramener le compte à un nombre pair — même dispositif que la
+    # blanche des liminaires, donc sans folio.
+    if blanche:
+        corps_html += '\n<div class="liminaire page-blanche"></div>'
     return f"""<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -231,20 +246,31 @@ def main():
                     '-t', 'html', '--wrap=none', '-o', str(corps_path)], check=True)
     chapters = decoupe_chapitres(corps_path.read_text(encoding='utf-8'), livre.get('chapitres'))
 
+    # Deux conditions à satisfaire ensemble : la gouttière doit correspondre à la tranche de
+    # pagination effective, et le compte doit être pair — une feuille porte deux pages, les
+    # prestataires refusent l'impair (BoD le contrôle à la saisie). Chacune peut déplacer la
+    # pagination, d'où la reprise ; la bascule de parité converge en un tour puisqu'elle change
+    # le compte de 1 exactement.
     gut = P["gouttieres"][0][2]   # hypothèse de départ : première tranche du gabarit
-    for _ in range(2):
+    blanche = False
+    for _ in range(4):
         interieur = outdir / 'interieur.html'
-        interieur.write_text(compose(livre, P, gut, chapters), encoding='utf-8')
+        interieur.write_text(compose(livre, P, gut, chapters, blanche), encoding='utf-8')
         subprocess.run(['weasyprint', str(interieur), str(pdf)], check=True)
         pages = pdf_pages(pdf)
         g2 = gouttiere(P, pages)  # sort proprement si la tranche est inconnue
-        if g2 == gut:
-            break
-        gut = g2                  # la gouttière change la pagination : re-composer
+        if g2 != gut:
+            gut = g2              # la gouttière change la pagination : re-composer
+            continue
+        if pages % 2:
+            blanche = not blanche
+            continue
+        break
     else:
-        sys.exit("La gouttière ne converge pas (pagination oscillante entre deux tranches).")
+        sys.exit("La composition ne converge pas (gouttière ou parité oscillantes).")
 
-    print(f"{pdf} — {pages} pages, {len(chapters)} chapitres, gouttière {gut} mm "
+    fin = " (page blanche de fin ajoutée)" if blanche else ""
+    print(f"{pdf} — {pages} pages{fin}, {len(chapters)} chapitres, gouttière {gut} mm "
           f"({args.provider}). Reporte {pages} pages dans l'app (onglet Assemblage) pour le dos.")
 
 

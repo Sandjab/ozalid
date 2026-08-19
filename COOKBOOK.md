@@ -1,6 +1,6 @@
 # Cookbook — publier un roman
 
-Marche à suivre complète, du manuscrit au fichier téléversé chez l'imprimeur. Un chapitre par prestataire ; aujourd'hui seul **Lulu** est outillé.
+Marche à suivre complète, du manuscrit au fichier téléversé chez l'imprimeur. Un chapitre par prestataire ; **Lulu** et **BoD** sont outillés.
 
 L'ordre n'est pas négociable : **l'intérieur d'abord, la couverture ensuite**. La largeur du dos se calcule à partir du nombre de pages, et ce nombre n'est connu qu'une fois l'intérieur composé. Toute recomposition qui change la pagination oblige à refaire la couverture.
 
@@ -146,6 +146,81 @@ Le guide de référence est dans `build/in/editors/lulu-book-creation-guide.pdf`
 
 ---
 
+## BoD — 13,5 × 21,5 cm ou 12 × 19 cm
+
+Même marche à suivre que Lulu ; seules les étapes qui changent sont détaillées ici. BoD a un
+avantage décisif pour l'usage privé : **imprimer n'oblige pas à publier**, ni à prendre un ISBN.
+
+### 1 à 3. Ressources, répertoire de travail, épreuve
+
+Identiques au chapitre Lulu — le `livre.toml` ne dépend pas du prestataire.
+
+### 4. Composer l'intérieur
+
+```
+python3 outils/gen_interieur.py build/mon-roman --provider bod
+```
+
+Sort `build/mon-roman/out/bod/interieur-bod.pdf`, composé en 13,5 × 21,5 cm avec les marges
+des modèles Word officiels de BoD : 20 mm côté reliure, 15 mm à l'extérieur, 18,8 en tête,
+28 en pied.
+
+Contrairement à Lulu, **la marge de reliure ne dépend pas de la pagination** chez BoD : la
+seconde passe converge donc toujours au premier tour.
+
+**La parité est réglée automatiquement** : une feuille porte deux pages et BoD refuse un
+compte impair à la saisie, donc le script ajoute au besoin une page blanche en fin d'ouvrage
+— sans folio — et le signale dans sa ligne de résultat. Le compte affiché est celui à
+reporter, page blanche comprise.
+
+### 5 et 6. Maquetter et exporter
+
+Dans l'app : format **« Poche BoD — 120 × 190 mm »** ou **« Roman — 135 × 215 mm »** selon le
+format visé, puis onglet Assemblage, prestataire **« BoD (crème 90 g) »**, et le nombre de
+pages relevé à l'étape 4.
+
+Le fond perdu passe à 5 mm et le dos se calcule autrement : à 280 pages, 19,5 mm chez BoD
+contre 17,54 mm chez Lulu. **Les deux gabarits ne sont pas interchangeables** — une planche
+maquettée pour Lulu et téléversée chez BoD serait fausse sur les deux tableaux.
+
+### 7. Téléverser chez BoD
+
+| Réglage | Valeur |
+|---|---|
+| Format | 13,5 × 21,5 cm (ou 12 × 19 cm) |
+| Couverture | souple, pelliculage mat, brillant ou en relief |
+| Papier | **crème 90 g** — celui sur lequel repose le calcul du dos |
+| Reliure | collée |
+
+Le parcours myBoD permet de commander pour soi sans publier ni référencer le titre.
+
+### Gabarit BoD, pour mémoire
+
+| Grandeur | Valeur | Source |
+|---|---|---|
+| Fond perdu | 5 mm | guide de maquette BoD |
+| Dos | pages × 0,0675 + 0,6 mm, en crème 90 g | calculateur officiel, relevé sur 4 points |
+| Épaisseur des autres papiers | blanc 90 g 0,012 · photo mat 120 g 0,0126 · photo brillant 130 g 0,0101 cm/feuille | données du calculateur |
+| Marge de reliure | 20 mm, quelle que soit la pagination | modèle Word « Roman » 13,5 × 21,5 |
+| Marge extérieure | 15 mm | idem |
+| Marges haut / bas | 18,8 / 28 mm | idem |
+| Pagination | 24 à 900 pages, **nombre pair obligatoire** | validation du calculateur |
+| Export | PDF/X-3:2002 | guide de maquette |
+
+Le détail des relevés est dans `build/in/editors/bod-specs.md`.
+
+### Pièges propres à BoD
+
+- **Le dos dépend du papier.** La formule implémentée vaut pour le **crème 90 g**. Sur blanc
+  90 g le même livre donne un dos plus mince — 17,4 mm au lieu de 19,5 mm à 280 pages. Changer
+  de papier à la commande sans refaire la couverture donnerait un dos faux.
+- **Nombre de pages pair**, sans exception — le script s'en charge, mais le compte à saisir
+  dans l'app est bien celui qu'il affiche, page blanche comprise.
+- Le fond perdu de 5 mm est plus large que chez Lulu : une composition calée sur Lulu perd
+  près de 2 mm de plus au massicot.
+
+---
+
 ## Ajouter un prestataire
 
 Il faut compléter **deux** tables, l'une pour la couverture, l'autre pour l'intérieur :
@@ -161,7 +236,7 @@ Retenus depuis le comparatif POD du 19 août 2026 (`build/in/editors/comparator-
 
 | Rang | Prestataire | Pourquoi lui | Réserve connue |
 |---|---|---|---|
-| 1 | **BoD** (Hambourg) | Impression privée explicitement autorisée, sans ISBN ni publication — le modèle qui colle à Ozalid. Le moins cher du panel. | Rainage faible, délai réel ~2,5 semaines. |
+| ~~1~~ | ~~BoD~~ — **implémenté**, voir son chapitre | | |
 | 2 | Amazon KDP | La documentation technique la plus complète du marché : calculateur de dos et gabarits publics. Implémentation la plus sûre. | Les exemplaires auteur exigent un livre publié ; l'épreuve privée est filigranée. |
 | 3 | TheBookEdition (Lille) | Meilleure fabrication du banc d'essai, contrôle manuel des fichiers, production française. | Le plus cher des trois grands, contrôles d'upload stricts, broché seul. |
 | 4 | CoolLibri (Toulouse) | Français, papiers crème et satin à l'unité, jusqu'à 648 pages. | Documentation technique à vérifier, pas de distribution. |
