@@ -54,7 +54,10 @@ copyright = """© Prénom Nom, 2026.
 Tous droits réservés."""
 chapitres = 40
 manuscrit = "text.md"
+couverture = "cover.png"
 ```
+
+`manuscrit` et `couverture` sont les seules entrées que lisent les scripts : pour tirer une épreuve d'un autre état du texte, on change la clé, pas le script.
 
 ### Épreuve de lecture
 
@@ -62,7 +65,7 @@ manuscrit = "text.md"
 python3 outils/roman_pdf.py build/mon-roman 12 -t 10
 ```
 
-Génère un PDF de lecture au format poche (fpdf2) depuis `WIP.md` et `cover.png` du répertoire : couverture + les 12 premiers chapitres. Sortie : `roman.pdf` dans le répertoire ; `-t` règle le corps du texte en points.
+Génère un PDF de lecture au format poche (fpdf2) depuis le manuscrit et la couverture désignés par `livre.toml` : couverture + les 12 premiers chapitres. Sortie : `roman.pdf` dans le répertoire ; `-t` règle le corps du texte en points.
 
 ### Planche d'images
 
@@ -90,10 +93,10 @@ Le code est versionné, pas les romans : `build/` reste hors git. Arborescence t
 
 ```
 build/mon-roman/
-  text.md          manuscrit complet
-  WIP.md           version de travail pour les épreuves
+  text.md          manuscrit complet — l'entrée des scripts
+  WIP.md           états gelés, archive de ce qui est parti en relecture
   cover.png        couverture exportée depuis l'app
-  livre.toml       métadonnées du livre
+  livre.toml       métadonnées du livre, et les fichiers qu'il désigne
   lulu/            intérieur composé pour Lulu
   rox/  delf/      épreuves destinées aux relecteurs
 ```

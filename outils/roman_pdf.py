@@ -4,9 +4,10 @@
 Usage : roman_pdf.py REPERTOIRE NB_CHAPITRES [-t TAILLE] [-o SORTIE]
 Exemple : roman_pdf.py build/mon-roman 8 -t 10
 
-Attend dans REPERTOIRE : WIP.md (titre en «# », chapitres en «## », séparateurs
-de scène «---», italiques *…*, gras **…**) et cover.png (première de
-couverture, pleine page). Pages numérotées en bas à droite, couverture exclue.
+REPERTOIRE contient livre.toml (métadonnées), qui désigne le manuscrit Markdown
+(titre en «# », chapitres en «## », séparateurs de scène «---», italiques *…*,
+gras **…**) et l'image de première de couverture, posée en pleine page. Pages
+numérotées en bas à droite, couverture exclue.
 """
 
 import argparse
@@ -16,6 +17,14 @@ from pathlib import Path
 
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
+
+# Pas de ré-exécution sur un interpréteur récent comme dans gen_interieur.py :
+# fpdf2 n'est installé que sur le python3 système, plus ancien que tomllib.
+# tomli est le backport du même parseur, à l'API identique.
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 # gabarit poche (Folio : 108 x 178 mm), Times New Roman
 PAGE = (108, 178)
@@ -66,7 +75,7 @@ def decoupe_chapitres(md):
 def main():
     p = argparse.ArgumentParser(
         description="Génère le PDF d'un roman au format poche (couverture + chapitres).")
-    p.add_argument('repertoire', type=Path, help='répertoire contenant WIP.md et cover.png')
+    p.add_argument('repertoire', type=Path, help='répertoire du roman (contient livre.toml)')
     p.add_argument('chapitres', type=int, help='nombre de chapitres à inclure')
     p.add_argument('-t', '--taille', type=float, default=10,
                    help='taille de police du texte courant, en points (défaut : 10)')
@@ -74,7 +83,13 @@ def main():
                    help='fichier PDF de sortie (défaut : roman.pdf dans le répertoire)')
     args = p.parse_args()
 
-    manuscrit, couverture = args.repertoire / 'WIP.md', args.repertoire / 'cover.png'
+    toml_path = args.repertoire / 'livre.toml'
+    if not toml_path.is_file():
+        sys.exit(f"Fichier introuvable : {toml_path}")
+    livre = tomllib.loads(toml_path.read_text(encoding='utf-8'))['livre']
+
+    manuscrit = args.repertoire / livre.get('manuscrit', 'text.md')
+    couverture = args.repertoire / livre.get('couverture', 'cover.png')
     for f in (manuscrit, couverture):
         if not f.is_file():
             sys.exit(f"Fichier introuvable : {f}")
