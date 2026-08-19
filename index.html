@@ -827,8 +827,27 @@ function buildPlanche(D, cwPl){
       if (v.endsWith('px')) el.style.setProperty(prop, parseFloat(v) * scale + 'px');
     }
   });
+  /* l'image de la 4ème est en px inline calculés sur la largeur écran : même remise à l'échelle */
+  c4.querySelectorAll('.art img').forEach(el => {
+    for (const prop of [...el.style]) {
+      const v = el.style.getPropertyValue(prop);
+      if (v.endsWith('px')) el.style.setProperty(prop, parseFloat(v) * scale + 'px');
+    }
+  });
   /* ordre porteur : capturePlancheExport()/applyPlancheExport() repèrent la 1ère par lastElementChild */
   $('planche').replaceChildren(c4, $('dos'), c1);
+}
+
+/* dégradé de voile de lisibilité : partagé entre la 1ère et la 4ème */
+function scrimCss(kind, op){
+  return {
+    none:  'none',
+    top:   `linear-gradient(to bottom, rgba(0,0,0,${op}) 0%, rgba(0,0,0,0) 55%)`,
+    bottom:`linear-gradient(to top, rgba(0,0,0,${op}) 0%, rgba(0,0,0,0) 55%)`,
+    both:  `linear-gradient(to bottom, rgba(0,0,0,${op}) 0%, rgba(0,0,0,0) 40%, rgba(0,0,0,0) 60%, rgba(0,0,0,${op}) 100%)`,
+    flat:  `linear-gradient(rgba(0,0,0,${op}), rgba(0,0,0,${op}))`,
+    light: `linear-gradient(rgba(255,255,255,${op}), rgba(255,255,255,${op}))`
+  }[kind];
 }
 
 function render(){
@@ -844,6 +863,36 @@ function render(){
   s4.setProperty('--fw', format[0]);
   s4.setProperty('--fh', format[1]);
   s4.setProperty('--paper', $('inQ4BgMode').value === 'couleur' ? $('inQ4Bg').value : $('inPaper').value);
+
+  /* --- 4ème : fond image (propre ou prolongement) --- */
+  const q4m = $('inQ4BgMode').value;
+  const art4 = $('art4'), img4 = $('elImg4'), img4P = $('elImg4P'), dosArt = $('dosArt');
+  const cw4 = parseFloat(getComputedStyle(cover4).getPropertyValue('--cw')) || 340;
+  const h4 = cw4 * format[1] / format[0];
+  $('fsQ4Image').classList.toggle('hide', q4m !== 'image' && q4m !== 'prolongement');
+  $('rowsQ4Cadrage').classList.toggle('hide', q4m !== 'image');
+  $('rowQ4File').classList.toggle('hide', q4m !== 'image');
+  $('noteQ4Pro').classList.toggle('hide', q4m !== 'prolongement');
+  let g4 = null;
+  if (q4m === 'image') {
+    art4.style.top = art4.style.left = art4.style.right = art4.style.bottom = '0';
+    art4.style.width = art4.style.height = '';
+    g4 = artGeom({ w: cw4, h: h4 },
+      { nw: img4.naturalWidth, nh: img4.naturalHeight, keep: $('inQ4KeepRatio').checked,
+        artX: +$('inQ4ArtX').value / 100, artY: +$('inQ4ArtY').value / 100,
+        zoom: +$('inQ4Zoom').value, stretch: +$('inQ4Stretch').value });
+    if (g4) img4.style.cssText = artCss(g4);
+  }
+  $('noteQ4NoImg').classList.toggle('hide', q4m !== 'image' || !!g4);
+  img4.classList.toggle('hide', q4m !== 'image' || !g4);
+  const proOn = false; /* tranches du prolongement : tâche 6 */
+  img4P.classList.add('hide'); dosArt.classList.add('hide');
+  $('noteQ4Manque').classList.add('hide');
+  art4.classList.toggle('hide', !(q4m === 'image' && g4) && !proOn);
+  const op4 = +$('inQ4ScrimOp').value / 100, kind4 = $('inQ4Scrim').value;
+  $('scrim4').style.background = scrimCss(kind4, op4) || 'none';
+  $('scrim4').classList.toggle('hide', kind4 === 'none' || art4.classList.contains('hide'));
+
   s4.setProperty('--q4-face', $('inQ4TextFace').value);
   s4.setProperty('--q4-weight', $('inQ4TextWeight').value);
   s4.setProperty('--q4-size', +$('inQ4TextSize').value / 100);
@@ -883,15 +932,7 @@ function render(){
   /* --- voile --- */
   const op = +$('inScrimOp').value / 100;
   const kind = $('inScrim').value;
-  const G = {
-    none:  'none',
-    top:   `linear-gradient(to bottom, rgba(0,0,0,${op}) 0%, rgba(0,0,0,0) 55%)`,
-    bottom:`linear-gradient(to top, rgba(0,0,0,${op}) 0%, rgba(0,0,0,0) 55%)`,
-    both:  `linear-gradient(to bottom, rgba(0,0,0,${op}) 0%, rgba(0,0,0,0) 40%, rgba(0,0,0,0) 60%, rgba(0,0,0,${op}) 100%)`,
-    flat:  `linear-gradient(rgba(0,0,0,${op}), rgba(0,0,0,${op}))`,
-    light: `linear-gradient(rgba(255,255,255,${op}), rgba(255,255,255,${op}))`
-  };
-  scrim.style.background = G[kind];
+  scrim.style.background = scrimCss(kind, op);
   scrim.classList.toggle('hide', mode === 'typo' || kind === 'none');
 
   /* --- cadre --- */
@@ -1044,6 +1085,9 @@ function render(){
     vQ4PiedSize:[$('inQ4PiedSize').value,1,' %'], vQ4PiedY:[$('inQ4PiedY').value,1,' %'],
     vQ4IsbnW:[$('inQ4IsbnW').value,1,' %'], vQ4IsbnH:[$('inQ4IsbnH').value,1,' %'],
     vQ4IsbnDx:[$('inQ4IsbnDx').value,1,' %'], vQ4IsbnDy:[$('inQ4IsbnDy').value,1,' %'],
+    vQ4ArtY:[$('inQ4ArtY').value,0,' %'], vQ4ArtX:[$('inQ4ArtX').value,0,' %'],
+    vQ4Zoom:[$('inQ4Zoom').value,2,''], vQ4Stretch:[$('inQ4Stretch').value,2,''],
+    vQ4Scrim:[$('inQ4ScrimOp').value,0,' %'],
   };
   for (const [k,[v,d,u]] of Object.entries(R)) $(k).textContent = fr(v,d) + u;
   syncOverlay();
@@ -1110,6 +1154,8 @@ const PRESETS = {
     inQ4PiedOn:true, inQ4Mention:'', inQ4Coll:'', inQ4Prix:'', inQ4PiedFace:F['Archivo'],
     inQ4PiedSize:2.4, inQ4PiedY:4, inQ4PiedColor:'#191917',
     inQ4IsbnOn:false, inQ4IsbnW:34, inQ4IsbnH:21, inQ4IsbnDx:7, inQ4IsbnDy:7,
+    inQ4ArtX:50, inQ4ArtY:50, inQ4Zoom:1, inQ4KeepRatio:false, inQ4Stretch:1,
+    inQ4Scrim:'none', inQ4ScrimOp:55,
     inAsmProvider:'lulu', inAsmPages:244,
     inDosFace:F['Archivo'], inDosWeight:'600', inDosSize:2.6, inDosColor:'#191917',
     inDosBgMode:'herite', inDosBg:'#fcf0d8',
@@ -1136,6 +1182,8 @@ const PRESETS = {
     inQ4PiedOn:true, inQ4Mention:'', inQ4Coll:'', inQ4Prix:'', inQ4PiedFace:F['Archivo'],
     inQ4PiedSize:2.4, inQ4PiedY:4, inQ4PiedColor:'#191917',
     inQ4IsbnOn:false, inQ4IsbnW:34, inQ4IsbnH:21, inQ4IsbnDx:7, inQ4IsbnDy:7,
+    inQ4ArtX:50, inQ4ArtY:50, inQ4Zoom:1, inQ4KeepRatio:false, inQ4Stretch:1,
+    inQ4Scrim:'none', inQ4ScrimOp:55,
     inAsmProvider:'lulu', inAsmPages:244,
     inDosFace:F['Archivo'], inDosWeight:'600', inDosSize:2.6, inDosColor:'#191917',
     inDosBgMode:'herite', inDosBg:'#fcf0d8'
@@ -1159,6 +1207,8 @@ const PRESETS = {
     inQ4PiedOn:true, inQ4Mention:'', inQ4Coll:'', inQ4Prix:'', inQ4PiedFace:F['Archivo'],
     inQ4PiedSize:2.4, inQ4PiedY:4, inQ4PiedColor:'#191917',
     inQ4IsbnOn:false, inQ4IsbnW:34, inQ4IsbnH:21, inQ4IsbnDx:7, inQ4IsbnDy:7,
+    inQ4ArtX:50, inQ4ArtY:50, inQ4Zoom:1, inQ4KeepRatio:false, inQ4Stretch:1,
+    inQ4Scrim:'none', inQ4ScrimOp:55,
     inAsmProvider:'lulu', inAsmPages:244,
     inDosFace:F['Archivo'], inDosWeight:'600', inDosSize:2.6, inDosColor:'#f4efe4',
     inDosBgMode:'herite', inDosBg:'#fcf0d8',
@@ -1639,28 +1689,31 @@ const slug = () => ($('inTitle').value || 'couverture').trim().replace(/\s+/g, '
 /* html2canvas ignore object-fit/object-position (il étire l'image sur sa boîte) :
    on fige dans le clone la géométrie que le CSS produit à l'écran — cadrage
    (cover/contain), position verticale et zoom — en px, sans transform. */
-function artFreezeCss(zone){
-  const src = $('elImg');
-  if (!src || mode === 'typo') return null;
-  const nw = src.naturalWidth, nh = src.naturalHeight;
-  if (!nw || !nh || !zone.width || !zone.height) return null;
-  const keep = $('inKeepRatio').checked;
-  const fit = (keep ? Math.min : Math.max)(zone.width / nw, zone.height / nh);
-  const artX = +$('inArtX').value / 100, artY = +$('inArtY').value / 100, zoom = +$('inZoom').value;
-  const sx = zoom * (keep ? 1 : +$('inStretch').value); /* déformation repliée dans l'échelle horizontale */
-  const dw = nw * fit, dh = nh * fit;
-  const left = (zone.width - dw) * artX, top = (zone.height - dh) * artY;
+/* géométrie d'une image posée dans une zone : mêmes formules pour la 1ère (gel
+   d'export), l'image propre de la 4ème et les tranches du prolongement */
+function artGeom(zone, o){
+  if (!o.nw || !o.nh || !zone.w || !zone.h) return null;
+  const fit = (o.keep ? Math.min : Math.max)(zone.w / o.nw, zone.h / o.nh);
+  const sx = o.zoom * (o.keep ? 1 : o.stretch); /* déformation repliée dans l'échelle horizontale */
+  const dw = o.nw * fit, dh = o.nh * fit;
+  const left = (zone.w - dw) * o.artX, top = (zone.h - dh) * o.artY;
   /* échelle repliée dans la géométrie, autour de l'origine (artX, artY) de la zone */
-  const ox = zone.width * artX, oy = zone.height * artY;
-  return 'position:absolute;' +
-    'left:' + (ox - (ox - left) * sx) + 'px;top:' + (oy - (oy - top) * zoom) + 'px;' +
-    'width:' + (dw * sx) + 'px;height:' + (dh * zoom) + 'px;transform:none;';
+  const ox = zone.w * o.artX, oy = zone.h * o.artY;
+  return { left: ox - (ox - left) * sx, top: oy - (oy - top) * o.zoom,
+           width: dw * sx, height: dh * o.zoom };
 }
-function freezeArtGeometry(doc){
-  const dst = doc.getElementById('elImg');
-  if (!dst) return;
-  const css = artFreezeCss($('art').getBoundingClientRect());
-  if (css) dst.style.cssText = css;
+const artCss = g => g && ('position:absolute;left:' + g.left + 'px;top:' + g.top +
+  'px;width:' + g.width + 'px;height:' + g.height + 'px;transform:none;');
+/* réglages de la 1ère, sous la forme attendue par artGeom */
+function artOptsUne(){
+  const src = $('elImg');
+  return { nw: src.naturalWidth, nh: src.naturalHeight, keep: $('inKeepRatio').checked,
+           artX: +$('inArtX').value / 100, artY: +$('inArtY').value / 100,
+           zoom: +$('inZoom').value, stretch: +$('inStretch').value };
+}
+function artFreezeCss(zone){
+  if (mode === 'typo') return null;
+  return artCss(artGeom({ w: zone.width, h: zone.height }, artOptsUne()));
 }
 /* export de la planche : tout ce que le clone devra recevoir est capturé sur le
    document vivant JUSTE APRÈS buildPlanche (synchrone) — onclone n'applique que
@@ -1702,9 +1755,11 @@ $('btnPng').addEventListener('click', async () => {
   if (handle === 'aborted') return;
   const btn = $('btnPng'), old = btn.textContent, wasMarks = $('inMarks').checked;
   $('inMarks').checked = false; render();
+  const artCssUne = artFreezeCss($('art').getBoundingClientRect()); /* capturé avant le rendu — même motif que l'export planche */
   btn.textContent = 'Rendu en cours…'; btn.disabled = true;
   try {
-    const canvas = await html2canvas(cover, { scale: 3, backgroundColor: null, logging: false, onclone: freezeArtGeometry });
+    const canvas = await html2canvas(cover, { scale: 3, backgroundColor: null, logging: false,
+      onclone: doc => { const dst = doc.getElementById('elImg'); if (dst && artCssUne) dst.style.cssText = artCssUne; } });
     const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
     let bytes = new Uint8Array(await blob.arrayBuffer());
     let note = '';
