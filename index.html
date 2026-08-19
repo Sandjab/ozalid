@@ -845,9 +845,9 @@ function buildPlanche(D, cwPl){
       if (v.endsWith('px')) el.style.setProperty(prop, parseFloat(v) * scale + 'px');
     }
   });
-  /* l'image de la 4ème est en px inline calculés sur la largeur écran : même remise à l'échelle */
-  /* scale vaut aussi pour c4 : fitCover pose le même --cw sur les deux couvertures */
-  c4.querySelectorAll('.art img').forEach(el => {
+  /* scale vaut aussi pour c4 (fitCover pose le même --cw sur les deux couvertures) ;
+     l'image de la 4ème ET sa zone .art sont en px inline calculés à l'échelle écran */
+  c4.querySelectorAll('.art, .art img').forEach(el => {
     for (const prop of [...el.style]) {
       const v = el.style.getPropertyValue(prop);
       if (v.endsWith('px')) el.style.setProperty(prop, parseFloat(v) * scale + 'px');
@@ -966,6 +966,7 @@ function render(){
   s.setProperty('--align', align);
 
   /* --- image : position selon le mode --- */
+  /* toute modification de cette géométrie doit être répercutée dans panoGeom() */
   const art = $('art'), scrim = $('scrim');
   art.classList.toggle('hide', mode === 'typo');
   if (mode === 'band') {
