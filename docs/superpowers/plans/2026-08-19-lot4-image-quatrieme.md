@@ -620,3 +620,20 @@ git commit -m "Lot 4 : plan coché, sondes consignées"
 **Écarts au plan** : step 1bis (export 1ère) ; micro-retouches T6 (`art4On`, `scrimCss` garde interne, commentaires) ; `else` du plan omis en T6 (prouvé sans effet) ; correctifs `e872912` et `d93565c`.
 
 **Limitations connues (pour mémoire)** : en bandeau + retrait latéral coché, la tranche du dos suit la formule du plan (décalage théorique = largeur du retrait, invisible car les marges papier séparent alors les panneaux) ; l'upload de la 4ème n'est sérialisé qu'en mode `image` (sémantique identique à la 1ère en typo) ; la note de l'export PNG ne mentionne pas la photo quand seule `image4` est embarquée.
+
+### Post-clôture (revue finale d'ensemble)
+
+- Correctif `85ef907` exigé par la revue finale : `object-fit:fill` dans `artCss`
+  (l'héritage de `.art img{object-fit:cover}` cassait le WYSIWYG écran/export dès
+  que la déformation ≠ 1 — trou de couverture : toutes les sondes étaient à
+  déformation 1) ; `rowQ4Stretch` togglé sur `inQ4KeepRatio` comme la 1ère.
+  Sondes : stretch 1,5 écran/export identiques ; prolongement inStretch 1,4
+  continu aux jonctions ; planche herite diff pixel = 0 vs référence.
+- Dettes documentées pour le lot 5 (non bloquantes, verdict revue finale) :
+  1. la note de dégradation typo du prolongement n'explique pas l'absence
+     d'image (micro-texte à ajouter) ;
+  2. asymétrie `applyConfig` préexistante : `c.image` absent laisse la photo de
+     la 1ère en place (pas de `else` symétrique à `image4`) — à trancher, le
+     prolongement la rend plus visible ;
+  3. la note de l'export PNG ne mentionne pas la photo quand seule `image4` est
+     embarquée.
