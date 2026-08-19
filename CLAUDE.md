@@ -1,12 +1,12 @@
 # Ozalid — instructions
 
-Générateur de maquettes de couverture de livre. Un seul fichier HTML autonome, sans build.
+Atelier de packaging de couverture pour l'auto-édition : l'app est un seul fichier HTML autonome, sans build (trois onglets — 1ère, 4ème, Assemblage — et export PDF de la planche). La chaîne Python de composition de l'intérieur vit dans `outils/` (voir README) ; les manuscrits et sorties par roman vivent dans `build/<roman>/`, jamais tracké.
 
 ## Contraintes non négociables
 
 - **Fichier unique.** CSS et JS inline dans `index.html`. Pas de bundler, pas de `node_modules`, pas de serveur. Le fichier doit s'ouvrir en `file://`.
 - **`localStorage` limité à une seule clé** (`atelier-couverture-session`) : la dernière configuration, sauvegardée depuis `render()` (debounce), rechargée au démarrage, effacée par « Réinitialiser l'atelier » dans le menu Réglages. Aucun autre usage de `localStorage`/`sessionStorage` ; tout le reste de l'état vit en mémoire.
-- **Dépendances externes** : Google Fonts et `html2canvas` via CDN. Ne pas en ajouter sans raison forte.
+- **Dépendances externes** : Google Fonts, `html2canvas` et `pdf-lib` via CDN. Ne pas en ajouter sans raison forte.
 - **Tout réglage est en pourcentage de la largeur de couverture**, jamais en px absolus. C'est ce qui rend les maquettes portables d'un format à l'autre.
 - **Français** dans l'interface, les commentaires et les commits. Termes techniques anglais conservés tels quels (`fond perdu` reste `fond perdu`, mais `viewport`, `chunk`, `canvas` ne se traduisent pas).
 
@@ -14,7 +14,7 @@ Générateur de maquettes de couverture de livre. Un seul fichier HTML autonome,
 
 Trois blocs dans le `<script>` final :
 
-1. **`render()`** — fonction unique qui lit tous les contrôles et écrit des variables CSS sur `#cover` et `#cover4`. Aucun autre endroit ne doit toucher au style de la couverture. Tout nouveau réglage passe par là.
+1. **`render()`** — fonction unique qui lit tous les contrôles et écrit des variables CSS sur `#cover`, `#cover4` et `#plancheFp`. Aucun autre endroit ne doit toucher au style de la couverture ; seule exception établie : `buildPlanche` (appelée par `render()` et par l'export), qui pose l'échelle de la planche et les px inline de ses clones. Tout nouveau réglage passe par `render()`.
 2. **Presets** — objet `PRESETS`, une clé par maquette, mappant `id de contrôle → valeur`. Ajouter une maquette = ajouter une entrée et un bouton.
 3. **Sérialisation PNG** — `collectConfig` / `applyConfig` balaient le DOM du panneau (les `input`, `select` et `textarea` dont l'id commence par `in`), donc **tout contrôle nommé `inXxx` est automatiquement sauvegardé**. Un contrôle nommé autrement sera silencieusement perdu à l'export.
 
@@ -31,8 +31,9 @@ Rien d'autre. La persistance suit automatiquement.
 
 - `node --check` sur le JS extrait — la syntaxe doit passer.
 - Round-trip métadonnées : exporter un PNG, le recharger, vérifier que tous les contrôles reviennent à l'identique.
-- Tester les trois modes et les trois presets après toute modification de `render()`.
+- Tester les trois presets × les trois onglets (1ère, 4ème, Assemblage) après toute modification de `render()`.
 - Vérifier le rendu à l'export, pas seulement à l'écran : `html2canvas` ne reproduit pas tout le CSS fidèlement.
+- `python3 -m py_compile outils/*.py` si un script d'`outils/` a changé ; `outils/gen_interieur.py build/heures-creuses` doit toujours régénérer 244 pages.
 
 ## Pièges connus
 
