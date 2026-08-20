@@ -36,6 +36,7 @@ fn main() -> Result<(), String> {
     let projet = Projet::ouvrir(Path::new(&ozalid))?;
     let livre = &projet.meta.livre;
     let int = &projet.meta.interieur;
+    // `interieur::source` interpole la police sans échappement : la validation est ici.
     int.verifie()?;
     let chapitres = manuscrit::decoupe(&projet.texte, livre.chapitres)?;
 
