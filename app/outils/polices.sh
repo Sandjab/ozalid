@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Récupère les polices de couverture dans src-tauri/fonts/.
+# Récupère les polices de l'application dans src-tauri/fonts/ — couverture et
+# intérieur.
 #
 # Typst ne lit que des fichiers : contrairement au navigateur, il ne va pas chercher
 # une police chez Google. Les embarquer est donc la condition pour que la même
@@ -40,6 +41,17 @@ FICHIERS=(
   "librefranklin/LibreFranklin[wght].ttf"
   "librefranklin/LibreFranklin-Italic[wght].ttf"
   "oswald/Oswald[wght].ttf"
+  # Polices de labeur de l'intérieur. Cardo n'a pas de version variable : ses trois
+  # coupes sont des fichiers statiques.
+  "crimsonpro/CrimsonPro[wght].ttf"
+  "crimsonpro/CrimsonPro-Italic[wght].ttf"
+  "alegreya/Alegreya[wght].ttf"
+  "alegreya/Alegreya-Italic[wght].ttf"
+  "vollkorn/Vollkorn[wght].ttf"
+  "vollkorn/Vollkorn-Italic[wght].ttf"
+  "cardo/Cardo-Regular.ttf"
+  "cardo/Cardo-Italic.ttf"
+  "cardo/Cardo-Bold.ttf"
 )
 
 mkdir -p "$DEST"
