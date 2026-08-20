@@ -141,63 +141,60 @@ jobs:
       # cherche le sidecar à côté de l'exécutable et les polices dans son sous-dossier
       # `fonts`, mais rien ne garantit encore que le NSIS les y pose vraiment. On installe
       # en silencieux et on inspecte l'arborescence réelle plutôt que de la supposer.
+      #
+      # En PowerShell, et non en bash : `Start-Process -Wait` attend l'installeur seul,
+      # là où bash attend aussi l'application que celui-ci lance en fin d'installation —
+      # un premier essai a tourné 1 h 40 sur cette seule ligne. `-PassThru` donne en
+      # prime le code de sortie de l'installeur, sans lequel un échec est muet.
       - name: Vérifier l'installation silencieuse
         timeout-minutes: 5
+        shell: pwsh
         run: |
-          exe=$(find app/src-tauri/target/release/bundle/nsis -name "*-setup.exe" | head -1)
-          [ -n "$exe" ] || { echo "aucun installeur trouvé sous app/src-tauri/target/release/bundle/nsis" >&2; exit 1; }
+          $dossier = "app/src-tauri/target/release/bundle/nsis"
+          $installeur = Get-ChildItem $dossier -Filter "*-setup.exe" | Select-Object -First 1
+          if (-not $installeur) {
+            Write-Error "aucun installeur trouvé sous $dossier"
+            exit 1
+          }
 
-          # L'installeur lance l'application en fin d'installation. Lui laisser la sortie
-          # de l'étape reviendrait à attendre que cette application se ferme — c'est-à-dire
-          # indéfiniment, personne n'étant là pour la fermer : un premier essai a tourné
-          # 1 h 40 sur cette seule ligne. On le détache donc, et on attend l'arborescence
-          # plutôt que le processus.
-          "$exe" /S >/dev/null 2>&1 </dev/null &
+          $p = Start-Process -FilePath $installeur.FullName -ArgumentList "/S" -Wait -PassThru
+          Write-Host "installeur terminé, code de sortie $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) {
+            Write-Error "l'installation silencieuse a échoué"
+            exit 1
+          }
+
+          # L'application que l'installeur vient de lancer tient ses fichiers ouverts.
+          Get-Process -Name "ozalid-studio" -ErrorAction SilentlyContinue | Stop-Process -Force
 
           # L'exécutable porte le nom du paquet Cargo — « ozalid-studio.exe » — et non le
-          # `productName`, qui ne nomme que le bundle et le dossier d'installation.
-          # Le mode NSIS de Tauri installe par utilisateur (%LOCALAPPDATA%) ou par machine
-          # (%PROGRAMFILES%) selon la configuration : on cherche aux deux emplacements
-          # plutôt que d'en privilégier un.
-          for _ in $(seq 1 60); do
-            trouve=$(find "$LOCALAPPDATA" "$PROGRAMFILES" -maxdepth 3 -iname "ozalid-studio.exe" 2>/dev/null | head -1)
-            [ -n "$trouve" ] && break
-            sleep 2
-          done
-          # Les ressources sont copiées après l'exécutable : le trouver ne dit pas que
-          # l'installation est finie.
-          sleep 10
-
-          # L'application que l'installeur vient de lancer n'a plus lieu d'être, et elle
-          # tient ses fichiers ouverts.
-          taskkill //IM "ozalid-studio.exe" //F >/dev/null 2>&1 || true
-
-          if [ -z "$trouve" ]; then
-            echo "exécutable « ozalid-studio.exe » introuvable sous $LOCALAPPDATA ni $PROGRAMFILES" >&2
-            # Les répertoires de premier niveau seulement : déverser l'arborescence
-            # entière de Program Files noie le journal sans rien apprendre.
-            echo "répertoires de $LOCALAPPDATA :" >&2
-            find "$LOCALAPPDATA" -maxdepth 1 -type d >&2 2>/dev/null
-            echo "répertoires de $PROGRAMFILES :" >&2
-            find "$PROGRAMFILES" -maxdepth 1 -type d >&2 2>/dev/null
+          # `productName`, qui ne nomme que le bundle et le dossier d'installation. Le mode
+          # NSIS de Tauri installe par utilisateur (%LOCALAPPDATA%) ou par machine
+          # (%PROGRAMFILES%) : on cherche aux deux endroits plutôt que d'en supposer un.
+          $racines = @($env:LOCALAPPDATA, $env:ProgramFiles)
+          $trouve = Get-ChildItem $racines -Recurse -Depth 2 -Filter "ozalid-studio.exe" `
+            -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $trouve) {
+            Write-Host "répertoires de $env:LOCALAPPDATA :"
+            Get-ChildItem $env:LOCALAPPDATA -Directory | ForEach-Object { $_.Name }
+            Write-Error "« ozalid-studio.exe » introuvable : l'installeur a rendu 0 sans rien poser"
             exit 1
-          fi
+          }
 
-          racine=$(dirname "$trouve")
-          echo "racine d'installation détectée : $racine"
-          find "$racine" -maxdepth 2
+          $racine = $trouve.Directory.FullName
+          Write-Host "racine d'installation : $racine"
+          Get-ChildItem $racine -Recurse -Depth 1 | ForEach-Object { $_.FullName }
 
-          if [ ! -f "$racine/typst.exe" ]; then
-            echo "typst.exe absent de $racine : commands.rs::binaire_typst() le cherche à côté de l'exécutable, l'installeur ne l'y a pas posé." >&2
+          if (-not (Test-Path (Join-Path $racine "typst.exe"))) {
+            Write-Error "typst.exe absent de $racine : commands.rs::binaire_typst() le cherche à côté de l'exécutable, l'installeur ne l'y a pas posé."
             exit 1
-          fi
-
-          if ! ls "$racine/fonts/"*.ttf >/dev/null 2>&1; then
-            echo "aucun .ttf dans $racine/fonts : commands.rs::typst() n'y trouvera pas de polices, l'installeur ne les a pas embarquées." >&2
+          }
+          if (-not (Get-ChildItem (Join-Path $racine "fonts") -Filter "*.ttf" -ErrorAction SilentlyContinue)) {
+            Write-Error "aucun .ttf dans $racine\fonts : commands.rs::typst() n'y trouvera pas de polices."
             exit 1
-          fi
+          }
 
-          echo "sidecar et polices trouvés à leur emplacement attendu"
+          Write-Host "sidecar et polices trouvés à leur emplacement attendu"
 
       - name: Release draft
         env:
