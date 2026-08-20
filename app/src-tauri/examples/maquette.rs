@@ -57,7 +57,13 @@ fn main() -> Result<(), String> {
         for (face, src) in [
             (
                 "une",
-                couverture::source_une(&projet.meta.livre, &cv, pr.format, une.as_ref()),
+                couverture::source_une(
+                    &projet.meta.livre,
+                    &cv,
+                    pr.format,
+                    une.as_ref(),
+                    Some(15.0),
+                ),
             ),
             (
                 "quatre",

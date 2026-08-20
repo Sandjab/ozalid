@@ -47,6 +47,16 @@ fn quatrieme_commune() -> Quatrieme {
     }
 }
 
+/// Le dos reprend la police de titrage de la maquette ; seule sa couleur d'encre change
+/// d'une maquette à l'autre, selon la couleur du papier.
+fn dos(couleur: &str) -> Dos {
+    Dos {
+        style: style("Archivo", 600, 2.6, couleur),
+        fond_propre: false,
+        fond: "#fcf0d8".into(),
+    }
+}
+
 fn pastille_eteinte() -> Pastille {
     Pastille {
         actif: false,
@@ -115,6 +125,7 @@ pub fn folio() -> Couverture {
         voile: Voile::Aucun,
         voile_opacite: 0.55,
         quatrieme: quatrieme_commune(),
+        dos: dos("#191917"),
     }
 }
 
@@ -160,7 +171,12 @@ pub fn blanche() -> Couverture {
             actif: true,
             monogramme: "nrf".into(),
             editeur: "GALLIMARD".into(),
-            y: 11.0,
+            // 13,5 % et non les 11 % du CSS d'origine : à 11 %, le pied éditeur passe
+            // sous le filet interne du cadre et le traverse. C'est le seul écart assumé
+            // vis-à-vis d'`index.html` dans les maquettes — l'atelier a le même défaut,
+            // il n'a pas été reproduit. Le test `le_pied_editeur_ne_traverse_jamais_le_cadre`
+            // borne la valeur sur tous les formats de la table.
+            y: 13.5,
             style_mono: Style {
                 italique: true,
                 ..style("Bodoni Moda", 600, 7.0, "#191917")
@@ -175,6 +191,7 @@ pub fn blanche() -> Couverture {
         voile: Voile::Aucun,
         voile_opacite: 0.55,
         quatrieme: quatrieme_commune(),
+        dos: dos("#191917"),
     }
 }
 
@@ -236,6 +253,7 @@ pub fn surimpression() -> Couverture {
         voile: Voile::Deux,
         voile_opacite: 0.62,
         quatrieme: quatrieme_commune(),
+        dos: dos("#f4efe4"),
     }
 }
 
@@ -274,6 +292,34 @@ mod tests {
     fn une_cle_inconnue_ne_rend_pas_de_maquette() {
         assert!(par_cle("gallimard").is_none());
         assert!(par_cle("folio").is_some());
+    }
+
+    /// Le pied éditeur est posé depuis le bas, en % de la hauteur ; le filet interne du
+    /// cadre l'est depuis le bas aussi, mais son décroché se lit sur la **largeur**. Les
+    /// deux ne varient donc pas ensemble d'un format à l'autre, et un pied qui dégage le
+    /// filet en poche peut le traverser en A4. Ce test tient la maquette Blanche sur
+    /// tous les formats de la table — c'est là que le défaut d'`index.html` se voyait.
+    #[test]
+    fn le_pied_editeur_ne_traverse_jamais_le_cadre() {
+        let cv = blanche();
+        let c = &cv.cadre;
+        for pr in crate::providers::PROVIDERS {
+            let (fw, fh) = pr.format;
+            // Bord intérieur du filet le plus bas, mesuré depuis le bas de la couverture.
+            // Le cadre étant concentrique, c'est la même distance qu'en haut.
+            let filet = c.marge / 100.0 * fh
+                + c.filet1_epaisseur / 100.0 * fw
+                + c.decroche / 100.0 * fw
+                + c.filet2_epaisseur / 100.0 * fw
+                + c.ecart / 100.0 * fw
+                + c.filet2_epaisseur / 100.0 * fw;
+            let pied = cv.pied.y / 100.0 * fh;
+            assert!(
+                pied > filet + 0.5,
+                "{} : pied à {pied:.2} mm du bas, filet à {filet:.2} mm",
+                pr.cle
+            );
+        }
     }
 
     /// Le voile n'a de sens que sur une image : l'allumer sans image assombrirait

@@ -162,6 +162,36 @@ pub struct Pied {
     pub style_editeur: Style,
 }
 
+/// Le dos, tel qu'il paraît sur la planche : auteur et titre à une extrémité,
+/// éditeur à l'autre, en lecture de bas en haut.
+///
+/// Il ne porte aucun texte propre — l'auteur et le titre viennent du livre, l'éditeur
+/// du pied de la 1ère. Sa **largeur** n'est pas réglable : elle vient de la pagination,
+/// et c'est tout l'objet de l'application.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Dos {
+    pub style: Style,
+    /// Fond distinct du papier de la 1ère.
+    pub fond_propre: bool,
+    pub fond: String,
+}
+
+fn dos_defaut() -> Dos {
+    Dos {
+        style: Style {
+            police: "Archivo".into(),
+            graisse: 600,
+            italique: false,
+            taille: 2.6,
+            couleur: "#191917".into(),
+            tracking: 0.0,
+            casse: Casse::Telle,
+        },
+        fond_propre: false,
+        fond: "#fcf0d8".into(),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Pastille {
     pub actif: bool,
@@ -232,6 +262,10 @@ pub struct Couverture {
     pub voile: Voile,
     pub voile_opacite: f64,
     pub quatrieme: Quatrieme,
+    /// Absent des projets écrits avant l'assemblage : ils reprennent le dos par défaut
+    /// plutôt que d'être refusés à l'ouverture.
+    #[serde(default = "dos_defaut")]
+    pub dos: Dos,
 }
 
 /// Une image disponible pour la composition : son nom de fichier, tel qu'il sera écrit
@@ -291,7 +325,7 @@ impl Style {
         )
     }
 
-    fn applique(&self, largeur: f64, texte: &str) -> String {
+    pub fn applique(&self, largeur: f64, texte: &str) -> String {
         let t = echappe(texte);
         let t = match self.casse {
             Casse::Capitales => format!("#upper[{t}]"),
@@ -329,12 +363,71 @@ fn voile_fond(v: Voile, opacite: f64) -> Option<String> {
     })
 }
 
-/// Zone occupée par l'image de la 1ère, en mm : (x, y, largeur, hauteur).
+/// La boîte qu'occupe une face, fond perdu compris, et où s'y trouve la couverture
+/// rognée.
+///
+/// Le fond perdu déborde vers l'**extérieur de la planche** : à droite pour la 1ère,
+/// à gauche pour la 4ème, en haut et en bas pour les deux. Jamais vers le dos, où les
+/// deux faces se rejoignent — y déborder n'aurait rien à déborder.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Boite {
+    pub largeur: f64,
+    pub hauteur: f64,
+    /// Coin de la couverture rognée dans la boîte.
+    pub x0: f64,
+    pub y0: f64,
+}
+
+impl Boite {
+    /// Face isolée : pas de fond perdu, la boîte est la couverture rognée. C'est ce que
+    /// montre l'aperçu par face, où il n'y a pas de planche autour.
+    pub fn rognee((fw, fh): (f64, f64)) -> Self {
+        Self {
+            largeur: fw,
+            hauteur: fh,
+            x0: 0.0,
+            y0: 0.0,
+        }
+    }
+
+    pub fn une((fw, fh): (f64, f64), fp: f64) -> Self {
+        Self {
+            largeur: fw + fp,
+            hauteur: fh + 2.0 * fp,
+            x0: 0.0,
+            y0: fp,
+        }
+    }
+
+    pub fn quatre((fw, fh): (f64, f64), fp: f64) -> Self {
+        Self {
+            largeur: fw + fp,
+            hauteur: fh + 2.0 * fp,
+            x0: fp,
+            y0: fp,
+        }
+    }
+
+    /// La même boîte, élargie vers la droite. La couverture rognée n'y bouge pas :
+    /// seuls le fond, le voile et la zone d'image s'étendent.
+    pub fn elargie(self, de: f64) -> Self {
+        Self {
+            largeur: self.largeur + de,
+            ..self
+        }
+    }
+}
+
+/// Zone occupée par l'image de la 1ère dans la boîte, en mm : (x, y, largeur, hauteur).
 /// `None` en composition purement typographique.
-fn zone_image(cv: &Couverture, (fw, fh): (f64, f64)) -> Option<(f64, f64, f64, f64)> {
+///
+/// Une image à fond perdu s'étend jusqu'aux bords de la **boîte**, fond perdu compris :
+/// sans quoi le rognage découvrirait une bande de papier là où la photo devait courir.
+/// Une image en retrait, elle, ne touche aucun bord et reste où la maquette la met.
+fn zone_image(cv: &Couverture, (fw, fh): (f64, f64), b: Boite) -> Option<(f64, f64, f64, f64)> {
     match cv.mode {
         Mode::Typo => None,
-        Mode::Surimpression => Some((0.0, 0.0, fw, fh)),
+        Mode::Surimpression => Some((0.0, 0.0, b.largeur, b.hauteur)),
         Mode::Bandeau => {
             // Le retrait est le même pourcentage lu sur la largeur horizontalement et
             // sur la hauteur verticalement : c'est ainsi que le CSS le résolvait.
@@ -343,14 +436,45 @@ fn zone_image(cv: &Couverture, (fw, fh): (f64, f64)) -> Option<(f64, f64, f64, f
             } else {
                 (0.0, 0.0)
             };
-            let haut = cv.bandeau / 100.0 * fh;
-            Some((rx, haut, fw - 2.0 * rx, fh - haut - ry))
+            // Le haut de l'image est toujours sous le bandeau, qui couvre le fond perdu
+            // supérieur avec le papier.
+            let haut = b.y0 + cv.bandeau / 100.0 * fh;
+            let gauche = if rx > 0.0 { b.x0 + rx } else { 0.0 };
+            let droite = if rx > 0.0 { b.x0 + fw - rx } else { b.largeur };
+            let bas = if ry > 0.0 { b.y0 + fh - ry } else { b.hauteur };
+            Some((gauche, haut, droite - gauche, bas - haut))
         }
     }
 }
 
+/// Rectangle de fond couvrant toute la boîte. Un `fill` de page ne suffirait pas :
+/// dans la planche, les trois zones ont chacune le leur.
+fn bloc_fond(b: Boite, couleur_hex: &str) -> String {
+    format!(
+        "#place(top + left, rect(width: {}, height: {}, fill: {}))\n",
+        mm(b.largeur),
+        mm(b.hauteur),
+        couleur(couleur_hex)
+    )
+}
+
+/// Contenu positionné par rapport à la couverture **rognée**, dans un bloc à sa taille.
+/// Cadre, textes, pied et pastille se placent ainsi sans jamais connaître le fond perdu.
+fn cale(b: Boite, (fw, fh): (f64, f64), contenu: &str) -> String {
+    if contenu.is_empty() {
+        return String::new();
+    }
+    format!(
+        "#place(top + left, dx: {}, dy: {}, block(width: {}, height: {})[\n{contenu}])\n",
+        mm(b.x0),
+        mm(b.y0),
+        mm(fw),
+        mm(fh),
+    )
+}
+
 /// Image posée dans une zone, découpée à ses bords.
-fn bloc_image(zone: (f64, f64, f64, f64), g: &Geometrie, fichier: &str) -> String {
+pub fn bloc_image(zone: (f64, f64, f64, f64), g: &Geometrie, fichier: &str) -> String {
     let (x, y, w, h) = zone;
     format!(
         "#place(top + left, dx: {}, dy: {}, box(width: {}, height: {}, clip: true,\n  \
@@ -510,103 +634,176 @@ fn bloc_pastille(p: &Pastille, fw: f64) -> String {
     )
 }
 
-/// Préambule commun aux deux faces.
-fn preambule((fw, fh): (f64, f64), fond: &str) -> String {
+/// Préambule d'une page d'une seule face. La planche a le sien.
+fn preambule(largeur: f64, hauteur: f64) -> String {
     format!(
-        "#set page(width: {}, height: {}, margin: 0mm, fill: {})\n\
+        "#set page(width: {}, height: {}, margin: 0mm)\n\
          // Boîte de ligne ramenée à 1em : « leading » Typst et « line-height » CSS\n\
          // deviennent alors la même grandeur.\n\
          #set text(lang: \"fr\", top-edge: 0.75em, bottom-edge: -0.25em)\n\
          #set par(leading: 0em, spacing: 0em, justify: false)\n\n",
-        mm(fw),
-        mm(fh),
-        couleur(fond)
+        mm(largeur),
+        mm(hauteur),
     )
 }
 
-/// Source Typst de la 1ère de couverture.
+/// Où se cadre l'image quand la 4ème prolonge la 1ère : sur la planche entière, et non
+/// sur la seule 1ère.
+///
+/// C'est le point où l'on s'écarte d'`index.html`, sciemment. L'atelier cadrait l'image
+/// sur une couverture puis la décalait pour la 4ème : elle n'y arrivait donc jamais, et
+/// il fallait la grossir à la main. Or le zoom se prend autour du point d'ancrage — le
+/// centre de la 1ère — si bien qu'aucun zoom raisonnable n'atteignait le bord gauche de
+/// la planche. L'atelier affichait « il manque de l'image » et laissait l'utilisateur
+/// avec le problème. Une image panoramique se cadre sur ce qu'elle doit couvrir.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Panorama {
+    /// Largeur de la planche entière, fond perdu compris.
+    pub largeur: f64,
+    /// Abscisse du bord gauche de la planche dans la boîte courante — donc négative
+    /// pour la 1ère, qui est à droite du dos.
+    pub x_zone: f64,
+}
+
+/// Zone de l'image de la 1ère dans une boîte, et la géométrie de l'image dedans.
+///
+/// Toutes les zones qui portent l'image en prolongement — 4ème, dos, 1ère — passent
+/// par ici avec le même `pano` : elles obtiennent donc la même géométrie et ne peuvent
+/// pas se décaler l'une de l'autre. Un cheveu d'écart, au pli, se voit.
+pub fn image_une(
+    cv: &Couverture,
+    format: (f64, f64),
+    image: Option<&Ressource>,
+    b: Boite,
+    pano: Option<Panorama>,
+) -> Option<((f64, f64, f64, f64), Geometrie)> {
+    let mut zone = zone_image(cv, format, b)?;
+    if let Some(p) = pano {
+        if cv.quatrieme.fond == FondQuatre::Panorama {
+            // Même bande verticale, étendue à toute la planche.
+            zone = (p.x_zone, zone.1, p.largeur, zone.3);
+        }
+    }
+    let r = image?;
+    let g = image::place((zone.2, zone.3), (r.largeur, r.hauteur), &cv.cadrage)?;
+    Some((zone, g))
+}
+
+/// Corps de la 1ère de couverture, dans la boîte donnée.
+///
+/// Rien n'y fixe la page : c'est ce qui permet de composer la même face seule, pour
+/// l'aperçu, et posée dans la planche, sans que les deux puissent diverger.
+pub fn corps_une(
+    livre: &Livre,
+    cv: &Couverture,
+    format: (f64, f64),
+    image: Option<&Ressource>,
+    b: Boite,
+    pano: Option<Panorama>,
+) -> String {
+    let (fw, _) = format;
+    let mut s = bloc_fond(b, &cv.papier);
+
+    if let (Some((zone, g)), Some(r)) = (image_une(cv, format, image, b, pano), image) {
+        s.push_str(&bloc_image(zone, &g, &r.fichier));
+    }
+    // Le voile couvre toute la face, pas seulement la zone image : c'est ce que faisait
+    // le CSS, et le bandeau en dépend visuellement.
+    if cv.mode != Mode::Typo {
+        if let Some(f) = voile_fond(cv.voile, cv.voile_opacite) {
+            s.push_str(&format!(
+                "#place(top + left, rect(width: {}, height: {}, fill: {f}, stroke: none))\n",
+                mm(b.largeur),
+                mm(b.hauteur)
+            ));
+        }
+    }
+
+    let mut cadre = bloc_cadre(&cv.cadre, format);
+    cadre.push_str(&bloc_texte(livre, cv, format));
+    cadre.push_str(&bloc_pied(&cv.pied, cv, format));
+    cadre.push_str(&bloc_pastille(&cv.pastille, fw));
+    s.push_str(&cale(b, format, &cadre));
+    s
+}
+
+/// Le prolongement panoramique tel que le voit une face **isolée**, sans fond perdu :
+/// la planche y est réduite à deux couvertures et un dos.
+///
+/// L'aperçu par face doit montrer le même cadrage que la planche, sans quoi on règle
+/// la couverture sur une image qui ne sera pas celle imprimée.
+pub fn panorama_face(format: (f64, f64), dos_mm: Option<f64>, face_une: bool) -> Option<Panorama> {
+    let dos = dos_mm?;
+    let fw = format.0;
+    Some(Panorama {
+        largeur: 2.0 * fw + dos,
+        // La 4ème est le bord gauche de la planche ; la 1ère en est à une couverture et
+        // un dos, d'où une abscisse négative.
+        x_zone: if face_une { -(fw + dos) } else { 0.0 },
+    })
+}
+
+/// Source Typst de la 1ère de couverture, seule sur sa page.
 pub fn source_une(
     livre: &Livre,
     cv: &Couverture,
     format: (f64, f64),
     image: Option<&Ressource>,
+    dos_mm: Option<f64>,
 ) -> String {
-    let (fw, fh) = format;
-    let mut s = preambule(format, &cv.papier);
-
-    if let (Some(zone), Some(r)) = (zone_image(cv, format), image) {
-        if let Some(g) = image::place((zone.2, zone.3), (r.largeur, r.hauteur), &cv.cadrage) {
-            s.push_str(&bloc_image(zone, &g, &r.fichier));
-        }
-    }
-    // Le voile couvre toute la couverture, pas seulement la zone image : c'est ce que
-    // faisait le CSS, et le bandeau en dépend visuellement.
-    if cv.mode != Mode::Typo {
-        if let Some(f) = voile_fond(cv.voile, cv.voile_opacite) {
-            s.push_str(&format!(
-                "#place(top + left, rect(width: {}, height: {}, fill: {f}, stroke: none))\n",
-                mm(fw),
-                mm(fh)
-            ));
-        }
-    }
-    s.push_str(&bloc_cadre(&cv.cadre, format));
-    s.push_str(&bloc_texte(livre, cv, format));
-    s.push_str(&bloc_pied(&cv.pied, cv, format));
-    s.push_str(&bloc_pastille(&cv.pastille, fw));
-    s
+    let b = Boite::rognee(format);
+    let pano = panorama_face(format, dos_mm, true);
+    preambule(b.largeur, b.hauteur) + &corps_une(livre, cv, format, image, b, pano)
 }
 
-/// Source Typst de la 4ème de couverture.
+/// Corps de la 4ème de couverture, dans la boîte donnée.
 ///
-/// `dos_mm` n'est requis que pour le prolongement panoramique : la 4ème y montre la
-/// partie de l'image de la 1ère située au-delà du dos, donc la largeur du dos — donc
-/// la pagination — entre dans le calcul. C'est le couplage que l'application existe
-/// pour tenir : ici, il est explicite au lieu d'être recopié à la main.
-pub fn source_quatre(
+/// `pano` n'est requis que pour le prolongement : il porte la largeur de la planche,
+/// donc celle du dos, donc la pagination. C'est le couplage que l'application existe
+/// pour tenir — ici, il est explicite au lieu d'être recopié à la main, et la 4ème
+/// refuse de se composer sans lui plutôt que de se composer de travers.
+pub fn corps_quatre(
     cv: &Couverture,
     format: (f64, f64),
     image_quatre: Option<&Ressource>,
-    image_une: Option<&Ressource>,
-    dos_mm: Option<f64>,
+    photo_une: Option<&Ressource>,
+    pano: Option<Panorama>,
+    b: Boite,
 ) -> Result<String, String> {
-    let (fw, fh) = format;
+    let (fw, _) = format;
     let q = &cv.quatrieme;
     let fond = match q.fond {
         FondQuatre::Couleur => &q.couleur,
         _ => &cv.papier,
     };
-    let mut s = preambule(format, fond);
+    let mut s = bloc_fond(b, fond);
 
     match q.fond {
         FondQuatre::Image => {
             if let Some(r) = image_quatre {
-                if let Some(g) = image::place((fw, fh), (r.largeur, r.hauteur), &q.cadrage) {
-                    s.push_str(&bloc_image((0.0, 0.0, fw, fh), &g, &r.fichier));
+                let zone = (0.0, 0.0, b.largeur, b.hauteur);
+                if let Some(g) = image::place((zone.2, zone.3), (r.largeur, r.hauteur), &q.cadrage)
+                {
+                    s.push_str(&bloc_image(zone, &g, &r.fichier));
                 }
             }
         }
         FondQuatre::Panorama => {
-            let dos = dos_mm.ok_or_else(|| {
+            let p = pano.ok_or_else(|| {
                 "prolongement panoramique : la largeur du dos est inconnue — composer \
                  l'intérieur d'abord, la pagination la détermine."
                     .to_string()
             })?;
-            let r = image_une.ok_or_else(|| {
+            let r = photo_une.ok_or_else(|| {
                 "prolongement panoramique : la 1ère n'a pas d'image à prolonger.".to_string()
             })?;
-            let zone = zone_image(cv, format).ok_or_else(|| {
+            // Rigoureusement le même appel que la 1ère et que le dos : la zone est celle
+            // de la planche entière, chaque face n'en montre que sa part. Le raccord au
+            // pli est donc exact par construction, et non par un décalage à recalculer.
+            let (zone, g) = image_une(cv, format, Some(r), b, Some(p)).ok_or_else(|| {
                 "prolongement panoramique : sans objet en composition typographique.".to_string()
             })?;
-            if let Some(g) = image::place((zone.2, zone.3), (r.largeur, r.hauteur), &cv.cadrage) {
-                // La 4ème est à gauche de la planche : l'image y est décalée de la
-                // largeur d'une couverture plus celle du dos.
-                let decale = Geometrie {
-                    gauche: g.gauche + fw + dos,
-                    ..g
-                };
-                s.push_str(&bloc_image(zone, &decale, &r.fichier));
-            }
+            s.push_str(&bloc_image(zone, &g, &r.fichier));
         }
         _ => {}
     }
@@ -616,15 +813,16 @@ pub fn source_quatre(
         if let Some(f) = voile_fond(q.voile, q.voile_opacite) {
             s.push_str(&format!(
                 "#place(top + left, rect(width: {}, height: {}, fill: {f}, stroke: none))\n",
-                mm(fw),
-                mm(fh)
+                mm(b.largeur),
+                mm(b.hauteur)
             ));
         }
     }
 
+    let mut c = String::new();
     let pad = q.pad_x / 100.0 * fw;
     if !q.texte.trim().is_empty() {
-        s.push_str(&format!(
+        c.push_str(&format!(
             "#place(top + left, dx: {}, dy: {}, block(width: {})[\n\
              #set align({})\n#set par(leading: {}em, spacing: {}em, justify: false)\n\
              #{}\n])\n",
@@ -646,7 +844,7 @@ pub fn source_quatre(
             .map(|v| format!("#{}", q.style_pied.applique(fw, v)))
             .collect();
         if !lignes.is_empty() {
-            s.push_str(&format!(
+            c.push_str(&format!(
                 "#place(bottom + left, dx: {}, dy: -{}, block(width: {})[\n\
                  #set align(center)\n#set par(leading: 0.5em, spacing: 0.5em)\n{}\n])\n",
                 mm(pad),
@@ -658,7 +856,7 @@ pub fn source_quatre(
     }
 
     if q.isbn_actif {
-        s.push_str(&format!(
+        c.push_str(&format!(
             "#place(bottom + right, dx: -{}, dy: -{}, \
              rect(width: {}, height: {}, fill: rgb(\"#ffffff\"), stroke: none))\n",
             mm(q.isbn_dx / 100.0 * fw),
@@ -667,7 +865,22 @@ pub fn source_quatre(
             mm(q.isbn_h / 100.0 * fw),
         ));
     }
+    s.push_str(&cale(b, format, &c));
     Ok(s)
+}
+
+/// Source Typst de la 4ème de couverture, seule sur sa page.
+pub fn source_quatre(
+    cv: &Couverture,
+    format: (f64, f64),
+    image_quatre: Option<&Ressource>,
+    image_une: Option<&Ressource>,
+    dos_mm: Option<f64>,
+) -> Result<String, String> {
+    let b = Boite::rognee(format);
+    let pano = panorama_face(format, dos_mm, false);
+    let corps = corps_quatre(cv, format, image_quatre, image_une, pano, b)?;
+    Ok(preambule(b.largeur, b.hauteur) + &corps)
 }
 
 #[cfg(test)]
@@ -702,8 +915,8 @@ mod tests {
     #[test]
     fn une_maquette_suit_le_format_sans_valeur_figee() {
         let cv = maquettes::folio();
-        let petit = source_une(&livre(), &cv, (100.0, 160.0), None);
-        let grand = source_une(&livre(), &cv, (200.0, 320.0), None);
+        let petit = source_une(&livre(), &cv, (100.0, 160.0), None, None);
+        let grand = source_une(&livre(), &cv, (200.0, 320.0), None, None);
         let corps = |s: &str| {
             let i = s.find("size: ").unwrap() + 6;
             s[i..].split("mm").next().unwrap().parse::<f64>().unwrap()
@@ -719,7 +932,7 @@ mod tests {
         let mut cv = maquettes::blanche();
         cv.voile = Voile::Uni;
         cv.voile_opacite = 0.5;
-        let s = source_une(&livre(), &cv, FORMAT, Some(&photo()));
+        let s = source_une(&livre(), &cv, FORMAT, Some(&photo()), None);
         assert!(!s.contains("image("), "image émise en mode typo");
         assert!(!s.contains("gradient"), "voile émis en mode typo");
     }
@@ -730,9 +943,11 @@ mod tests {
     fn le_cadre_emet_trois_filets_dans_l_ordre() {
         let cv = maquettes::blanche();
         assert!(cv.cadre.actif);
-        let s = source_une(&livre(), &cv, FORMAT, None);
-        let filets: Vec<&str> = s.match_indices("rect(").map(|(_, m)| m).collect();
-        assert_eq!(filets.len(), 3, "trois filets attendus");
+        let s = source_une(&livre(), &cv, FORMAT, None, None);
+        // Le fond de la face est un rectangle lui aussi : seuls les filets portent un
+        // contour, c'est ce qui les distingue.
+        let filets = s.matches("stroke: ").count();
+        assert_eq!(filets, 3, "trois filets attendus");
         // Externe noir, puis les deux internes rouges.
         let pos_noir = s.find("#000000").unwrap();
         let pos_rouge = s.find("#c00000").unwrap();
@@ -743,7 +958,7 @@ mod tests {
     fn un_cadre_inactif_n_emet_rien() {
         let cv = maquettes::folio();
         assert!(!cv.cadre.actif);
-        assert!(!source_une(&livre(), &cv, FORMAT, None).contains("stroke:"));
+        assert!(!source_une(&livre(), &cv, FORMAT, None, None).contains("stroke:"));
     }
 
     /// L'identité du livre vient du projet : la maquette ne doit pas pouvoir la
@@ -755,7 +970,7 @@ mod tests {
             maquettes::blanche(),
             maquettes::surimpression(),
         ] {
-            let s = source_une(&livre(), &cv, FORMAT, None);
+            let s = source_une(&livre(), &cv, FORMAT, None, None);
             assert!(s.contains("Les Heures creuses"), "{:?}", cv.mode);
             assert!(s.contains("Ivan Pjig"), "{:?}", cv.mode);
         }
@@ -765,7 +980,7 @@ mod tests {
     #[test]
     fn le_bandeau_pousse_l_image_sous_la_bande() {
         let cv = maquettes::folio();
-        let s = source_une(&livre(), &cv, FORMAT, Some(&photo()));
+        let s = source_une(&livre(), &cv, FORMAT, Some(&photo()), None);
         let dy = s
             .split("dy: ")
             .nth(1)
@@ -782,7 +997,7 @@ mod tests {
     #[test]
     fn la_surimpression_couvre_toute_la_couverture() {
         let cv = maquettes::surimpression();
-        let s = source_une(&livre(), &cv, FORMAT, Some(&photo()));
+        let s = source_une(&livre(), &cv, FORMAT, Some(&photo()), None);
         assert!(s.contains(&format!("width: {}", mm(FORMAT.0))));
         assert!(s.contains("gradient.linear"), "voile attendu");
     }
@@ -798,19 +1013,20 @@ mod tests {
         assert!(err.contains("pagination"), "{err}");
     }
 
-    /// Avec le dos, l'image de la 4ème est décalée d'une couverture plus le dos :
-    /// c'est ce décalage qui fait que la photo se prolonge sans rupture au pli.
+    /// En prolongement, l'image se cadre sur la **planche entière** — deux couvertures
+    /// et le dos — et non sur la seule face qui la porte. C'est ce qui la fait couvrir
+    /// la 4ème sans réglage supplémentaire, et ce qui fait qu'un dos plus large élargit
+    /// la zone de cadrage. L'atelier HTML cadrait sur une couverture et laissait la
+    /// 4ème en papier nu : la divergence est ici, et elle est voulue.
     #[test]
-    fn le_prolongement_decale_l_image_d_une_couverture_plus_le_dos() {
+    fn le_prolongement_cadre_l_image_sur_la_planche_entiere() {
         let mut cv = maquettes::folio();
         cv.quatrieme.fond = FondQuatre::Panorama;
-        let sans = source_quatre(&cv, FORMAT, None, Some(&photo()), Some(0.0)).unwrap();
-        let avec = source_quatre(&cv, FORMAT, None, Some(&photo()), Some(17.43)).unwrap();
-        let dx = |s: &str| {
-            s.split("image(\"")
-                .next()
-                .unwrap()
-                .rsplit("dx: ")
+        let largeur_zone = |dos: f64| {
+            let s = source_quatre(&cv, FORMAT, None, Some(&photo()), Some(dos)).unwrap();
+            let i = s.find("image(\"").unwrap();
+            s[..i]
+                .rsplit("box(width: ")
                 .next()
                 .unwrap()
                 .split("mm")
@@ -819,7 +1035,8 @@ mod tests {
                 .parse::<f64>()
                 .unwrap()
         };
-        assert!((dx(&avec) - dx(&sans) - 17.43).abs() < 0.01);
+        assert!((largeur_zone(0.0) - 2.0 * FORMAT.0).abs() < 0.01);
+        assert!((largeur_zone(17.43) - (2.0 * FORMAT.0 + 17.43)).abs() < 0.01);
     }
 
     /// La zone ISBN est laissée vide et blanche : le code-barres est posé par le
@@ -842,7 +1059,7 @@ mod tests {
             maquettes::blanche(),
             maquettes::surimpression(),
         ] {
-            assert!(!source_une(&livre(), &cv, FORMAT, Some(&photo())).is_empty());
+            assert!(!source_une(&livre(), &cv, FORMAT, Some(&photo()), None).is_empty());
             source_quatre(&cv, FORMAT, None, Some(&photo()), Some(15.0)).unwrap();
         }
     }
@@ -879,7 +1096,7 @@ mod tests {
         l.titre = "Le #Titre".into();
         let mut cv = maquettes::folio();
         cv.pastille.texte = "col#lection".into();
-        let s = source_une(&l, &cv, FORMAT, None);
+        let s = source_une(&l, &cv, FORMAT, None, None);
         assert!(s.contains(r"Le \#Titre"));
         assert!(s.contains(r"col\#lection"));
     }

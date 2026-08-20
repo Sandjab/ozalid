@@ -166,3 +166,28 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
 .groupe label { grid-template-columns: 10rem 1fr; }
 .groupe input[type="color"] { padding: 0; height: 1.8rem; }
 .groupe input[type="checkbox"] { width: auto; justify-self: start; }
+
+/* ---------- packages prestataires ---------- */
+
+.prestataires { margin-top: .8rem; }
+
+.prestataire {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  padding: .4rem 0;
+  border-bottom: 1px solid var(--trait);
+}
+.prestataire:last-child { border-bottom: 0; }
+.prestataire input[type="checkbox"] { width: auto; margin: 0; }
+.prestataire label { margin: 0; flex: 1; }
+.prestataire select { width: auto; }
+
+/* Relevés d'un prestataire à gabarit : côte à côte, à droite de sa ligne. */
+.releve { display: flex; gap: .6rem; }
+.releve .petit { display: grid; gap: .1rem; margin: 0; }
+.releve .petit span { font-size: .75rem; color: #7a7368; }
+.releve .petit input { width: 6rem; }
+
+.package + .package { margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--trait); }
+.package h3 { margin: 0 0 .6rem; font-size: .95rem; }

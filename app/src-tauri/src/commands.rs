@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::couverture::{self, Couverture, Ressource};
@@ -13,6 +13,8 @@ use crate::import;
 use crate::interieur::{self, Reglage};
 use crate::manuscrit;
 use crate::maquettes;
+use crate::package;
+use crate::planche;
 use crate::projet::{Livre, Projet};
 use crate::providers::{self, Provider};
 use crate::typst::Typst;
@@ -37,6 +39,9 @@ pub struct ProviderVue {
     largeur: f64,
     hauteur: f64,
     fond_perdu: Option<f64>,
+    /// Vrai quand le prestataire publie de quoi calculer le dos. Faux, l'interface
+    /// réclame un relevé plutôt que de laisser croire à un chiffre.
+    dos_publie: bool,
     papiers: Vec<PapierVue>,
 }
 
@@ -54,6 +59,8 @@ impl From<&Provider> for ProviderVue {
             largeur: p.format.0,
             hauteur: p.format.1,
             fond_perdu: p.fond_perdu,
+            // Une pagination quelconque suffit à savoir si une formule existe.
+            dos_publie: p.papier_defaut().dos.mm(100).is_some(),
             papiers: p
                 .papiers
                 .iter()
@@ -183,7 +190,7 @@ pub fn composer(
     let livre = &o.projet.meta.livre;
     let chapitres = manuscrit::decoupe(&o.projet.texte, livre.chapitres)?;
 
-    let dossier = sorties(o, pr.cle)?;
+    let dossier = sorties_dossier(o, pr.cle)?;
     std::fs::create_dir_all(&dossier).map_err(|e| {
         format!(
             "répertoire de sortie inutilisable ({}) : {e}",
@@ -265,15 +272,21 @@ pub fn couverture_modifier(
     vue(o)
 }
 
-/// Aperçu d'une face de couverture, en PNG encodé dans une URL `data:`.
+/// Aperçu d'une face de couverture ou de la planche entière, en PNG encodé dans une
+/// URL `data:`.
 ///
 /// L'aperçu sort du **même** moteur et de la même source que le PDF final : il n'y a
 /// donc pas d'écart écran/export à surveiller, contrairement à l'atelier HTML.
+///
+/// `dos_mm` vient de la dernière composition de l'intérieur ; il n'est jamais saisi.
+/// Sans lui, la planche ne s'aperçoit pas — c'est voulu : une planche dont le dos
+/// serait deviné donnerait à voir un livre qui n'existe pas.
 #[tauri::command]
 pub fn couverture_apercu(
     face: String,
     provider_cle: String,
     dos_mm: Option<f64>,
+    fond_perdu_mm: Option<f64>,
     atelier: State<Atelier>,
 ) -> Result<String, String> {
     let garde = atelier.ouvert.lock().unwrap();
@@ -295,9 +308,26 @@ pub fn couverture_apercu(
 
     let (une, quatre) = ecrire_images(&o.projet, &dossier)?;
     let src = match face.as_str() {
-        "une" => couverture::source_une(&o.projet.meta.livre, cv, pr.format, une.as_ref()),
+        "une" => couverture::source_une(&o.projet.meta.livre, cv, pr.format, une.as_ref(), dos_mm),
         "quatre" => {
             couverture::source_quatre(cv, pr.format, quatre.as_ref(), une.as_ref(), dos_mm)?
+        }
+        "planche" => {
+            let dos = dos_mm.ok_or(
+                "planche : composer l'intérieur d'abord, c'est la pagination qui donne le dos.",
+            )?;
+            let fp = pr.fond_perdu.or(fond_perdu_mm).ok_or_else(|| {
+                format!(
+                    "{} ne publie pas de fond perdu : le relever sur son gabarit et le saisir.",
+                    pr.libelle
+                )
+            })?;
+            let g = planche::Gabarit {
+                format: pr.format,
+                dos,
+                fond_perdu: fp,
+            };
+            planche::source(&o.projet.meta.livre, cv, &g, une.as_ref(), quatre.as_ref())?
         }
         autre => return Err(format!("face inconnue : {autre}")),
     };
@@ -314,30 +344,106 @@ pub fn couverture_apercu(
     ))
 }
 
+/* ---------- packages ---------- */
+
+/// Un prestataire coché, avec son papier et, s'il ne publie rien, ce que
+/// l'utilisateur a relevé sur son gabarit.
+#[derive(Deserialize)]
+pub struct Choix {
+    pub provider_cle: String,
+    pub papier_cle: Option<String>,
+    pub dos_mm: Option<f64>,
+    pub fond_perdu_mm: Option<f64>,
+}
+
+/// Ce que rend la génération pour un prestataire : le package, ou l'erreur qui l'a
+/// empêché. Un prestataire en échec n'interrompt pas les autres — mais il est dit.
+#[derive(Serialize)]
+pub struct Resultat {
+    pub provider: String,
+    pub libelle: String,
+    pub package: Option<package::Package>,
+    pub erreur: Option<String>,
+}
+
+/// Génère les packages des prestataires cochés, chacun dans son répertoire.
+///
+/// Une seule maquette, N prestataires, aucun réglage retouché entre eux : chaque
+/// prestataire compose son propre intérieur, donc sa propre pagination, donc son
+/// propre dos. C'est la promesse de l'étape « Prestataires ».
+#[tauri::command]
+pub fn packager(choix: Vec<Choix>, atelier: State<Atelier>) -> Result<Vec<Resultat>, String> {
+    let garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_ref().ok_or_else(aucun_projet)?;
+    if choix.is_empty() {
+        return Err("aucun prestataire coché.".into());
+    }
+    let typst = typst()?;
+
+    let mut sorties = Vec::with_capacity(choix.len());
+    for c in &choix {
+        let Some(pr) = providers::provider(&c.provider_cle) else {
+            sorties.push(Resultat {
+                provider: c.provider_cle.clone(),
+                libelle: c.provider_cle.clone(),
+                package: None,
+                erreur: Some(format!("prestataire inconnu : {}", c.provider_cle)),
+            });
+            continue;
+        };
+        let r = papier(pr, c.papier_cle.as_deref()).and_then(|pa| {
+            let dossier = sorties_dossier(o, pr.cle)?;
+            package::assembler(
+                &o.projet,
+                pr,
+                pa,
+                planche::Releve {
+                    dos: c.dos_mm,
+                    fond_perdu: c.fond_perdu_mm,
+                },
+                &dossier,
+                &typst,
+            )
+        });
+        sorties.push(match r {
+            Ok(p) => Resultat {
+                provider: pr.cle.into(),
+                libelle: pr.libelle.into(),
+                package: Some(p),
+                erreur: None,
+            },
+            Err(e) => Resultat {
+                provider: pr.cle.into(),
+                libelle: pr.libelle.into(),
+                package: None,
+                erreur: Some(e),
+            },
+        });
+    }
+    Ok(sorties)
+}
+
+fn papier(pr: &'static Provider, cle: Option<&str>) -> Result<&'static providers::Papier, String> {
+    match cle {
+        Some(c) => pr
+            .papier(c)
+            .ok_or_else(|| format!("papier inconnu chez {} : {c}", pr.cle)),
+        None => Ok(pr.papier_defaut()),
+    }
+}
+
 /// Écrit les images du projet à côté de la source, et rend leurs descriptions.
-/// Typst lit ses images par chemin relatif, comme n'importe quel document.
 fn ecrire_images(
     projet: &Projet,
     dossier: &Path,
 ) -> Result<(Option<Ressource>, Option<Ressource>), String> {
-    let (mut une, mut quatre) = (None, None);
-    for (nom, octets) in &projet.images {
-        std::fs::write(dossier.join(nom), octets).map_err(|e| format!("{nom} : {e}"))?;
-        let r = Ressource::depuis(nom, octets)
-            .ok_or_else(|| format!("{nom} : dimensions illisibles (ni PNG ni JPEG)."))?;
-        if nom.starts_with("quatrieme") {
-            quatre = Some(r);
-        } else {
-            une = Some(r);
-        }
-    }
-    Ok((une, quatre))
+    package::ecrire_images(projet, dossier)
 }
 
 /// Répertoire des sorties d'un prestataire : à côté du `.ozalid`, jamais dedans.
 /// Un projet non enregistré n'a donc pas d'endroit où écrire — c'est voulu, sinon les
 /// sorties atterriraient dans un répertoire temporaire que personne ne retrouve.
-fn sorties(o: &Ouvert, provider: &str) -> Result<PathBuf, String> {
+fn sorties_dossier(o: &Ouvert, provider: &str) -> Result<PathBuf, String> {
     let chemin = o.chemin.as_ref().ok_or_else(|| {
         "enregistrer le projet avant de composer : les sorties se rangent à côté du \
          fichier .ozalid."

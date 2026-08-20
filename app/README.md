@@ -8,9 +8,9 @@ intérieur composé → couverture → packages prestataires. Elle succède à l
 Ce qu'elle règle : le nombre de pages ne transite plus par un humain. L'intérieur
 le produit, la couverture le consomme, et le dos suit le manuscrit sans ressaisie.
 
-**État : jalon 3** — projet `.ozalid`, import d'un livre existant, composition de
-l'intérieur, moteur de couverture avec aperçu. Pas encore d'assemblage de planche
-ni de packages.
+**État : jalon 4** — projet `.ozalid`, import d'un livre existant, composition de
+l'intérieur, moteur de couverture, assemblage de la planche et packages
+multi-prestataires. Reste l'épreuve de lecture et la release Windows.
 
 ## Stack
 
@@ -54,6 +54,8 @@ résultats. Tout le reste est testable sans fenêtre.
 | `maquettes` | Folio, Blanche et Surimpression |
 | `typst` | Invocation du sidecar : mesurer la pagination, compiler, rendre un aperçu |
 | `interieur` | Source Typst de l'intérieur, et convergence gouttière/parité |
+| `planche` | Assemblage 4ème \| dos \| 1ère au gabarit, et dos composé |
+| `package` | Un prestataire, un intérieur, une planche, dans son répertoire |
 | `commands` | Frontière avec l'interface, et projet ouvert |
 
 `providers` fusionne les deux tables historiques du projet — celle d'`index.html`
@@ -95,7 +97,12 @@ cd app/src-tauri
 cargo run --example importer -- <livre.toml> <projet.ozalid>
 cargo run --example composer -- <projet.ozalid> lulu <sortie>
 cargo run --example maquette -- <projet.ozalid> lulu <sortie>
+cargo run --example packager -- <projet.ozalid> <sortie> lulu tbe-110x170 bookvault-127x203
 ```
+
+`packager` traverse la chaîne entière sans interface : intérieur composé, pagination
+mesurée, dos calculé, planche assemblée. C'est ce qui prouve que Typst compile
+vraiment ce que le moteur émet.
 
 `maquette` rend les maquettes en PNG : c'est la vérification qu'aucun test ne peut
 faire — la position du cadre, l'assiette du bloc titre, le voile. À rejouer et à
@@ -116,9 +123,13 @@ tout ce qui se voit se vérifie dans l'application.
 - **Georgia et Helvetica ne sont pas reprises.** Elles appartiennent au système, ne
   sont pas redistribuables, et Helvetica n'existe pas sous Windows. Une maquette
   importée qui les utilise est refusée avec la liste des familles embarquées.
-- **Le prolongement panoramique dépend de la pagination.** La 4ème y montre la part
-  de l'image située au-delà du dos : le composer sans compte de pages est refusé,
-  pas approximé.
+- **Le prolongement panoramique dépend de la pagination.** L'image y est cadrée sur
+  la planche entière — deux couvertures et le dos — et non sur la seule 1ère :
+  le composer sans compte de pages est refusé, pas approximé. C'est un écart
+  délibéré avec `index.html`, qui cadrait sur une couverture et laissait la 4ème en
+  papier nu tant qu'on n'avait pas grossi l'image à la main.
+- **La planche ne porte aucun trait de coupe.** Lulu, KDP et Bookvault les refusent
+  explicitement ; le fond perdu suffit à dire où couper.
 - **L'aperçu et le PDF sortent de la même source.** Il n'y a donc pas d'écart
   écran/export à surveiller — le piège que consignait le `CLAUDE.md` du projet
   n'existe plus ici.

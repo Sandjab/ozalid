@@ -18,6 +18,14 @@ let providers = [];
 let polices = [];
 let face = 'une';
 let attenteApercu = null;
+/**
+ * Dos de la dernière composition, en mm, et le prestataire pour lequel il vaut.
+ *
+ * Il n'est jamais saisi : il vient de la pagination mesurée par Typst. C'est ce qui
+ * permet à l'aperçu de planche d'être juste, et ce qui le fait refuser de s'afficher
+ * tant que l'intérieur n'a pas été composé.
+ */
+let dosCompose = null;
 
 const nb = (v, d = 2) => v.toLocaleString('fr-FR', {
   minimumFractionDigits: d, maximumFractionDigits: d
@@ -38,6 +46,7 @@ async function chargerProviders() {
     $('maquettes').append(b);
   }
   construireReglages();
+  construirePrestataires();
 }
 
 function providerCourant() {
@@ -63,7 +72,7 @@ function afficherProjet(p) {
   projet = p;
   $('cheminProjet').textContent = p.chemin ?? 'projet non enregistré';
   $('btEnregistrer').disabled = false;
-  for (const s of ['secLivre', 'secManuscrit', 'secCouverture', 'secComposer']) {
+  for (const s of ['secLivre', 'secManuscrit', 'secCouverture', 'secComposer', 'secPackages']) {
     $(s).hidden = false;
   }
 
@@ -264,6 +273,12 @@ function demanderApercu() {
   attenteApercu = setTimeout(rendreApercu, 180);
 }
 
+/** Dos à passer à l'aperçu : celui de la composition, et seulement s'il vaut pour le
+ * prestataire affiché. Changer de gabarit le périme aussitôt. */
+function dosCourant() {
+  return dosCompose?.provider === $('inProvider').value ? dosCompose.mm : null;
+}
+
 async function rendreApercu() {
   if (!projet?.couverture) {
     $('apercu').removeAttribute('src');
@@ -275,7 +290,8 @@ async function rendreApercu() {
     const data = await invoke('couverture_apercu', {
       face,
       providerCle: $('inProvider').value,
-      dosMm: null,
+      dosMm: dosCourant(),
+      fondPerduMm: null,
     });
     $('apercu').src = data;
     $('etatApercu').textContent = '';
@@ -287,7 +303,7 @@ async function rendreApercu() {
   }
 }
 
-const FACES = [['une', '1ère'], ['quatre', '4ème']];
+const FACES = [['une', '1ère'], ['quatre', '4ème'], ['planche', 'Planche']];
 
 function construireFaces() {
   for (const [cle, libelle] of FACES) {
@@ -337,14 +353,128 @@ async function composer() {
   $('etat').className = 'etat';
   $('resultat').hidden = true;
   try {
-    afficher(await invoke('composer', {
+    const c = await invoke('composer', {
       providerCle: $('inProvider').value,
       papierCle: $('inPapier').value,
-    }));
+    });
+    afficher(c);
+    // Le dos sort de la pagination qu'on vient de mesurer : l'aperçu de planche s'en
+    // sert tel quel, sans que personne ne le retape.
+    dosCompose = c.dos === null ? null : { provider: $('inProvider').value, mm: c.dos };
+    if (face === 'planche') demanderApercu();
     $('etat').textContent = '';
   } catch (e) {
     $('etat').textContent = String(e);
     $('etat').className = 'etat erreur';
+  } finally {
+    bt.disabled = false;
+  }
+}
+
+/* ---------- packages prestataires ---------- */
+
+/** Une ligne par prestataire : la case à cocher, le papier, et les relevés que les
+ * prestataires à gabarit exigent — dos et fond perdu, qu'eux seuls ne publient pas. */
+function construirePrestataires() {
+  const box = $('listePrestataires');
+  box.replaceChildren();
+  for (const p of providers) {
+    const ligne = h('div', undefined, 'prestataire');
+    const case_ = h('input');
+    case_.type = 'checkbox';
+    case_.id = `pkg-${p.cle}`;
+    const nom = h('label', p.libelle);
+    nom.htmlFor = case_.id;
+    ligne.append(case_, nom);
+
+    const papier = h('select');
+    papier.id = `pkg-papier-${p.cle}`;
+    for (const pa of p.papiers) papier.append(new Option(pa.libelle, pa.cle));
+    papier.disabled = p.papiers.length < 2;
+    ligne.append(papier);
+
+    if (!p.dos_publie || p.fond_perdu === null) {
+      const releve = h('span', undefined, 'releve');
+      if (!p.dos_publie) releve.append(champReleve(`pkg-dos-${p.cle}`, 'Dos relevé (mm)', 12));
+      if (p.fond_perdu === null) {
+        releve.append(champReleve(`pkg-fp-${p.cle}`, 'Fond perdu (mm)', 3));
+      }
+      ligne.append(releve);
+    }
+    box.append(ligne);
+  }
+}
+
+function champReleve(id, libelle, defaut) {
+  const l = h('label', undefined, 'petit');
+  const i = h('input');
+  i.type = 'number';
+  i.id = id;
+  i.min = 0;
+  i.step = 0.1;
+  i.value = String(defaut);
+  l.append(h('span', libelle), i);
+  return l;
+}
+
+/** Ce que l'utilisateur a coché, prêt pour la commande. */
+function choixPrestataires() {
+  const lu = (id) => ($(id) ? Number($(id).value) : null);
+  return providers
+    .filter((p) => $(`pkg-${p.cle}`)?.checked)
+    .map((p) => ({
+      providerCle: p.cle,
+      papierCle: $(`pkg-papier-${p.cle}`).value,
+      dosMm: lu(`pkg-dos-${p.cle}`),
+      fondPerduMm: lu(`pkg-fp-${p.cle}`),
+    }));
+}
+
+function afficherPackages(resultats) {
+  const box = $('packages');
+  box.replaceChildren();
+  for (const r of resultats) {
+    const bloc = h('div', undefined, 'package');
+    bloc.append(h('h3', r.libelle));
+    if (r.erreur) {
+      bloc.append(h('p', r.erreur, 'note alerte'));
+    } else {
+      const p = r.package;
+      const dl = h('dl');
+      for (const [k, v] of [
+        ['Pages', `${p.pages}${p.blanche ? ' (blanche de parité)' : ''}`],
+        ['Papier', p.papier],
+        ['Gouttière', `${nb(p.gouttiere, 1)} mm`],
+        ['Dos', `${nb(p.dos)} mm`],
+        ['Planche', `${nb(p.planche[0])} × ${nb(p.planche[1])} mm, `
+          + `fond perdu ${nb(p.fond_perdu, 3)} mm`],
+      ]) dl.append(h('dt', k), h('dd', v));
+      bloc.append(dl);
+      for (const c of p.chemins) bloc.append(h('p', c, 'chemin'));
+    }
+    box.append(bloc);
+  }
+  box.hidden = false;
+}
+
+async function packager() {
+  const choix = choixPrestataires();
+  if (!choix.length) {
+    $('etatPackages').textContent = 'Cocher au moins un prestataire.';
+    $('etatPackages').className = 'etat erreur';
+    return;
+  }
+  const bt = $('btPackager');
+  bt.disabled = true;
+  $('packages').hidden = true;
+  $('etatPackages').className = 'etat';
+  $('etatPackages').textContent = `composition de ${choix.length} package(s)…`;
+  try {
+    afficherPackages(await invoke('packager', { choix }));
+    $('etatPackages').textContent = '';
+  } catch (e) {
+    $('etatPackages').textContent = String(e);
+    $('etatPackages').className = 'etat erreur';
   } finally {
     bt.disabled = false;
   }
@@ -356,6 +486,7 @@ $('btEnregistrer').addEventListener('click', enregistrer);
 $('btReimporter').addEventListener('click', reimporter);
 $('btChoisirManuscrit').addEventListener('click', choisirManuscrit);
 $('btComposer').addEventListener('click', composer);
+$('btPackager').addEventListener('click', packager);
 $('inProvider').addEventListener('change', () => {
   majPapiers();
   // Le format vient du prestataire : l'aperçu change avec lui, même si aucun réglage

@@ -7,7 +7,9 @@
 //! seul endroit, et le nombre de pages ne peut plus désigner deux formats différents.
 //!
 //! Toutes les valeurs proviennent des relevés déjà documentés dans ces deux fichiers
-//! et dans `COOKBOOK.md` ; aucune n'est reconstituée.
+//! et dans `COOKBOOK.md`, ou de relevés faits sur les gabarits et calculateurs des
+//! prestataires, cités en commentaire là où ils servent ; aucune n'est reconstituée.
+//! Hors tranche connue, on refuse plutôt que d'extrapoler.
 
 /// Épaisseur du dos. Trois formes, parce que les prestataires en publient trois.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -18,8 +20,8 @@ pub enum Dos {
     /// BoD et KDP : `pages × épaisseur + constante` mm. La constante vaut 0 chez KDP,
     /// qui ne compte pas l'épaisseur de la couverture.
     Multiplie { par: f64, plus: f64 },
-    /// CoolLibri, TheBookEdition, Bookvault : aucune formule publiable (la « main »
-    /// des papiers manque). Le dos se relève sur leur gabarit, il ne se calcule pas.
+    /// CoolLibri : aucune formule publiable (la « main » des papiers manque). Le dos
+    /// se relève sur leur gabarit, il ne se calcule pas.
     Mesure,
 }
 
@@ -147,6 +149,67 @@ const PAPIER_MESURE: &[Papier] = &[Papier {
     dos: Dos::Mesure,
 }];
 
+// TheBookEdition : 0,060 mm par page, **quel que soit le papier et quel que soit le
+// format**. Ce n'est pas une simplification de notre part — c'est ce que produit leur
+// générateur de gabarit (POST sur /fr/module/bookscover/simulationcover, relevé le
+// 20/08/2026). Mesuré sur la largeur des gabarits JPEG 300 dpi qu'il renvoie :
+// 40 p → 232,41 mm, 100 p → 235,97, 280 p → 246,80, 500 p → 260,01, 750 p → 275,00,
+// soit 2 × 110 + 2 × 5 de fond perdu + pages × 0,060 au format Poche. Les mêmes
+// paginations sur le papier 120 g, et sur les formats 12x18, 14,8x21 et 21x29,7,
+// donnent le même dos à moins de 0,04 mm — l'écart résiduel est l'arrondi au pixel.
+const PAPIERS_TBE: &[Papier] = &[
+    Papier {
+        cle: "munken-80",
+        libelle: "Munken 80 g",
+        dos: Dos::Multiplie {
+            par: 0.060,
+            plus: 0.0,
+        },
+    },
+    Papier {
+        cle: "120",
+        libelle: "Papier 120 g",
+        dos: Dos::Multiplie {
+            par: 0.060,
+            plus: 0.0,
+        },
+    },
+];
+
+// Bookvault : dos = pages × épaisseur, sans terme additif. Relevé à leur calculateur
+// public (tools.bookvault.app/sizingcalculator) le 20/08/2026, reliure « Perfect
+// Bound ». Le 70 g crème est linéaire à la décimale près sur sept paginations
+// (40 p → 2,2 mm ; 100 → 5,6 ; 200 → 11,2 ; 280 → 15,7 ; 400 → 22,4 ; 560 → 31,4 ;
+// 800 → 44,8) ; les deux autres papiers sont confirmés sur trois paginations chacun.
+// Leur guide PDF cite 5,6 mm pour 100 pages de 80 g bond là où le calculateur en
+// rend 5,5 : le calculateur fait foi, c'est lui qui produit les gabarits.
+const PAPIERS_BOOKVAULT: &[Papier] = &[
+    Papier {
+        cle: "creme-70",
+        libelle: "Crème 70 g",
+        dos: Dos::Multiplie {
+            par: 0.056,
+            plus: 0.0,
+        },
+    },
+    Papier {
+        cle: "bond-80",
+        libelle: "Bond blanc 80 g",
+        dos: Dos::Multiplie {
+            par: 0.055,
+            plus: 0.0,
+        },
+    },
+    Papier {
+        cle: "creme-premium-80",
+        libelle: "Crème premium 80 g",
+        dos: Dos::Multiplie {
+            par: 0.072,
+            plus: 0.0,
+        },
+    },
+];
+
 // Gouttières KDP : le plus grand des deux gabarits publiés — les 19,05 mm du modèle
 // de manuscrit, sauf au-delà de 700 pages où le minimum de la tranche (0,875 po) passe
 // devant. Identiques aux trois formats de rognage.
@@ -156,6 +219,19 @@ const GOUTTIERES_KDP: &[Tranche] = &[(24, 700, 19.05), (701, 828, 22.23)];
 // variation selon la pagination (FAQ : « 2 cm de marges tout autour »). Tranche unique,
 // bornée par les paginations admises en dos carré collé.
 const GOUTTIERES_COOLLIBRI: &[Tranche] = &[(60, 700, 20.0)];
+
+// TheBookEdition, page « Réussir la mise en page » : 1,25 cm de marge sur les quatre
+// côtés pour les formats jusqu'à l'A5, plus 0,5 cm de reliure — d'où 17,5 mm de
+// gouttière. Aucune variation selon la pagination n'est publiée : tranche unique,
+// bornée par les 40 à 750 pages que leur dos carré collé admet.
+const GOUTTIERES_TBE: &[Tranche] = &[(40, 750, 17.5)];
+
+// Bookvault, guide « Your Guide to Supplying Print-Ready PDF Files » (help.bookvault.app),
+// page 2 : « Allow a safety margin of 20mm on the gutter ». C'est la seule marge que
+// Bookvault impose ; les trois autres restent un choix typographique, repris ci-dessous
+// du format déjà en table le plus proche. Le calculateur refuse en dessous de 24 pages
+// (« It needs to be at least 1.3mm (24 pages) ») et accepte encore 1000 pages.
+const GOUTTIERES_BOOKVAULT: &[Tranche] = &[(24, 1000, 20.0)];
 
 pub const PROVIDERS: &[Provider] = &[
     Provider {
@@ -288,6 +364,113 @@ pub const PROVIDERS: &[Provider] = &[
         pages_max: 700,
         papiers: PAPIER_MESURE,
     },
+    // TheBookEdition — trois des neuf formats admis en dos carré collé, ceux qui
+    // servent au roman. Fond perdu de 5 mm : leur générateur rend une planche haute
+    // de la hauteur du livre + 10 mm, sur les cinq formats mesurés. Marges du guide
+    // de mise en page (12,5 mm, plus 5 mm de reliure).
+    Provider {
+        cle: "tbe-110x170",
+        libelle: "TheBookEdition — Poche 11 × 17",
+        format: (110.0, 170.0),
+        marge_haut: 12.5,
+        marge_bas: 12.5,
+        exterieur: 12.5,
+        gouttieres: GOUTTIERES_TBE,
+        corps_pt: 9.5,
+        interligne: 1.42,
+        folio_pt: 8.0,
+        fond_perdu: Some(5.0),
+        pages_min: 40,
+        pages_max: 750,
+        papiers: PAPIERS_TBE,
+    },
+    Provider {
+        cle: "tbe-120x180",
+        libelle: "TheBookEdition — Manga 12 × 18",
+        format: (120.0, 180.0),
+        marge_haut: 12.5,
+        marge_bas: 12.5,
+        exterieur: 12.5,
+        gouttieres: GOUTTIERES_TBE,
+        corps_pt: 9.5,
+        interligne: 1.42,
+        folio_pt: 8.0,
+        fond_perdu: Some(5.0),
+        pages_min: 40,
+        pages_max: 750,
+        papiers: PAPIERS_TBE,
+    },
+    Provider {
+        // 148,5 et non 148 : c'est la largeur que déclare leur table des formats,
+        // et c'est elle qui dimensionne le gabarit de couverture.
+        cle: "tbe-1485x210",
+        libelle: "TheBookEdition — A5 14,8 × 21",
+        format: (148.5, 210.0),
+        marge_haut: 12.5,
+        marge_bas: 12.5,
+        exterieur: 12.5,
+        gouttieres: GOUTTIERES_TBE,
+        corps_pt: 9.5,
+        interligne: 1.42,
+        folio_pt: 8.0,
+        fond_perdu: Some(5.0),
+        pages_min: 40,
+        pages_max: 750,
+        papiers: PAPIERS_TBE,
+    },
+    // Bookvault — trois des onze formats de leur calculateur. Fond perdu de 3 mm, sur
+    // les quatre côtés de la planche (guide PDF, « Paperback Book - Cover Setup »).
+    Provider {
+        cle: "bookvault-127x203",
+        libelle: "Bookvault — Novel 127 × 203",
+        format: (127.0, 203.0),
+        // Format à 0,2 mm du KDP 5 × 8 déjà en table : ses marges sont reprises telles
+        // quelles, faute de valeur publiée par Bookvault hors gouttière.
+        marge_haut: 12.7,
+        marge_bas: 12.7,
+        exterieur: 12.7,
+        gouttieres: GOUTTIERES_BOOKVAULT,
+        corps_pt: 9.5,
+        interligne: 1.42,
+        folio_pt: 8.0,
+        fond_perdu: Some(3.0),
+        pages_min: 24,
+        pages_max: 1000,
+        papiers: PAPIERS_BOOKVAULT,
+    },
+    Provider {
+        cle: "bookvault-129x198",
+        libelle: "Bookvault — B Format 129 × 198",
+        marge_haut: 12.7,
+        marge_bas: 12.7,
+        exterieur: 12.7,
+        format: (129.0, 198.0),
+        gouttieres: GOUTTIERES_BOOKVAULT,
+        corps_pt: 9.5,
+        interligne: 1.42,
+        folio_pt: 8.0,
+        fond_perdu: Some(3.0),
+        pages_min: 24,
+        pages_max: 1000,
+        papiers: PAPIERS_BOOKVAULT,
+    },
+    Provider {
+        cle: "bookvault-148x210",
+        libelle: "Bookvault — A5 148 × 210",
+        format: (148.0, 210.0),
+        // Format identique au CoolLibri A5 : mêmes marges que lui.
+        marge_haut: 20.0,
+        marge_bas: 20.0,
+        exterieur: 20.0,
+        gouttieres: GOUTTIERES_BOOKVAULT,
+        corps_pt: 9.5,
+        interligne: 1.42,
+        folio_pt: 8.0,
+        fond_perdu: Some(3.0),
+        pages_min: 24,
+        pages_max: 1000,
+        papiers: PAPIERS_BOOKVAULT,
+    },
 ];
 
 pub fn provider(cle: &str) -> Option<&'static Provider> {
@@ -333,6 +516,52 @@ mod tests {
         for f in ["kdp-5x8", "kdp-55x85", "kdp-6x9"] {
             assert_eq!(p(f).gouttieres, GOUTTIERES_KDP);
         }
+    }
+
+    /// Chez TheBookEdition, le dos ne dépend que de la pagination : leur générateur rend
+    /// le même gabarit sur les deux papiers et sur les quatre formats mesurés. Faire
+    /// dépendre le dos du papier ici produirait une planche que leur gabarit refuse.
+    #[test]
+    fn dos_tbe_ancre_sur_les_gabarits_releves() {
+        let poche = p("tbe-110x170");
+        for (pages, attendu) in [(40, 2.4), (280, 16.8), (750, 45.0)] {
+            let dos = poche.papier_defaut().dos.mm(pages).unwrap();
+            assert!((dos - attendu).abs() < 0.05, "{pages} p → {dos} mm");
+        }
+        for papier in poche.papiers {
+            assert_eq!(papier.dos.mm(280), poche.papier_defaut().dos.mm(280));
+        }
+        for cle in ["tbe-120x180", "tbe-1485x210"] {
+            assert_eq!(
+                p(cle).papier_defaut().dos.mm(280),
+                poche.papier_defaut().dos.mm(280)
+            );
+        }
+    }
+
+    /// Bookvault, à l'inverse, module le dos par le papier : le crème premium fait un
+    /// livre visiblement plus épais que le bond blanc à pagination égale.
+    #[test]
+    fn dos_bookvault_ancre_sur_le_calculateur_papier_par_papier() {
+        let bv = p("bookvault-127x203");
+        for (cle, pages, attendu) in [
+            ("creme-70", 280, 15.7),
+            ("creme-70", 800, 44.8),
+            ("bond-80", 100, 5.5),
+            ("creme-premium-80", 400, 28.8),
+        ] {
+            let dos = bv.papier(cle).unwrap().dos.mm(pages).unwrap();
+            assert!((dos - attendu).abs() < 0.05, "{cle} à {pages} p → {dos} mm");
+        }
+    }
+
+    /// Le fond perdu est ce qui sépare une planche imprimable d'une planche rejetée.
+    /// Chaque valeur vient du gabarit du prestataire, aucune n'est un défaut commun.
+    #[test]
+    fn le_fond_perdu_est_celui_du_gabarit_de_chaque_prestataire() {
+        assert_eq!(p("tbe-110x170").fond_perdu, Some(5.0));
+        assert_eq!(p("bookvault-127x203").fond_perdu, Some(3.0));
+        assert_eq!(p("coollibri-110x170").fond_perdu, None);
     }
 
     /// La gouttière se lit dans la tranche, elle ne s'interpole pas : une page de plus

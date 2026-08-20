@@ -149,6 +149,18 @@ const SCHEMA = [
   },
   { ...style('quatrieme.style', '4ème — style du texte', { casse: false }), face: 'quatre' },
   {
+    // Le dos n'a pas de contrôle de largeur : elle vient de la pagination. C'est le
+    // seul réglage de la maquette que l'utilisateur ne peut pas toucher, et c'est
+    // exactement ce que l'application apporte.
+    titre: 'Dos — fond',
+    face: 'planche',
+    champs: [
+      { chemin: 'dos.fond_propre', libelle: 'Fond distinct du papier', type: 'case' },
+      { chemin: 'dos.fond', libelle: 'Couleur du fond', type: 'couleur' },
+    ],
+  },
+  { ...style('dos.style', 'Dos — texte', { casse: false }), face: 'planche' },
+  {
     titre: '4ème — pied et ISBN',
     face: 'quatre',
     champs: [

@@ -14,10 +14,11 @@ const IDS = [
   'reglages',
   'inProvider', 'inPapier', 'noteFormat',
   'btComposer', 'etat', 'resultat',
+  'secPackages', 'listePrestataires', 'btPackager', 'etatPackages', 'packages',
 ];
 
 const LULU = {
-  cle: 'lulu', libelle: 'Lulu', largeur: 108, hauteur: 175, fond_perdu: 3.175,
+  cle: 'lulu', libelle: 'Lulu', largeur: 108, hauteur: 175, fond_perdu: 3.175, dos_publie: true,
   papiers: [{ cle: 'standard', libelle: 'Papier standard' }],
 };
 
@@ -69,6 +70,11 @@ function maquette(mode = 'bandeau') {
       style_pied: style('Archivo', 2.4, '#191917'), pied_y: 4,
       isbn_actif: false, isbn_l: 34, isbn_h: 21, isbn_dx: 7, isbn_dy: 7,
       cadrage: { ...CADRAGE }, voile: 'aucun', voile_opacite: 0.55,
+    },
+    dos: {
+      style: style('Archivo', 2.6, '#191917'),
+      fond_propre: false,
+      fond: '#fcf0d8',
     },
   };
 }

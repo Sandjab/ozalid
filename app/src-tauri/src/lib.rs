@@ -5,6 +5,8 @@ pub mod import;
 pub mod interieur;
 pub mod manuscrit;
 pub mod maquettes;
+pub mod package;
+pub mod planche;
 pub mod png;
 pub mod projet;
 pub mod providers;
@@ -27,7 +29,8 @@ pub fn run() {
             commands::maquette_choisir,
             commands::couverture_modifier,
             commands::couverture_apercu,
-            commands::composer
+            commands::composer,
+            commands::packager
         ])
         .run(tauri::generate_context!())
         .expect("démarrage de l'application impossible");

@@ -20,6 +20,22 @@ class El {
     this.className = '';
     this.hidden = false;
     this.disabled = false;
+    this._id = undefined;
+    this._registre = null;
+  }
+
+  /**
+   * Un élément créé à la volée devient retrouvable par son identifiant dès qu'il en
+   * reçoit un : la liste des prestataires est construite ainsi, et l'application la
+   * relit avec `getElementById`.
+   */
+  get id() {
+    return this._id;
+  }
+
+  set id(v) {
+    this._id = v;
+    if (this._registre) this._registre.set(v, this);
   }
 
   get textContent() {
@@ -126,7 +142,7 @@ async function charge({
   );
   const document = {
     getElementById: (id) => els.get(id) ?? null,
-    createElement: (tag) => new El(tag),
+    createElement: (tag) => Object.assign(new El(tag), { _registre: els }),
   };
   const contexte = {
     document,

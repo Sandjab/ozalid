@@ -13,21 +13,22 @@ const IDS = [
   'reglages',
   'inProvider', 'inPapier', 'noteFormat',
   'btComposer', 'etat', 'resultat',
+  'secPackages', 'listePrestataires', 'btPackager', 'etatPackages', 'packages',
 ];
 
 const LULU = {
   cle: 'lulu', libelle: 'Lulu — poche 108 × 175',
-  largeur: 108, hauteur: 175, fond_perdu: 3.175,
+  largeur: 108, hauteur: 175, fond_perdu: 3.175, dos_publie: true,
   papiers: [{ cle: 'standard', libelle: 'Papier standard' }],
 };
 const KDP = {
   cle: 'kdp-6x9', libelle: 'Amazon KDP — 6 × 9 po',
-  largeur: 152.4, hauteur: 228.6, fond_perdu: 3.175,
+  largeur: 152.4, hauteur: 228.6, fond_perdu: 3.175, dos_publie: true,
   papiers: [{ cle: 'creme', libelle: 'Crème' }, { cle: 'blanc', libelle: 'Blanc' }],
 };
 const COOLLIBRI = {
   cle: 'coollibri-148x210', libelle: 'CoolLibri — A5',
-  largeur: 148, hauteur: 210, fond_perdu: null,
+  largeur: 148, hauteur: 210, fond_perdu: null, dos_publie: false,
   papiers: [{ cle: 'mesure', libelle: 'Dos relevé sur le gabarit' }],
 };
 

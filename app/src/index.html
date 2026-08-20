@@ -9,7 +9,7 @@
 
 <header>
   <h1>Ozalid Studio</h1>
-  <p class="sous">Jalon 2 — projet .ozalid, import d'un livre existant, pagination</p>
+  <p class="sous">Manuscrit, intérieur, couverture, planche et packages prestataires</p>
 </header>
 
 <main>
@@ -73,6 +73,19 @@
       <span id="etat" class="etat"></span>
     </div>
     <div id="resultat" class="resultat" hidden></div>
+  </section>
+
+  <section id="secPackages" hidden>
+    <h2>Packages</h2>
+    <p class="note">Chaque prestataire coché compose son propre intérieur, donc sa propre
+      pagination, donc son propre dos et sa propre planche. Les fichiers sont écrits à côté
+      du <code>.ozalid</code>, dans un répertoire par prestataire.</p>
+    <div id="listePrestataires" class="prestataires"></div>
+    <div class="ligne">
+      <button id="btPackager" type="button">Générer les packages</button>
+      <span id="etatPackages" class="etat"></span>
+    </div>
+    <div id="packages" class="resultat" hidden></div>
   </section>
 </main>
 
