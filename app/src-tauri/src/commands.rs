@@ -402,7 +402,12 @@ pub fn couverture_apercu(
 
 /// Un prestataire coché, avec son papier et, s'il ne publie rien, ce que
 /// l'utilisateur a relevé sur son gabarit.
+///
+/// Tauri met les *arguments* de commande en snake_case, jamais les champs d'une
+/// struct : `Choix` voyage dans un tableau, il porte donc les noms que l'interface
+/// écrit, comme tout ce qu'elle envoie.
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Choix {
     pub provider_cle: String,
     pub papier_cle: Option<String>,
@@ -597,5 +602,36 @@ fn nom_sidecar() -> &'static str {
         "typst.exe"
     } else {
         "typst"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// L'interface envoie les prestataires cochés dans un tableau, et Tauri ne
+    /// renomme que les arguments d'une commande : si `Choix` cessait de lire les
+    /// noms écrits par `choixPrestataires()`, la génération échouerait avant même
+    /// d'atteindre le premier prestataire.
+    #[test]
+    fn les_choix_de_l_interface_se_lisent() {
+        let json = r#"[{
+            "providerCle": "lulu",
+            "papierCle": "standard",
+            "dosMm": null,
+            "fondPerduMm": null
+        }, {
+            "providerCle": "coollibri-148x210",
+            "papierCle": "mesure",
+            "dosMm": 18.4,
+            "fondPerduMm": 4
+        }]"#;
+        let choix: Vec<Choix> = serde_json::from_str(json).unwrap();
+        assert_eq!(choix[0].provider_cle, "lulu");
+        assert_eq!(choix[0].papier_cle.as_deref(), Some("standard"));
+        assert_eq!(choix[0].dos_mm, None);
+        assert_eq!(choix[1].provider_cle, "coollibri-148x210");
+        assert_eq!(choix[1].dos_mm, Some(18.4));
+        assert_eq!(choix[1].fond_perdu_mm, Some(4.0));
     }
 }
