@@ -247,3 +247,29 @@ test('changer de prestataire périme le dos de l\'aperçu', async () => {
     'dos de Lulu réutilisé pour KDP'
   );
 });
+
+/**
+ * Même raison, autre cause : la police repagine le livre. Un dos calculé en Alegreya
+ * n'est plus le dos du livre dès qu'on le compose en Cardo, et le laisser sur la
+ * planche donnerait un chiffre faux — ce qui vaut moins que pas de chiffre.
+ */
+test('un dos calculé pour une autre police ne vaut plus rien', async () => {
+  const { els, appels } = await ouvre([LULU], {
+    projet_ouvrir: { ...PROJET, couverture: {} },
+    composer: COMPOSITION,
+    interieur_modifier: (args) => ({ ...PROJET, couverture: {}, interieur: args.interieur }),
+  });
+  await els.get('btComposer').declenche('click');
+  await els.get('faces').children[2].declenche('click');
+  await attendreApercu();
+  assert.strictEqual(appels.filter(([c]) => c === 'couverture_apercu').pop()[1].dosMm, 17.427);
+
+  els.get('inPoliceInterieur').value = 'Cardo';
+  await els.get('inPoliceInterieur').declenche('change');
+  await attendreApercu();
+  assert.strictEqual(
+    appels.filter(([c]) => c === 'couverture_apercu').pop()[1].dosMm,
+    null,
+    'dos d\'Alegreya réutilisé pour Cardo'
+  );
+});

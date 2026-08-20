@@ -19,7 +19,8 @@ let polices = [];
 let face = 'une';
 let attenteApercu = null;
 /**
- * Dos de la dernière composition, en mm, et le prestataire pour lequel il vaut.
+ * Dos de la dernière composition, en mm, avec le prestataire et la police pour
+ * lesquels il vaut.
  *
  * Il n'est jamais saisi : il vient de la pagination mesurée par Typst. C'est ce qui
  * permet à l'aperçu de planche d'être juste, et ce qui le fait refuser de s'afficher
@@ -287,9 +288,13 @@ function demanderApercu() {
 }
 
 /** Dos à passer à l'aperçu : celui de la composition, et seulement s'il vaut pour le
- * prestataire affiché. Changer de gabarit le périme aussitôt. */
+ * prestataire et la police affichés. Changer de gabarit le périme aussitôt, et changer
+ * de police aussi : elle repagine le livre, donc déplace le dos. */
 function dosCourant() {
-  return dosCompose?.provider === $('inProvider').value ? dosCompose.mm : null;
+  return dosCompose?.provider === $('inProvider').value
+    && dosCompose?.police === $('inPoliceInterieur').value
+    ? dosCompose.mm
+    : null;
 }
 
 async function rendreApercu() {
@@ -373,7 +378,11 @@ async function composer() {
     afficher(c);
     // Le dos sort de la pagination qu'on vient de mesurer : l'aperçu de planche s'en
     // sert tel quel, sans que personne ne le retape.
-    dosCompose = c.dos === null ? null : { provider: $('inProvider').value, mm: c.dos };
+    dosCompose = c.dos === null ? null : {
+      provider: $('inProvider').value,
+      police: $('inPoliceInterieur').value,
+      mm: c.dos,
+    };
     if (face === 'planche') demanderApercu();
     $('etat').textContent = '';
   } catch (e) {
