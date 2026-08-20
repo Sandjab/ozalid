@@ -135,6 +135,48 @@ jobs:
         working-directory: app/src-tauri
         run: tauri build --bundles nsis
 
+      # Un installeur qui s'installe n'est pas un installeur qui compose : commands.rs
+      # cherche le sidecar à côté de l'exécutable et les polices dans son sous-dossier
+      # `fonts`, mais rien ne garantit encore que le NSIS les y pose vraiment. On installe
+      # en silencieux et on inspecte l'arborescence réelle plutôt que de la supposer.
+      - name: Vérifier l'installation silencieuse
+        run: |
+          exe=$(find app/src-tauri/target/release/bundle/nsis -name "*-setup.exe" | head -1)
+          [ -n "$exe" ] || { echo "aucun installeur trouvé sous app/src-tauri/target/release/bundle/nsis" >&2; exit 1; }
+
+          "$exe" /S
+          # NSIS rend la main avant la fin de la copie des fichiers.
+          sleep 20
+
+          # Le mode NSIS de Tauri installe par utilisateur (%LOCALAPPDATA%) ou par machine
+          # (%PROGRAMFILES%) selon la configuration : on cherche aux deux emplacements
+          # plutôt que d'en privilégier un.
+          trouve=$(find "$LOCALAPPDATA" "$PROGRAMFILES" -maxdepth 3 -iname "Ozalid Studio.exe" 2>/dev/null | head -1)
+          if [ -z "$trouve" ]; then
+            echo "exécutable « Ozalid Studio.exe » introuvable sous $LOCALAPPDATA ni $PROGRAMFILES" >&2
+            echo "contenu de $LOCALAPPDATA :" >&2
+            find "$LOCALAPPDATA" -maxdepth 3 >&2 2>/dev/null
+            echo "contenu de $PROGRAMFILES :" >&2
+            find "$PROGRAMFILES" -maxdepth 3 >&2 2>/dev/null
+            exit 1
+          fi
+
+          racine=$(dirname "$trouve")
+          echo "racine d'installation détectée : $racine"
+          find "$racine" -maxdepth 2
+
+          if [ ! -f "$racine/typst.exe" ]; then
+            echo "typst.exe absent de $racine : commands.rs::binaire_typst() le cherche à côté de l'exécutable, l'installeur ne l'y a pas posé." >&2
+            exit 1
+          fi
+
+          if ! ls "$racine/fonts/"*.ttf >/dev/null 2>&1; then
+            echo "aucun .ttf dans $racine/fonts : commands.rs::typst() n'y trouvera pas de polices, l'installeur ne les a pas embarquées." >&2
+            exit 1
+          fi
+
+          echo "sidecar et polices trouvés à leur emplacement attendu"
+
       - name: Release draft
         env:
           GH_TOKEN: ${{ github.token }}
