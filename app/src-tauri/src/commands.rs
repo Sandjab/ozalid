@@ -9,8 +9,9 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::couverture::{self, Couverture, Ressource};
+use crate::epreuve;
 use crate::import;
-use crate::interieur::{self, Reglage};
+use crate::interieur::{self, Interieur, Reglage};
 use crate::manuscrit;
 use crate::maquettes;
 use crate::package;
@@ -86,6 +87,7 @@ pub struct ProjetVue {
     pub couverture: Option<Couverture>,
     pub couverture_importee: bool,
     pub images: Vec<String>,
+    pub interieur: Interieur,
 }
 
 #[derive(Serialize)]
@@ -167,6 +169,23 @@ pub fn livre_modifier(livre: Livre, atelier: State<Atelier>) -> Result<ProjetVue
     vue(o)
 }
 
+#[tauri::command]
+pub fn polices_texte_liste() -> Vec<&'static str> {
+    interieur::POLICES_TEXTE.to_vec()
+}
+
+#[tauri::command]
+pub fn interieur_modifier(
+    interieur: Interieur,
+    atelier: State<Atelier>,
+) -> Result<ProjetVue, String> {
+    interieur.verifie()?;
+    let mut garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_mut().ok_or_else(aucun_projet)?;
+    o.projet.meta.interieur = interieur;
+    vue(o)
+}
+
 /// Compose l'intérieur du projet ouvert et rend le compte de pages avec le dos qui
 /// en découle.
 #[tauri::command]
@@ -232,6 +251,32 @@ pub fn composer(
         dos: papier.dos.mm(r.pages),
         pdf: pdf.to_string_lossy().into_owned(),
     })
+}
+
+/// Tire l'épreuve de relecture à la racine des sorties : elle ne vise aucun éditeur,
+/// elle ne descend donc pas dans un répertoire de prestataire.
+#[tauri::command]
+pub fn epreuve_tirer(corps_pt: f64, atelier: State<Atelier>) -> Result<String, String> {
+    let garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_ref().ok_or_else(aucun_projet)?;
+    let livre = &o.projet.meta.livre;
+    let int = &o.projet.meta.interieur;
+    // `epreuve::source` interpole la police sans échappement : la validation est ici.
+    int.verifie()?;
+    let chapitres = manuscrit::decoupe(&o.projet.texte, livre.chapitres)?;
+
+    let dossier = sorties_racine(o)?;
+    std::fs::create_dir_all(&dossier).map_err(|e| {
+        format!(
+            "répertoire de sortie inutilisable ({}) : {e}",
+            dossier.display()
+        )
+    })?;
+    let src = dossier.join("epreuve.typ");
+    ecrire(&src, &epreuve::source(livre, int, &chapitres, corps_pt))?;
+    let pdf = dossier.join("epreuve.pdf");
+    typst()?.compile(&src, &pdf)?;
+    Ok(pdf.to_string_lossy().into_owned())
 }
 
 /* ---------- couverture ---------- */
@@ -448,10 +493,11 @@ fn ecrire_images(
     package::ecrire_images(projet, dossier)
 }
 
-/// Répertoire des sorties d'un prestataire : à côté du `.ozalid`, jamais dedans.
-/// Un projet non enregistré n'a donc pas d'endroit où écrire — c'est voulu, sinon les
-/// sorties atterriraient dans un répertoire temporaire que personne ne retrouve.
-fn sorties_dossier(o: &Ouvert, provider: &str) -> Result<PathBuf, String> {
+/// Racine des sorties : un répertoire du nom du projet, à côté du `.ozalid`, jamais
+/// dedans. Un projet non enregistré n'a donc pas d'endroit où écrire — c'est voulu,
+/// sinon les sorties atterriraient dans un répertoire temporaire que personne ne
+/// retrouve. L'épreuve s'y range directement : elle ne vise aucun éditeur.
+fn sorties_racine(o: &Ouvert) -> Result<PathBuf, String> {
     let chemin = o.chemin.as_ref().ok_or_else(|| {
         "enregistrer le projet avant de composer : les sorties se rangent à côté du \
          fichier .ozalid."
@@ -462,7 +508,12 @@ fn sorties_dossier(o: &Ouvert, provider: &str) -> Result<PathBuf, String> {
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| "projet".into());
-    Ok(parent.join(nom).join(provider))
+    Ok(parent.join(nom))
+}
+
+/// Sorties d'un prestataire : un répertoire par prestataire, sous la racine.
+fn sorties_dossier(o: &Ouvert, provider: &str) -> Result<PathBuf, String> {
+    Ok(sorties_racine(o)?.join(provider))
 }
 
 fn poser(
@@ -490,6 +541,7 @@ fn vue(o: &Ouvert) -> Result<ProjetVue, String> {
         couverture: o.projet.meta.couverture.maquette.clone(),
         couverture_importee: o.projet.meta.couverture.maquette.is_some(),
         images: o.projet.images.keys().cloned().collect(),
+        interieur: o.projet.meta.interieur.clone(),
     })
 }
 

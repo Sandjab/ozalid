@@ -17,6 +17,8 @@ const IDS = [
   'inProvider', 'inPapier', 'noteFormat',
   'btComposer', 'etat', 'resultat',
   'secPackages', 'listePrestataires', 'btPackager', 'etatPackages', 'packages',
+  'secInterieur', 'inPoliceInterieur',
+  'secEpreuve', 'inEpreuveCorps', 'btEpreuve', 'etatEpreuve', 'cheminEpreuve',
 ];
 
 const LULU = {
@@ -47,6 +49,7 @@ const PROJET = {
   couverture: null,
   couverture_importee: false,
   images: ['couverture.jpg'],
+  interieur: { police: 'Alegreya' },
 };
 
 const COMPOSITION = {
@@ -81,6 +84,7 @@ async function ouvre(providers, sur = {}) {
     }
     if (cmd === 'providers_liste') return providers;
     if (cmd === 'polices_liste') return ['Archivo', 'Spectral'];
+    if (cmd === 'polices_texte_liste') return ['EB Garamond', 'Alegreya', 'Cardo'];
     if (cmd === 'maquettes_liste') return [{ cle: 'folio', libelle: 'Folio' }];
     if (cmd === 'projet_ouvrir') return PROJET;
     if (cmd === 'couverture_apercu') return 'data:image/png;base64,QUJD';

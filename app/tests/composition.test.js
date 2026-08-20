@@ -14,6 +14,8 @@ const IDS = [
   'inProvider', 'inPapier', 'noteFormat',
   'btComposer', 'etat', 'resultat',
   'secPackages', 'listePrestataires', 'btPackager', 'etatPackages', 'packages',
+  'secInterieur', 'inPoliceInterieur',
+  'secEpreuve', 'inEpreuveCorps', 'btEpreuve', 'etatEpreuve', 'cheminEpreuve',
 ];
 
 const LULU = {
@@ -44,6 +46,7 @@ const PROJET = {
   mots: 49344,
   couverture_importee: true,
   images: ['couverture.jpg'],
+  interieur: { police: 'Alegreya' },
 };
 
 /** Fausse implémentation des commandes Rust. `sur` surcharge une commande. */
@@ -51,6 +54,7 @@ function faux(providers, sur = {}) {
   return async (cmd, args) => {
     if (cmd === 'providers_liste') return providers;
     if (cmd === 'polices_liste') return ['Bodoni Moda', 'Archivo', 'Spectral'];
+    if (cmd === 'polices_texte_liste') return ['EB Garamond', 'Alegreya', 'Cardo'];
     if (cmd === 'maquettes_liste') {
       return [{ cle: 'folio', libelle: 'Folio' }, { cle: 'blanche', libelle: 'Blanche' }];
     }

@@ -15,6 +15,8 @@ const IDS = [
   'inProvider', 'inPapier', 'noteFormat',
   'btComposer', 'etat', 'resultat',
   'secPackages', 'listePrestataires', 'btPackager', 'etatPackages', 'packages',
+  'secInterieur', 'inPoliceInterieur',
+  'secEpreuve', 'inEpreuveCorps', 'btEpreuve', 'etatEpreuve', 'cheminEpreuve',
 ];
 
 const LULU = {
@@ -101,6 +103,7 @@ function projet(couverture) {
     couverture,
     couverture_importee: !!couverture,
     images: ['couverture.jpg'],
+    interieur: { police: 'Alegreya' },
   };
 }
 
@@ -114,6 +117,7 @@ async function ouvre(couverture, sur = {}) {
     if (cmd in sur) return sur[cmd](args);
     if (cmd === 'providers_liste') return [LULU];
     if (cmd === 'polices_liste') return ['Archivo', 'Spectral', 'Bodoni Moda'];
+    if (cmd === 'polices_texte_liste') return ['EB Garamond', 'Alegreya', 'Cardo'];
     if (cmd === 'maquettes_liste') {
       return [
         { cle: 'folio', libelle: 'Folio' },

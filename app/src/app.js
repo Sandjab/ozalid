@@ -38,6 +38,9 @@ async function chargerProviders() {
   for (const p of providers) $('inProvider').append(new Option(p.libelle, p.cle));
   majPapiers();
   polices = await invoke('polices_liste');
+  for (const p of await invoke('polices_texte_liste')) {
+    $('inPoliceInterieur').append(new Option(p, p));
+  }
   for (const m of await invoke('maquettes_liste')) {
     const b = h('button', m.libelle);
     b.type = 'button';
@@ -72,7 +75,8 @@ function afficherProjet(p) {
   projet = p;
   $('cheminProjet').textContent = p.chemin ?? 'projet non enregistré';
   $('btEnregistrer').disabled = false;
-  for (const s of ['secLivre', 'secManuscrit', 'secCouverture', 'secComposer', 'secPackages']) {
+  for (const s of ['secLivre', 'secManuscrit', 'secInterieur', 'secCouverture',
+                   'secComposer', 'secPackages', 'secEpreuve']) {
     $(s).hidden = false;
   }
 
@@ -82,6 +86,7 @@ function afficherProjet(p) {
   $('inGenre').value = p.livre.genre;
   $('inCopyright').value = p.livre.copyright;
   $('inChapitres').value = p.livre.chapitres ?? '';
+  $('inPoliceInterieur').value = p.interieur.police;
 
   const attendu = p.livre.chapitres;
   const ecart = attendu !== null && attendu !== undefined && attendu !== p.chapitres_trouves;
@@ -180,6 +185,14 @@ async function choisirManuscrit() {
   if (!choix) return;
   await tente(async () =>
     afficherProjet(await invoke('manuscrit_choisir', { chemin: choix })));
+}
+
+/* ---------- intérieur ---------- */
+
+async function majInterieur() {
+  await tente(async () => afficherProjet(await invoke('interieur_modifier', {
+    interieur: { police: $('inPoliceInterieur').value },
+  })));
 }
 
 /* ---------- couverture ---------- */
@@ -480,6 +493,27 @@ async function packager() {
   }
 }
 
+/* ---------- épreuve ---------- */
+
+async function epreuve() {
+  const bt = $('btEpreuve');
+  bt.disabled = true;
+  $('cheminEpreuve').textContent = '';
+  $('etatEpreuve').className = 'etat';
+  $('etatEpreuve').textContent = 'composition…';
+  try {
+    $('cheminEpreuve').textContent = await invoke('epreuve_tirer', {
+      corpsPt: Number($('inEpreuveCorps').value),
+    });
+    $('etatEpreuve').textContent = '';
+  } catch (e) {
+    $('etatEpreuve').textContent = String(e);
+    $('etatEpreuve').className = 'etat erreur';
+  } finally {
+    bt.disabled = false;
+  }
+}
+
 $('btOuvrir').addEventListener('click', ouvrir);
 $('btImporter').addEventListener('click', importer);
 $('btEnregistrer').addEventListener('click', enregistrer);
@@ -487,6 +521,8 @@ $('btReimporter').addEventListener('click', reimporter);
 $('btChoisirManuscrit').addEventListener('click', choisirManuscrit);
 $('btComposer').addEventListener('click', composer);
 $('btPackager').addEventListener('click', packager);
+$('btEpreuve').addEventListener('click', epreuve);
+$('inPoliceInterieur').addEventListener('change', majInterieur);
 $('inProvider').addEventListener('change', () => {
   majPapiers();
   // Le format vient du prestataire : l'aperçu change avec lui, même si aucun réglage
