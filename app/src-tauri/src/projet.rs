@@ -93,6 +93,8 @@ pub struct Metadonnees {
     pub manuscrit: Manuscrit,
     #[serde(default)]
     pub couverture: Couverture,
+    #[serde(default)]
+    pub interieur: crate::interieur::Interieur,
 }
 
 /// Un projet ouvert : les métadonnées, le texte du manuscrit, les images.
@@ -112,6 +114,7 @@ impl Projet {
                 livre,
                 manuscrit: Manuscrit::default(),
                 couverture: Couverture::default(),
+                interieur: crate::interieur::Interieur::default(),
             },
             texte,
             images: BTreeMap::new(),
@@ -273,6 +276,22 @@ mod tests {
         assert!(m.cadre.actif);
         assert_eq!(m.cadre.filet2_couleur, "#c00000");
         assert_eq!(m.pastille.texte, "collection « Ozalid »");
+    }
+
+    /// Un `.ozalid` écrit avant que la police ne soit réglable doit s'ouvrir, pas être
+    /// refusé — même principe que le dos rendu réglable élément par élément.
+    #[test]
+    fn un_projet_sans_section_interieur_prend_la_police_par_defaut() {
+        let toml = r#"
+[ozalid]
+version = 1
+
+[livre]
+titre = "Les Heures creuses"
+auteur = "Ivan Pjig"
+"#;
+        let m: Metadonnees = toml::from_str(toml).expect("projet sans [interieur] refusé");
+        assert_eq!(m.interieur.police, "EB Garamond");
     }
 
     #[test]

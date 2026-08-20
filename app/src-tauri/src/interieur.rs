@@ -8,10 +8,69 @@
 //! Le compte de pages produit ici est celui que consomme la couverture pour calculer
 //! le dos. Il ne transite par aucune saisie humaine : c'est la raison d'être de l'app.
 
+use serde::{Deserialize, Serialize};
+
 use crate::manuscrit::{echappe, inline, Chapitre};
 use crate::projet::Livre;
 use crate::providers::Provider;
 use crate::typst::MARQUEUR;
+
+/// Les polices que l'intérieur admet.
+///
+/// Volontairement plus courte que `couverture::POLICES` : ce sont les seules qui
+/// tiennent trois cents pages de corps de texte, chacune avec un vrai italique. Un
+/// titrage comme Oswald ferait un roman illisible, et l'erreur ne se découvrirait
+/// qu'après tirage.
+pub const POLICES_TEXTE: &[&str] = &[
+    "EB Garamond",
+    "Crimson Pro",
+    "Alegreya",
+    "Cardo",
+    "Vollkorn",
+    "Spectral",
+    "Libre Baskerville",
+];
+
+fn police_defaut() -> String {
+    "EB Garamond".into()
+}
+
+/// Réglages d'intérieur du projet.
+///
+/// Le prestataire impose le format, les marges, la gouttière et le corps ; le livre
+/// choisit son caractère. C'est la raison pour laquelle la police n'est pas un champ
+/// de `Provider`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Interieur {
+    #[serde(default = "police_defaut")]
+    pub police: String,
+}
+
+impl Default for Interieur {
+    fn default() -> Self {
+        Self {
+            police: police_defaut(),
+        }
+    }
+}
+
+impl Interieur {
+    /// Refuse une police absente de la liste.
+    ///
+    /// Sans ce contrôle, Typst composerait dans sa police par défaut **sans lever
+    /// d'erreur** : `--ignore-system-fonts` empêche une substitution par le système,
+    /// pas une substitution par le défaut du binaire.
+    pub fn verifie(&self) -> Result<(), String> {
+        if POLICES_TEXTE.contains(&self.police.as_str()) {
+            return Ok(());
+        }
+        Err(format!(
+            "police d'intérieur inconnue : « {} ». Attendu : {}.",
+            self.police,
+            POLICES_TEXTE.join(", ")
+        ))
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Reglage {
@@ -333,6 +392,38 @@ mod tests {
         );
         assert!(s.contains(r"Les Heures \ creuses"), "saut de ligne perdu");
         assert!(s.contains(r"Ivan \#Pjig"), "auteur non échappé");
+    }
+
+    /// Une police que Typst ne connaît pas ne lève aucune erreur à la composition : il
+    /// compose dans sa police par défaut, en silence. C'est ainsi que l'intérieur est
+    /// resté en Libertinus Serif pendant quatre jalons. Le refus est donc ici, en
+    /// amont, ou il n'est nulle part.
+    #[test]
+    fn une_police_hors_liste_est_refusee_et_non_substituee() {
+        let i = Interieur {
+            police: "Comic Sans MS".into(),
+        };
+        let e = i.verifie().unwrap_err();
+        assert!(
+            e.contains("Comic Sans MS"),
+            "l'erreur ne nomme pas la police : {e}"
+        );
+        assert!(
+            e.contains("EB Garamond"),
+            "l'erreur ne dit pas ce qui est attendu : {e}"
+        );
+    }
+
+    /// Les sept polices offertes doivent toutes passer : une liste qui contient une
+    /// entrée que la validation refuse est une porte fermée sur elle-même.
+    #[test]
+    fn les_polices_offertes_sont_toutes_acceptees() {
+        for p in POLICES_TEXTE {
+            let i = Interieur {
+                police: (*p).into(),
+            };
+            assert!(i.verifie().is_ok(), "{p} offerte mais refusée");
+        }
     }
 
     /// Le premier chapitre suit déjà le saut de page du copyright : un saut de plus
