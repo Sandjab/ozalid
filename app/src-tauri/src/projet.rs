@@ -243,10 +243,15 @@ mod tests {
     /// Le `.ozalid` est le document de l'utilisateur : ce qui y entre doit en ressortir
     /// identique, sauts de ligne du titre et réglages de couverture compris. Une perte
     /// silencieuse ici, c'est une maquette à refaire.
+    ///
+    /// La police posée est volontairement `Cardo`, pas `EB Garamond` : avec le défaut,
+    /// le test passerait même si la police n'était jamais écrite dans l'archive, la
+    /// relecture la reconstruisant de toute façon par `#[serde(default)]`.
     #[test]
     fn un_projet_complet_survit_a_l_aller_retour() {
         let mut p = Projet::nouveau(livre(), "## 01 - Un\n\nTexte.\n".into());
         p.meta.manuscrit.source = Some("/travail/roman.md".into());
+        p.meta.interieur.police = "Cardo".into();
         let mut maquette = crate::maquettes::blanche();
         maquette.pad_x = 16.5;
         maquette.titre.taille = 9.25;
@@ -263,6 +268,7 @@ mod tests {
             r.meta.manuscrit.source.as_deref(),
             Some("/travail/roman.md")
         );
+        assert_eq!(r.meta.interieur.police, "Cardo");
         assert_eq!(r.texte, p.texte);
         assert_eq!(r.images["couverture.jpg"], vec![0xFF, 0xD8, 0xFF]);
 
