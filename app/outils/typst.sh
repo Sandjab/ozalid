@@ -70,7 +70,13 @@ else
   case "$TRIPLE" in
     *windows*)
       curl -fL "$BASE/typst-${TRIPLE}.zip" -o "$TMP/t.zip"
-      unzip -q "$TMP/t.zip" -d "$TMP"
+      # `unzip` n'est pas garanti dans Git Bash, où ce script tourne sur les runners
+      # Windows ; le `tar` de Windows 10 et au-delà ouvre un zip.
+      if command -v unzip >/dev/null 2>&1; then
+        unzip -q "$TMP/t.zip" -d "$TMP"
+      else
+        tar -xf "$TMP/t.zip" -C "$TMP"
+      fi
       ;;
     *)
       curl -fL "$BASE/typst-${TRIPLE}.tar.xz" -o "$TMP/t.tar.xz"
