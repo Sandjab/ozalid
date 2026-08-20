@@ -71,6 +71,8 @@ python3 outils/roman_pdf.py build/mon-roman 12 -t 10
 
 Génère un PDF de lecture au format poche (fpdf2) depuis le manuscrit et la couverture désignés par `livre.toml` : couverture + les 12 premiers chapitres. Sortie : `build/mon-roman/out/roman.pdf` — l'épreuve ne vise aucun éditeur, elle reste à la racine de `out/` ; `-t` règle le corps du texte en points.
 
+Celle-ci sert à **faire lire** : format poche, couverture pleine page, les premiers chapitres. À ne pas confondre avec l'épreuve de relecture d'Ozalid Studio, qui est un autre document et ne la remplace pas : A4, le manuscrit entier, fer à gauche, une marge de 50 mm et des numéros de ligne pour **faire corriger**. Voir `app/README.md`.
+
 ### Planche d'images
 
 ```

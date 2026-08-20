@@ -9,8 +9,8 @@ Ce qu'elle règle : le nombre de pages ne transite plus par un humain. L'intéri
 le produit, la couverture le consomme, et le dos suit le manuscrit sans ressaisie.
 
 **État : jalon 4** — projet `.ozalid`, import d'un livre existant, composition de
-l'intérieur, moteur de couverture, assemblage de la planche et packages
-multi-prestataires. Reste l'épreuve de lecture et la release Windows.
+l'intérieur, moteur de couverture, assemblage de la planche, packages
+multi-prestataires et épreuve de relecture. Reste la release Windows.
 
 ## Stack
 
@@ -23,7 +23,7 @@ multi-prestataires. Reste l'épreuve de lecture et la release Windows.
 
 ```
 app/outils/typst.sh --local     # ou sans --local pour télécharger la version épinglée
-app/outils/polices.sh           # ~6 Mo de polices OFL
+app/outils/polices.sh           # ~10 Mo de polices OFL
 cd app/src-tauri && cargo tauri dev
 ```
 
@@ -53,7 +53,8 @@ résultats. Tout le reste est testable sans fenêtre.
 | `couverture` | Maquette typée → source Typst des deux faces |
 | `maquettes` | Folio, Blanche et Surimpression |
 | `typst` | Invocation du sidecar : mesurer la pagination, compiler, rendre un aperçu |
-| `interieur` | Source Typst de l'intérieur, et convergence gouttière/parité |
+| `interieur` | Source Typst de l'intérieur, police du livre, et convergence gouttière/parité |
+| `epreuve` | Source Typst de l'épreuve de relecture : A4, numéros de ligne, marge d'annotation |
 | `planche` | Assemblage 4ème \| dos \| 1ère au gabarit, et dos composé élément par élément |
 | `package` | Un prestataire, un intérieur, une planche, dans son répertoire |
 | `commands` | Frontière avec l'interface, et projet ouvert |
@@ -67,10 +68,14 @@ les mêmes prestataires sans jamais se recouper.
 Une archive, un document :
 
 ```
-projet.toml     identité du livre, réglages de couverture, chemin source du manuscrit
+projet.toml     identité du livre, police de l'intérieur, réglages de couverture,
+                chemin source du manuscrit
 manuscrit.md
 images/         photos source de la 1ère et de la 4ème
 ```
+
+La police de l'intérieur est une section à part, `[interieur]`, qui vaut `EB Garamond`
+quand elle manque — un projet écrit avant qu'elle existe s'ouvre donc sans rien dire.
 
 Le manuscrit y est **copié**, ce qui rend le projet complet sur une autre machine.
 Corriger le fichier d'origine ne met donc pas la copie à jour : « Réimporter le
@@ -80,7 +85,9 @@ qu'une copie est périmée.
 
 Les **sorties ne sont pas dans l'archive** : elles vont à côté, dans
 `<nom-du-projet>/<prestataire>/`. Un projet non enregistré ne peut donc pas
-composer, faute d'endroit où écrire.
+composer, faute d'endroit où écrire. Seule l'épreuve de relecture reste à la racine,
+en `epreuve.pdf` : elle ne vise aucun prestataire, elle n'a rien à faire dans leurs
+répertoires.
 
 ## Vérifications
 
@@ -89,7 +96,7 @@ cd app/src-tauri && cargo test --lib && cargo clippy --all-targets && cargo fmt 
 cd app && node --test "tests/*.test.js"
 ```
 
-Et les deux exercices sur livre réel, à rejouer après toute modification de la
+Et les exercices sur livre réel, à rejouer après toute modification de la
 composition — le compte de pages est ce qu'on compare :
 
 ```
@@ -98,6 +105,7 @@ cargo run --example importer -- <livre.toml> <projet.ozalid>
 cargo run --example composer -- <projet.ozalid> lulu <sortie>
 cargo run --example maquette -- <projet.ozalid> lulu <sortie>
 cargo run --example packager -- <projet.ozalid> <sortie> lulu tbe-110x170 bookvault-127x203
+cargo run --example epreuve -- <projet.ozalid> <epreuve.pdf>
 ```
 
 `packager` traverse la chaîne entière sans interface : intérieur composé, pagination
@@ -107,6 +115,10 @@ vraiment ce que le moteur émet.
 `maquette` rend les maquettes en PNG : c'est la vérification qu'aucun test ne peut
 faire — la position du cadre, l'assiette du bloc titre, le voile. À rejouer et à
 regarder après toute modification du moteur de couverture.
+
+`epreuve` tire l'épreuve de relecture sans interface. Elle se regarde de la même
+façon : les numéros de ligne repartent-ils de 1 à chaque page, la marge d'annotation
+est-elle libre, un chapitre commence-t-il bien en tête de page.
 
 Les tests du front exécutent le vrai `src/app.js` dans un faux DOM qui lit l'état
 initial dans le vrai `src/index.html`. Ils couvrent le câblage, jamais le rendu :
@@ -120,6 +132,11 @@ tout ce qui se voit se vérifie dans l'application.
 - **Le manuscrit n'admet qu'un sous-ensemble de Markdown.** Tout le reste est
   refusé avec son numéro de ligne — un aplatissement silencieux donnerait un
   livre faux, découvert après tirage.
+- **La police de l'intérieur est un réglage du projet, et elle repagine.** Sept serifs
+  de labeur sont admis, EB Garamond par défaut ; le compte de pages, donc le dos, en
+  dépend. Une police hors liste est refusée au lieu d'être substituée : Typst, lui,
+  composerait dans sa police par défaut sans lever la moindre erreur, et le livre
+  sortirait faux en silence.
 - **Georgia et Helvetica ne sont pas reprises.** Elles appartiennent au système, ne
   sont pas redistribuables, et Helvetica n'existe pas sous Windows. Une maquette
   importée qui les utilise est refusée avec la liste des familles embarquées.

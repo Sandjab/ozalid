@@ -17,6 +17,8 @@ L'outil est né du besoin de tester des proportions concrètement plutôt que de
 
 Le livre de travail est *Au Petit Remords*, par Ivan Pjig. Ces valeurs sont les défauts des champs texte, pas des constantes.
 
+Le manuscrit de travail, lui, est *Les Heures creuses*, du même auteur : c'est sur lui que se mesure la pagination, donc toute non-régression de la composition. Un trait de ce texte est à connaître avant d'en tirer des conclusions : ses soixante-quatre `---` précèdent tous un `## `. Ce sont des filets de chapitre, pas des ruptures de scène, et le livre n'en contient aucune à l'intérieur d'un chapitre — alors que le format documenté appelle `---` un « séparateur de scène ». L'épreuve de relecture n'en composera donc aucune sur ce livre : ce n'est pas la fonctionnalité qui manque, c'est le matériel qui n'en porte pas.
+
 ---
 
 ## 2. Analyse de la Blanche, pour mémoire
@@ -45,6 +47,10 @@ C'est cette contrainte qui explique une forme du code qui paraîtrait sinon tord
 ## 4. Dette de code encore ouverte
 
 **Le positionnement vertical du bloc titre en mode `band` est bancal.** `render()` contient deux affectations successives de `block.style.top` (`index.html:1020-1021`), la seconde écrasant la première. Le résultat est correct mais le code ne l'est pas — à nettoyer.
+
+**Les ruptures de scène n'atteignent pas le livre imprimé.** Le manuscrit les note `---`. Depuis le passage aux blocs typés, `manuscrit::decoupe` les conserve et l'épreuve de relecture les compose, mais `interieur::source` les ignore encore : deux scènes séparées s'impriment collées, en alinéas consécutifs, et le blanc que l'auteur a écrit disparaît. Les rendre déplacerait le compte de pages de tous les livres déjà composés — le témoin de non-régression du projet — ce qui mérite un passage à part, mesuré. Un test, `l_interieur_compose_a_l_identique_avec_ou_sans_rupture_de_scene`, fige l'état actuel : il tombera le jour où on s'y mettra, et c'est voulu.
+
+**Un guillemet droit dans le titre casse la composition.** `manuscrit::echappe` protège le markup Typst — il fait précéder `#`, `*`, `_` et leurs semblables d'une contre-oblique — mais laisse passer le `"`. Or le titre et l'auteur arrivent aussi *à l'intérieur d'une chaîne* Typst, dans `#set document(title: "…", author: "…")` : un titre portant un guillemet droit y referme la chaîne, et le compilateur répond `expected comma`. Le saut de ligne appelle le même correctif pour une autre raison : le titre est également interpolé dans la ligne de commentaire qui ouvre la source, et ce qui suit le saut sort du commentaire et s'imprime en tête du livre. La contre-oblique, elle, est déjà sauve par accident — `echappe` la double, ce qui reste valide en chaîne. Le défaut est identique dans `interieur.rs` et dans `epreuve.rs`, donc le correctif appartient à `manuscrit.rs` : une seconde fonction, pour l'échappement de chaîne, distincte de celle qui protège le markup. Jamais rencontré parce qu'aucun titre de test n'en porte.
 
 ---
 
