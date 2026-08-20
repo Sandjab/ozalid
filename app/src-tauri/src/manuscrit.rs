@@ -9,11 +9,22 @@
 //! Ce n'est donc pas un convertisseur Markdown général. Si le besoin apparaît, la
 //! bascule vers un vrai parseur (`pulldown-cmark`) se fera derrière la même API.
 
+/// Un bloc de chapitre.
+///
+/// Une rupture de scène n'est ni un paragraphe vide ni de la mise en page : c'est une
+/// coupure que l'auteur a écrite. Elle est typée pour que chaque composition décide
+/// quoi en faire — l'épreuve la rend, l'intérieur ne la rend pas encore.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Bloc {
+    Paragraphe(String),
+    Scene,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Chapitre {
     pub numero: u32,
     pub titre: String,
-    pub paragraphes: Vec<String>,
+    pub blocs: Vec<Bloc>,
 }
 
 /// Caractères qui ouvrent une syntaxe Typst dans du texte brut. Tout ce qui vient du
@@ -116,12 +127,16 @@ pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Chapitre>, String> 
         }
         if let Some(reste) = t.strip_prefix("## ") {
             chapitres.push(entete(reste.trim(), no)?);
-        } else if t.starts_with("# ") || t == "---" || t.is_empty() {
-            // Titre du livre : le projet fait foi, pas le manuscrit. Séparateurs de
-            // scène : sans rendu propre, comme dans la chaîne actuelle.
+        } else if t == "---" {
+            // Hors chapitre, la rupture appartient aux liminaires : rien à garder.
+            if let Some(courant) = chapitres.last_mut() {
+                courant.blocs.push(Bloc::Scene);
+            }
+        } else if t.starts_with("# ") || t.is_empty() {
+            // Titre du livre : le projet fait foi, pas le manuscrit.
             continue;
         } else if let Some(courant) = chapitres.last_mut() {
-            courant.paragraphes.push(t.to_string());
+            courant.blocs.push(Bloc::Paragraphe(t.to_string()));
         } else {
             // Avant le premier « ## » : liminaires du manuscrit, composés par le projet.
             continue;
@@ -152,7 +167,7 @@ fn entete(reste: &str, no: usize) -> Result<Chapitre, String> {
     Ok(Chapitre {
         numero,
         titre: titre.to_string(),
-        paragraphes: Vec::new(),
+        blocs: Vec::new(),
     })
 }
 
@@ -170,7 +185,7 @@ mod tests {
         assert_eq!(ch.len(), 1);
         assert_eq!(ch[0].numero, 1);
         assert_eq!(ch[0].titre, "Vingt centimes");
-        assert_eq!(ch[0].paragraphes.len(), 2);
+        assert_eq!(ch[0].blocs.len(), 2);
     }
 
     #[test]
@@ -181,15 +196,23 @@ mod tests {
     }
 
     /// Le titre du livre appartient au projet, pas au manuscrit : le `#` de tête ne
-    /// doit jamais se retrouver dans le corps composé.
+    /// doit jamais se retrouver dans le corps composé. Le séparateur de scène, lui,
+    /// n'est plus silencieusement perdu : il est conservé sous forme de `Bloc::Scene`.
     #[test]
-    fn le_titre_du_livre_et_les_separateurs_ne_deviennent_pas_du_corps() {
+    fn le_titre_du_livre_ne_devient_pas_du_corps_mais_le_separateur_est_conserve() {
         let ch = decoupe(
-            "# Le Livre\n\n*Roman*\n\n---\n\n## 01 - Un\n\nTexte.\n",
+            "# Le Livre\n\n*Roman*\n\n## 01 - Un\n\nTexte.\n\n---\n\nSuite.\n",
             None,
         )
         .unwrap();
-        assert_eq!(ch[0].paragraphes, vec!["Texte."]);
+        assert_eq!(
+            ch[0].blocs,
+            vec![
+                Bloc::Paragraphe("Texte.".into()),
+                Bloc::Scene,
+                Bloc::Paragraphe("Suite.".into()),
+            ]
+        );
     }
 
     /// Le contrôle d'intégrité sert au gel : il doit échouer sur un chapitre perdu,
@@ -216,6 +239,30 @@ mod tests {
             assert!(err.contains("ligne 3"), "{md} → {err}");
             assert!(err.contains(quoi), "{md} → {err}");
         }
+    }
+
+    /// Une rupture de scène est une intention de l'auteur, pas une ligne vide. Elle est
+    /// gardée telle quelle : l'épreuve la compose, l'intérieur l'ignore encore.
+    #[test]
+    fn une_rupture_de_scene_est_gardee_comme_bloc() {
+        let ch = decoupe("## 01 - Un\n\nAvant.\n\n---\n\nAprès.\n", None).unwrap();
+        assert_eq!(
+            ch[0].blocs,
+            vec![
+                Bloc::Paragraphe("Avant.".into()),
+                Bloc::Scene,
+                Bloc::Paragraphe("Après.".into()),
+            ]
+        );
+    }
+
+    /// Un `---` avant le premier chapitre appartient aux liminaires du manuscrit, que
+    /// le projet compose lui-même : il ne doit ouvrir aucun chapitre fantôme.
+    #[test]
+    fn une_rupture_avant_le_premier_chapitre_est_ignoree() {
+        let ch = decoupe("# Le Livre\n\n---\n\n## 01 - Un\n\nTexte.\n", None).unwrap();
+        assert_eq!(ch.len(), 1);
+        assert_eq!(ch[0].blocs, vec![Bloc::Paragraphe("Texte.".into())]);
     }
 
     #[test]

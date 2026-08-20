@@ -10,7 +10,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::manuscrit::{echappe, inline, Chapitre};
+use crate::manuscrit::{echappe, inline, Bloc, Chapitre};
 use crate::projet::Livre;
 use crate::providers::Provider;
 use crate::typst::MARQUEUR;
@@ -229,7 +229,11 @@ pub fn source(
             ));
         }
         s.push_str("#v(11mm)\n");
-        for p in &ch.paragraphes {
+        // Les ruptures de scène sont ignorées ici : le livre imprimé les perd, dette
+        // consignée dans NOTES.md. Les corriger déplacerait le compte de pages de tous
+        // les livres déjà composés, ce qui mérite son propre passage.
+        for b in &ch.blocs {
+            let Bloc::Paragraphe(p) = b else { continue };
             s.push_str(&inline(p));
             s.push_str("\n\n");
         }
@@ -270,7 +274,7 @@ mod tests {
         vec![Chapitre {
             numero: 1,
             titre: "Un".into(),
-            paragraphes: vec!["Texte.".into()],
+            blocs: vec![Bloc::Paragraphe("Texte.".into())],
         }]
     }
 
@@ -463,6 +467,41 @@ mod tests {
         assert!(s.contains(r#"font: "Cardo""#), "police du projet ignorée");
     }
 
+    /// L'intérieur ignore les ruptures de scène — c'est la dette consignée dans la
+    /// spec. Le test la fige : le jour où on la corrigera, il tombera, et il faudra
+    /// alors relever le nouveau compte de pages sciemment.
+    #[test]
+    fn l_interieur_compose_a_l_identique_avec_ou_sans_rupture_de_scene() {
+        let pr = provider("lulu").unwrap();
+        let r = Reglage {
+            gouttiere: 25.0,
+            blanche: false,
+        };
+        let int = Interieur::default();
+        let sans = vec![Chapitre {
+            numero: 1,
+            titre: "Un".into(),
+            blocs: vec![
+                Bloc::Paragraphe("Avant.".into()),
+                Bloc::Paragraphe("Après.".into()),
+            ],
+        }];
+        let avec = vec![Chapitre {
+            numero: 1,
+            titre: "Un".into(),
+            blocs: vec![
+                Bloc::Paragraphe("Avant.".into()),
+                Bloc::Scene,
+                Bloc::Paragraphe("Après.".into()),
+            ],
+        }];
+        assert_eq!(
+            source(&livre(), &int, pr, &r, &sans),
+            source(&livre(), &int, pr, &r, &avec),
+            "la rupture de scène a changé l'intérieur"
+        );
+    }
+
     /// Le premier chapitre suit déjà le saut de page du copyright : un saut de plus
     /// laisserait une page blanche parasite, qui décalerait toute la pagination.
     #[test]
@@ -472,12 +511,12 @@ mod tests {
             Chapitre {
                 numero: 1,
                 titre: "Un".into(),
-                paragraphes: vec!["A.".into()],
+                blocs: vec![Bloc::Paragraphe("A.".into())],
             },
             Chapitre {
                 numero: 2,
                 titre: "Deux".into(),
-                paragraphes: vec!["B.".into()],
+                blocs: vec![Bloc::Paragraphe("B.".into())],
             },
         ];
         let s = source(
