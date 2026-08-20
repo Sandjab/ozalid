@@ -191,3 +191,12 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
 
 .package + .package { margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--trait); }
 .package h3 { margin: 0 0 .6rem; font-size: .95rem; }
+
+/* ---------- masquage ---------- */
+
+/* Dernière règle du fichier, et il faut qu'elle le reste : `hidden` est le seul
+   moyen par lequel le code fait disparaître quelque chose, et tout `display` posé
+   ici — `label`, `.ligne`, `.releve` — l'emporterait sinon sur la feuille du
+   navigateur. Un réglage sans objet resterait alors offert, ce qui est le piège que
+   le masquage existe pour éviter. */
+[hidden] { display: none; }

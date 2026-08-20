@@ -285,13 +285,26 @@ function afficherCouverture(cv) {
   }
 }
 
+/**
+ * Un nombre ramené dans les bornes du schéma.
+ *
+ * Les flèches du champ les respectent, la frappe au clavier non : rien n'empêche de
+ * taper 500 dans une marge qui va jusqu'à 40. Ramenée ici, la valeur revient corrigée
+ * dans le panneau au rafraîchissement, et la maquette reste composable.
+ */
+function nombreSaisi(el, champ) {
+  const v = Number(el.value);
+  if (champ.min === undefined || champ.max === undefined) return v;
+  return Math.min(Math.max(v, champ.min), champ.max);
+}
+
 /** Relit les contrôles et renvoie la maquette modifiée. */
 function couvertureSaisie() {
   const cv = JSON.parse(JSON.stringify(projet.couverture));
   for (const { champ, el } of controles) {
     let v;
     if (champ.type === 'case') v = el.checked;
-    else if (champ.type === 'nombre') v = Number(el.value);
+    else if (champ.type === 'nombre') v = nombreSaisi(el, champ);
     else v = el.value;
     ecrire(cv, champ.chemin, v);
   }
@@ -328,25 +341,38 @@ function dosCourant() {
     : null;
 }
 
+/**
+ * Pose l'aperçu, ou le retire faute d'image.
+ *
+ * Retiré pour de bon : une image sans source garde sa place et son fond blanc, et ce
+ * rectangle-là ne se distingue pas d'une couverture vide — il donne à voir un livre
+ * là où le message dit qu'il n'y en a pas.
+ */
+function poserApercu(data) {
+  const img = $('apercu');
+  if (data) img.src = data;
+  else img.removeAttribute('src');
+  img.hidden = !data;
+}
+
 async function rendreApercu() {
   if (!projet?.couverture) {
-    $('apercu').removeAttribute('src');
+    poserApercu(null);
     $('etatApercu').textContent = 'Choisir une maquette de départ.';
     return;
   }
   $('etatApercu').textContent = 'composition de l\'aperçu…';
   try {
-    const data = await invoke('couverture_apercu', {
+    poserApercu(await invoke('couverture_apercu', {
       face,
       providerCle: $('inProvider').value,
       dosMm: dosCourant(),
       fondPerduMm: null,
-    });
-    $('apercu').src = data;
+    }));
     $('etatApercu').textContent = '';
     $('etatApercu').className = 'note';
   } catch (e) {
-    $('apercu').removeAttribute('src');
+    poserApercu(null);
     $('etatApercu').textContent = String(e);
     $('etatApercu').className = 'note alerte';
   }
@@ -366,7 +392,7 @@ function construireFaces() {
 
 function choisirFace(v) {
   face = v;
-  $('faces').children.forEach((b, i) => {
+  [...$('faces').children].forEach((b, i) => {
     b.setAttribute('aria-pressed', String(FACES[i][0] === v));
   });
   if (projet?.couverture) afficherCouverture(projet.couverture);

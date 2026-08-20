@@ -12,7 +12,7 @@ const vm = require('node:vm');
 class El {
   constructor(tag) {
     this.tagName = String(tag).toUpperCase();
-    this.children = [];
+    this.enfants = [];
     this.attrs = {};
     this.ecouteurs = {};
     this._texte = '';
@@ -38,24 +38,41 @@ class El {
     if (this._registre) this._registre.set(v, this);
   }
 
+  /**
+   * Indexée, mesurable et itérable — et rien de plus, comme une `HTMLCollection`.
+   *
+   * Un tableau donnerait `map` et `forEach` : le code passerait ici et casserait dans
+   * l'application, où ces méthodes n'existent pas. Les tests qui veulent un tableau
+   * l'étalent, comme l'application doit le faire.
+   */
+  get children() {
+    const c = {
+      length: this.enfants.length,
+      item: (i) => this.enfants[i] ?? null,
+      [Symbol.iterator]: () => this.enfants[Symbol.iterator](),
+    };
+    this.enfants.forEach((e, i) => { c[i] = e; });
+    return c;
+  }
+
   get textContent() {
-    return this.children.length
-      ? this.children.map((c) => c.textContent).join('')
+    return this.enfants.length
+      ? this.enfants.map((c) => c.textContent).join('')
       : this._texte;
   }
 
   set textContent(v) {
     this._texte = String(v);
-    this.children = [];
+    this.enfants = [];
   }
 
   append(...n) {
-    for (const x of n) this.children.push(x);
+    for (const x of n) this.enfants.push(x);
     this.majSelection();
   }
 
   replaceChildren(...n) {
-    this.children = [];
+    this.enfants = [];
     if (this.tagName === 'SELECT') this.value = '';
     this.append(...n);
   }
@@ -63,7 +80,7 @@ class El {
   /** Un <select> vide qui reçoit des options sélectionne la première, comme le DOM. */
   majSelection() {
     if (this.tagName !== 'SELECT' || this.value !== '') return;
-    const premiere = this.children.find((c) => c.tagName === 'OPTION');
+    const premiere = this.enfants.find((c) => c.tagName === 'OPTION');
     if (premiere) this.value = premiere.value;
   }
 
@@ -94,9 +111,9 @@ class El {
     const out = [];
     const visite = (e) => {
       if (e.tagName === tag.toUpperCase()) out.push(e.textContent);
-      e.children.forEach(visite);
+      e.enfants.forEach(visite);
     };
-    this.children.forEach(visite);
+    this.enfants.forEach(visite);
     return out;
   }
 }

@@ -83,7 +83,7 @@ test('le choix du papier n\'est offert que quand il y en a plusieurs', async () 
   await els.get('inProvider').declenche('change');
   assert.strictEqual(els.get('inPapier').disabled, false);
   assert.deepStrictEqual(
-    els.get('inPapier').children.map((o) => o.value),
+    [...els.get('inPapier').children].map((o) => o.value),
     ['creme', 'blanc']
   );
 });

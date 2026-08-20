@@ -166,7 +166,8 @@ test('écrire puis relire un chemin imbriqué rend la valeur posée', () => {
 
 test('le panneau se remplit depuis la maquette du projet', async () => {
   const { els } = await ouvre(maquette());
-  const lignes = els.get('reglages').children.flatMap((g) => g.children.slice(1));
+  const lignes = [...els.get('reglages').children]
+    .flatMap((g) => [...g.children].slice(1));
   const valeurs = lignes.map((l) => l.children[1].value);
   assert.ok(valeurs.includes('bandeau'), 'le mode n\'est pas repris');
   assert.ok(valeurs.includes('#ffffff'), 'le papier n\'est pas repris');
@@ -181,7 +182,7 @@ test('les réglages sans objet dans le mode courant sont masqués', async () => 
   const visibles = (els) => {
     const out = new Map();
     for (const g of els.get('reglages').children) {
-      for (const l of g.children.slice(1)) {
+      for (const l of [...g.children].slice(1)) {
         out.set(l.children[0].textContent, !g.hidden && !l.hidden);
       }
     }
@@ -200,7 +201,7 @@ test('les réglages sans objet dans le mode courant sont masqués', async () => 
 
 test('basculer sur la 4ème change les groupes offerts', async () => {
   const { els } = await ouvre(maquette());
-  const titres = () => els.get('reglages').children
+  const titres = () => [...els.get('reglages').children]
     .filter((g) => !g.hidden)
     .map((g) => g.children[0].textContent);
 
@@ -218,7 +219,7 @@ test('basculer sur la 4ème change les groupes offerts', async () => {
  */
 test('les trois éléments du dos ne sont offerts que sur la planche', async () => {
   const { els } = await ouvre(maquette());
-  const titres = () => els.get('reglages').children
+  const titres = () => [...els.get('reglages').children]
     .filter((g) => !g.hidden)
     .map((g) => g.children[0].textContent);
 
@@ -255,6 +256,31 @@ test('modifier un réglage renvoie la maquette entière', async () => {
   assert.strictEqual(recue.quatrieme.interligne, 1.45, '4ème perdue');
 });
 
+/**
+ * Le schéma borne chaque réglage, mais seules les flèches du champ s'y tiennent : au
+ * clavier, rien n'empêche une marge de 500 % de largeur. Elle composerait une
+ * couverture où le titre n'a plus de place, sans que rien ne dise d'où vient
+ * l'absurdité.
+ */
+test('un nombre tapé hors des bornes du schéma y est ramené', async () => {
+  let recue = null;
+  const { els } = await ouvre(maquette(), {
+    couverture_modifier: ({ couverture }) => {
+      recue = couverture;
+      return projet(couverture);
+    },
+  });
+  const marge = els.get('reglages').children[0].children[4].children[1];
+
+  marge.value = '500';
+  await marge.declenche('change');
+  assert.strictEqual(recue.pad_x, 40, 'maximum du schéma dépassé');
+
+  marge.value = '-8';
+  await marge.declenche('change');
+  assert.strictEqual(recue.pad_x, 0, 'minimum du schéma franchi');
+});
+
 /* ---------- aperçu ---------- */
 
 test('l\'aperçu est demandé et affiché à l\'ouverture du projet', async () => {
@@ -286,6 +312,7 @@ test('sans maquette, l\'aperçu le dit au lieu de rester vide', async () => {
   assert.match(els.get('etatCouverture').textContent, /Aucune maquette/);
   assert.strictEqual(els.get('reglages').hidden, true);
   assert.match(els.get('etatApercu').textContent, /Choisir une maquette/);
+  assert.strictEqual(els.get('apercu').hidden, true, 'cadre d\'image sans image');
 });
 
 /**
@@ -303,11 +330,13 @@ test('un aperçu qui échoue efface l\'image et affiche la cause', async () => {
   });
   await attendreApercu();
   assert.ok(els.get('apercu').src);
+  assert.strictEqual(els.get('apercu').hidden, false, 'aperçu réussi mais masqué');
 
   casse = true;
   await els.get('inProvider').declenche('change');
   await attendreApercu();
   assert.strictEqual(els.get('apercu').src, undefined, 'aperçu périmé laissé à l\'écran');
+  assert.strictEqual(els.get('apercu').hidden, true, 'cadre d\'image sans image');
   assert.match(els.get('etatApercu').textContent, /largeur du dos/);
   assert.strictEqual(els.get('etatApercu').className, 'note alerte');
 });
