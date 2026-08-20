@@ -25,7 +25,14 @@ const MARGE_DROITE: f64 = 50.0;
 pub fn source(livre: &Livre, int: &Interieur, chapitres: &[Chapitre], corps_pt: f64) -> String {
     let titre = echappe(&livre.titre);
     let auteur = echappe(&livre.auteur);
+    // Interpolée brute, comme dans `interieur::source` : l'appelant doit l'avoir
+    // validée par `Interieur::verifie`, qui seul connaît les polices admises.
     let police = &int.police;
+    // Les mots du texte seul : ni les titres de chapitres, ni les `---` du manuscrit.
+    // `commands.rs:489` compte, lui, `projet.texte.split_whitespace()` sur le Markdown
+    // brut, et annonce donc toujours un peu plus. La divergence est assumée et va
+    // toujours dans ce sens : le compte de la garde est celui qu'un auteur appelle des
+    // mots. Les deux chiffres se voient — ne pas « corriger » l'un vers l'autre.
     let mots: usize = chapitres
         .iter()
         .flat_map(|c| &c.blocs)
@@ -45,6 +52,10 @@ pub fn source(livre: &Livre, int: &Interieur, chapitres: &[Chapitre], corps_pt: 
   header: context {{
     let n = counter(page).get().first()
     if n <= 1 {{ return }}
+    // Filtrer sur le numéro de page, et surtout pas sur `.before(here())`, qui est
+    // pourtant la forme idiomatique : l'en-tête est évalué avant que le titre ouvrant
+    // la page ne soit posé, si bien que `before(here())` priverait de rappel toute
+    // page d'ouverture de chapitre — une page sur deux ou trois en chapitres courts.
     let ch = query(heading.where(level: 1)).filter(h => h.location().page() <= n)
     set text(size: 8.5pt, fill: rgb("#808080"))
     grid(columns: (1fr, auto),
