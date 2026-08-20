@@ -12,7 +12,8 @@ le produit, la couverture le consomme, et le dos suit le manuscrit sans ressaisi
 l'intérieur, moteur de couverture, assemblage de la planche, packages
 multi-prestataires, épreuve de relecture et vérification Windows par intégration
 continue : chaque push et chaque pull request compilent, testent et paginent le
-témoin sur `windows-latest`. Reste la publication de l'installeur sur tag, et la
+témoin sur `windows-latest`, et un tag `v*` produit l'installeur, l'installe en
+silencieux pour vérifier son arborescence, et le dépose en release draft. Reste la
 vérification manuelle du premier lancement sur une machine Windows — aucun runner
 ne lance l'application avec sa fenêtre.
 
@@ -43,14 +44,18 @@ dépendrait de la machine.
 
 ## Installer sous Windows
 
-L'installeur (`.exe` NSIS) proviendra de la publication automatique déclenchée par un
-tag `v*` : ce job produira le binaire et le déposera en release draft sur GitHub — il
-n'existe pas encore. Une fois publié, Windows affichera au premier lancement
-« Windows a protégé votre PC » : SmartScreen ne reconnaît pas l'éditeur tant que le
-binaire n'est pas signé. Il faut alors choisir « Informations complémentaires », puis
-« Exécuter quand même » ; l'installation elle-même ne demande aucun droit
-administrateur. Un certificat de signature de code lèverait l'avertissement ; il n'a
-pas été pris tant que la diffusion reste confidentielle.
+L'installeur (`.exe` NSIS) vient de la publication déclenchée par un tag `v*` : le job
+`publier` le construit, l'installe en silencieux pour vérifier qu'il pose bien ses
+fichiers, puis le dépose en **release draft** sur GitHub — c'est un humain qui publie,
+après avoir lancé l'application au moins une fois.
+
+Au premier lancement, Windows affiche « Windows a protégé votre PC » : SmartScreen ne
+reconnaît pas l'éditeur tant que le binaire n'est pas signé. Il faut choisir
+« Informations complémentaires », puis « Exécuter quand même ». L'installation elle-même
+ne demande aucun droit administrateur : elle se fait par utilisateur, dans
+`%LOCALAPPDATA%\Ozalid Studio`, où l'application trouve `typst.exe` à côté d'elle et ses
+polices dans `fonts\`. Un certificat de signature de code lèverait l'avertissement ; il
+n'a pas été pris tant que la diffusion reste confidentielle.
 
 ## Modules
 
