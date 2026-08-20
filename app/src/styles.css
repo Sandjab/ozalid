@@ -1,0 +1,112 @@
+:root {
+  --papier: #fcf0d8;
+  --encre: #191917;
+  --rouge: #c00000;
+  --trait: #d8cdb4;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0 0 3rem;
+  font: 14px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif;
+  color: var(--encre);
+  background: var(--papier);
+}
+
+header {
+  padding: 1.4rem 2rem 1rem;
+  border-bottom: 1px solid var(--trait);
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
+.sous { margin: .2rem 0 0; color: #7a7368; font-size: .85rem; }
+
+main { max-width: 46rem; padding: 0 2rem; }
+
+section { padding: 1.2rem 0; border-bottom: 1px solid var(--trait); }
+section:last-child { border-bottom: none; }
+
+h2 {
+  margin: 0 0 .8rem;
+  font-size: .78rem;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #7a7368;
+}
+
+label {
+  display: grid;
+  grid-template-columns: 13rem 1fr;
+  align-items: baseline;
+  gap: .8rem;
+  margin-bottom: .5rem;
+}
+
+label > span { color: #5c564d; }
+
+input, select, textarea {
+  font: inherit;
+  padding: .35rem .5rem;
+  border: 1px solid var(--trait);
+  border-radius: 3px;
+  background: #fff;
+  color: inherit;
+  width: 100%;
+}
+
+textarea { resize: vertical; }
+select:disabled { color: #9a9488; background: #f4ecd9; }
+
+.ligne { display: flex; align-items: center; gap: .8rem; }
+
+button {
+  font: inherit;
+  padding: .4rem .9rem;
+  border: 1px solid var(--encre);
+  border-radius: 3px;
+  background: var(--encre);
+  color: var(--papier);
+  cursor: pointer;
+}
+
+button:disabled { opacity: .4; cursor: default; }
+
+.chemin {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .78rem;
+  color: #7a7368;
+  word-break: break-all;
+}
+
+.note { margin: .6rem 0 0; color: #7a7368; font-size: .85rem; }
+
+.etat { font-size: .85rem; color: #7a7368; }
+.etat.erreur { color: var(--rouge); white-space: pre-wrap; }
+
+.resultat {
+  margin-top: 1rem;
+  padding: 1rem 1.2rem;
+  background: #fff;
+  border: 1px solid var(--trait);
+  border-radius: 3px;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: 13rem 1fr;
+  gap: .3rem .8rem;
+  margin: 0;
+}
+
+dt { color: #5c564d; }
+dd { margin: 0; font-variant-numeric: tabular-nums; }

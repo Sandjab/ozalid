@@ -1,0 +1,7 @@
+/target
+/gen/schemas
+# Sidecar Typst : ~30 Mo par plateforme, récupéré par outils/typst.sh — pas versionné.
+/binaries
+# Icônes mobiles produites par « cargo tauri icon » : hors périmètre (macOS + Windows).
+/icons/android
+/icons/ios

@@ -8,3 +8,8 @@ build/
 .claude/handoff.md
 .superpowers/
 .playwright-mcp/
+
+# L'app Tauri a besoin de ses JSON de configuration et de ses icônes, que les
+# règles globales *.json et *.png ci-dessus écarteraient.
+!app/**/*.json
+!app/src-tauri/icons/*.png
