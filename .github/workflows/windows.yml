@@ -85,3 +85,63 @@ jobs:
       - name: Témoin de pagination
         working-directory: app/src-tauri
         run: cargo run --example temoin -- "$RUNNER_TEMP/temoin"
+
+  publier:
+    needs: verifier
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      # Une release dont le numéro ment sur son contenu est pire que pas de release.
+      - name: Le tag et la version de l'application doivent coïncider
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          conf=$(node -p "require('./app/src-tauri/tauri.conf.json').version")
+          if [ "$tag" != "$conf" ]; then
+            echo "tag $GITHUB_REF_NAME contre version $conf de tauri.conf.json" >&2
+            exit 1
+          fi
+          echo "version $conf"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+
+      - name: Cache du sidecar et des polices
+        uses: actions/cache@v4
+        with:
+          path: |
+            app/src-tauri/binaries
+            app/src-tauri/fonts
+          key: typst-polices-${{ hashFiles('app/outils/typst.sh', 'app/outils/polices.sh') }}
+
+      - name: Sidecar Typst et polices embarquées
+        run: |
+          app/outils/typst.sh x86_64-pc-windows-msvc
+          app/outils/polices.sh
+
+      - name: CLI Tauri
+        run: npm install -g @tauri-apps/cli@^2
+
+      - name: Construire l'installeur
+        working-directory: app/src-tauri
+        run: tauri build --bundles nsis
+
+      - name: Release draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          exe=$(find app/src-tauri/target/release/bundle/nsis -name "*-setup.exe" | head -1)
+          [ -n "$exe" ] || { echo "aucun installeur produit" >&2; exit 1; }
+          gh release create "$GITHUB_REF_NAME" "$exe" \
+            --draft \
+            --title "Ozalid Studio $GITHUB_REF_NAME" \
+            --notes "L'installeur n'est pas signé : au premier lancement, Windows affiche « Windows a protégé votre PC ». Choisir « Informations complémentaires », puis « Exécuter quand même ». L'installation ne demande pas de droits administrateur."
