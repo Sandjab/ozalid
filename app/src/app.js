@@ -113,7 +113,16 @@ function afficherProjet(p) {
   demanderApercu();
 }
 
-/** Enveloppe commune : affiche l'erreur au lieu de la laisser filer dans la console. */
+/**
+ * Enveloppe commune : affiche l'erreur au lieu de la laisser filer dans la console, et
+ * ramène le panneau à ce que le projet porte vraiment.
+ *
+ * Ce retour vaut pour tous les appelants, parce qu'ils font tous la même chose : ils
+ * envoient une saisie au Rust et n'attendent qu'un projet en retour. Refusée, la saisie
+ * n'est nulle part — la laisser à l'écran donnerait à lire un projet qui n'existe pas,
+ * et tout ce qui se calcule depuis le panneau, à commencer par le dos de l'aperçu de
+ * planche, vaudrait pour ce livre-là.
+ */
 async function tente(fn) {
   try {
     $('etat').textContent = '';
@@ -122,6 +131,8 @@ async function tente(fn) {
   } catch (e) {
     $('etat').textContent = String(e);
     $('etat').className = 'etat erreur';
+    // `afficherProjet` ne touche pas `#etat` : le message qu'on vient d'écrire survit.
+    if (projet) afficherProjet(projet);
   }
 }
 

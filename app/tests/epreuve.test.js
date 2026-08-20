@@ -118,6 +118,11 @@ test('une police refusée est dite, et le panneau revient au projet', async () =
   await els.get('inPoliceInterieur').declenche('change');
   assert.match(els.get('etat').textContent, /police d'intérieur inconnue/);
   assert.strictEqual(els.get('etat').className, 'etat erreur');
+  assert.strictEqual(
+    els.get('inPoliceInterieur').value,
+    'Alegreya',
+    'le panneau reste sur une police que le projet ne porte pas'
+  );
 });
 
 /* ---------- épreuve ---------- */
