@@ -127,7 +127,13 @@ pub fn converge(
 }
 
 /// Source Typst complète de l'intérieur.
-pub fn source(livre: &Livre, pr: &Provider, r: &Reglage, chapitres: &[Chapitre]) -> String {
+pub fn source(
+    livre: &Livre,
+    int: &Interieur,
+    pr: &Provider,
+    r: &Reglage,
+    chapitres: &[Chapitre],
+) -> String {
     let (fw, fh) = pr.format;
     // `leading` Typst = espace entre lignes ; `line-height` CSS = distance entre lignes
     // de base. Les deux ne coïncident qu'une fois la boîte de ligne ramenée à 1em par
@@ -147,7 +153,7 @@ pub fn source(livre: &Livre, pr: &Provider, r: &Reglage, chapitres: &[Chapitre])
   margin: (top: {}mm, bottom: {}mm, inside: {}mm, outside: {}mm),
   footer: none,
 )
-#set text(size: {}pt, lang: "fr", hyphenate: true,
+#set text(font: "{}", size: {}pt, lang: "fr", hyphenate: true,
           top-edge: 0.75em, bottom-edge: -0.25em,
           costs: (orphan: 100%, widow: 100%))
 #set par(justify: true, leading: {lead}em, spacing: {lead}em, first-line-indent: 1.2em)
@@ -161,6 +167,8 @@ pub fn source(livre: &Livre, pr: &Provider, r: &Reglage, chapitres: &[Chapitre])
         pr.marge_bas,
         r.gouttiere,
         pr.exterieur,
+        // La police est validée en amont par `Interieur::verifie` : pas d'échappement.
+        int.police,
         pr.corps_pt,
     ));
 
@@ -258,6 +266,14 @@ mod tests {
         }
     }
 
+    fn chapitres() -> Vec<Chapitre> {
+        vec![Chapitre {
+            numero: 1,
+            titre: "Un".into(),
+            paragraphes: vec!["Texte.".into()],
+        }]
+    }
+
     /// Une composition déjà stable ne doit pas être recomposée : une reprise inutile
     /// coûte une passe de mise en page sur tout le livre.
     #[test]
@@ -338,7 +354,7 @@ mod tests {
             gouttiere: 20.0,
             blanche: false,
         };
-        let s = source(&livre(), pr, &r, &[]);
+        let s = source(&livre(), &Interieur::default(), pr, &r, &[]);
         assert!(s.contains("width: 135mm, height: 215mm"));
         assert!(s.contains("inside: 20mm"), "gouttière absente");
         assert!(s.contains("outside: 15mm"));
@@ -353,6 +369,7 @@ mod tests {
         let pr = provider("lulu").unwrap();
         let sans = source(
             &livre(),
+            &Interieur::default(),
             pr,
             &Reglage {
                 gouttiere: 25.0,
@@ -362,6 +379,7 @@ mod tests {
         );
         let avec = source(
             &livre(),
+            &Interieur::default(),
             pr,
             &Reglage {
                 gouttiere: 25.0,
@@ -383,6 +401,7 @@ mod tests {
         l.auteur = "Ivan #Pjig".into();
         let s = source(
             &l,
+            &Interieur::default(),
             pr,
             &Reglage {
                 gouttiere: 25.0,
@@ -426,6 +445,29 @@ mod tests {
         }
     }
 
+    /// La police doit être déclarée, et une seule fois. Deux `#set text(font: …)` dans
+    /// la même source, c'est le second qui gagne — donc un réglage qui paraît obéi
+    /// alors qu'il ne l'est pas.
+    #[test]
+    fn la_source_declare_la_police_du_projet_une_seule_fois() {
+        let pr = provider("lulu").unwrap();
+        let r = Reglage {
+            gouttiere: 25.0,
+            blanche: false,
+        };
+        let int = Interieur {
+            police: "Cardo".into(),
+        };
+        let s = source(&livre(), &int, pr, &r, &chapitres());
+        assert_eq!(
+            s.matches("font:").count(),
+            1,
+            "police déclarée {} fois",
+            s.matches("font:").count()
+        );
+        assert!(s.contains(r#"font: "Cardo""#), "police du projet ignorée");
+    }
+
     /// Le premier chapitre suit déjà le saut de page du copyright : un saut de plus
     /// laisserait une page blanche parasite, qui décalerait toute la pagination.
     #[test]
@@ -445,6 +487,7 @@ mod tests {
         ];
         let s = source(
             &livre(),
+            &Interieur::default(),
             pr,
             &Reglage {
                 gouttiere: 25.0,

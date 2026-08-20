@@ -64,8 +64,13 @@ pub fn assembler(
 
     // 1. L'intérieur, et la pagination qui en sort.
     let src_int = dossier.join(nom(pr, "interieur", "typ"));
+    let int = &projet.meta.interieur;
+    int.verifie()?;
     let r = interieur::converge(pr, |reglage| {
-        ecrire(&src_int, &interieur::source(livre, pr, reglage, &chapitres))?;
+        ecrire(
+            &src_int,
+            &interieur::source(livre, int, pr, reglage, &chapitres),
+        )?;
         typst.pages(&src_int)
     })?;
     if r.pages < pr.pages_min || r.pages > pr.pages_max {
@@ -80,7 +85,7 @@ pub fn assembler(
     };
     ecrire(
         &src_int,
-        &interieur::source(livre, pr, &reglage, &chapitres),
+        &interieur::source(livre, int, pr, &reglage, &chapitres),
     )?;
     let pdf_int = dossier.join(nom(pr, "interieur", "pdf"));
     typst.compile(&src_int, &pdf_int)?;

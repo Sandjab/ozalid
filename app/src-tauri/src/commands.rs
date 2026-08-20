@@ -188,6 +188,8 @@ pub fn composer(
     };
 
     let livre = &o.projet.meta.livre;
+    let int = &o.projet.meta.interieur;
+    int.verifie()?;
     let chapitres = manuscrit::decoupe(&o.projet.texte, livre.chapitres)?;
 
     let dossier = sorties_dossier(o, pr.cle)?;
@@ -204,7 +206,10 @@ pub fn composer(
     // La convergence ne mesure que le compte de pages : aucun PDF n'est produit tant
     // que le réglage n'est pas stable.
     let r = interieur::converge(pr, |reglage| {
-        ecrire(&src, &interieur::source(livre, pr, reglage, &chapitres))?;
+        ecrire(
+            &src,
+            &interieur::source(livre, int, pr, reglage, &chapitres),
+        )?;
         typst.pages(&src)
     })?;
 
@@ -212,7 +217,10 @@ pub fn composer(
         gouttiere: r.gouttiere,
         blanche: r.blanche,
     };
-    ecrire(&src, &interieur::source(livre, pr, &reglage, &chapitres))?;
+    ecrire(
+        &src,
+        &interieur::source(livre, int, pr, &reglage, &chapitres),
+    )?;
     let pdf = dossier.join(format!("interieur-{}.pdf", pr.cle));
     typst.compile(&src, &pdf)?;
 

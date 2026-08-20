@@ -35,17 +35,23 @@ fn main() -> Result<(), String> {
     let pr = providers::provider(&cle).ok_or_else(|| format!("prestataire inconnu : {cle}"))?;
     let projet = Projet::ouvrir(Path::new(&ozalid))?;
     let livre = &projet.meta.livre;
+    let int = &projet.meta.interieur;
+    int.verifie()?;
     let chapitres = manuscrit::decoupe(&projet.texte, livre.chapitres)?;
 
     let dossier = PathBuf::from(&sortie);
     std::fs::create_dir_all(&dossier).map_err(|e| format!("{sortie} : {e}"))?;
     let src = dossier.join(format!("interieur-{}.typ", pr.cle));
-    let typst = Typst::new("typst");
+    // Les polices embarquées, comme le fait `packager` : sans elles, la police du
+    // projet est introuvable et Typst compose dans la sienne, sans rien dire — le
+    // témoin de non-régression mesurerait alors un livre qui n'est pas celui-là.
+    let typst =
+        Typst::new("typst").avec_polices(Path::new(env!("CARGO_MANIFEST_DIR")).join("fonts"));
 
     let mut passes = 0;
     let r = interieur::converge(pr, |reglage| {
         passes += 1;
-        std::fs::write(&src, interieur::source(livre, pr, reglage, &chapitres))
+        std::fs::write(&src, interieur::source(livre, int, pr, reglage, &chapitres))
             .map_err(|e| e.to_string())?;
         typst.pages(&src)
     })?;
@@ -54,8 +60,11 @@ fn main() -> Result<(), String> {
         gouttiere: r.gouttiere,
         blanche: r.blanche,
     };
-    std::fs::write(&src, interieur::source(livre, pr, &reglage, &chapitres))
-        .map_err(|e| e.to_string())?;
+    std::fs::write(
+        &src,
+        interieur::source(livre, int, pr, &reglage, &chapitres),
+    )
+    .map_err(|e| e.to_string())?;
     let pdf = dossier.join(format!("interieur-{}.pdf", pr.cle));
     typst.compile(&src, &pdf)?;
 
