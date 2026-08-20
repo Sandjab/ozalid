@@ -24,11 +24,12 @@ Ce volet établit deux choses, dans cet ordre :
 
 - **Windows seul.** macOS se construit à la main sur le poste de développement ;
   la CI ne prend en charge que ce qui n'est pas faisable localement.
-- **Un manuscrit-témoin versionné**, fabriqué pour l'occasion. C'est le seul
-  endroit du projet où l'on s'écarte du principe « matériel de test réel » :
+- **Un manuscrit-témoin versionné, pris dans le domaine public** : *Candide*.
   `build/` et `images/` sont ignorés par git, la CI n'a donc aucun livre à
   composer, et faire transiter un manuscrit personnel par un runner GitHub n'est
-  pas souhaitable.
+  pas souhaitable. Un texte littéraire réel sert le principe « matériel de test
+  réel » mieux qu'une prose fabriquée pour l'occasion.
+- **Le témoin compose au gabarit `bod`**, non `lulu`.
 - **Aucune image dans le témoin.** La maquette Blanche est purement
   typographique (`maquettes.rs:139`) : le témoin traverse la chaîne entière —
   intérieur, dos, planche — sans qu'un octet binaire entre dans le dépôt.
@@ -53,25 +54,54 @@ Aucun `.gitattributes` n'existe. Un checkout Windows peut convertir les fins de
 ligne en CRLF selon la configuration du runner. Si cela déplaçait la pagination,
 on ne saurait pas distinguer un défaut de Typst d'un artefact de git.
 
+### Ce que les bornes des prestataires imposent
+
+Deux contraintes découvertes en chiffrant, et qui commandent la taille du
+témoin :
+
+- `package::assembler` refuse un livre hors des bornes du prestataire
+  (`package.rs:77`), et une page tient environ 350 mots au corps du projet
+  (9,5 pt, interligne 1,42). Le minimum de 24 pages d'un prestataire impose donc
+  **de l'ordre de 8 000 mots**, liminaires déduits.
+- **Lulu n'a aucune tranche de gouttière sous 151 pages** (`providers.rs:244` :
+  `&[(151, 400, 25.0)]`). Un livre court y échoue sur « tranche de gouttière
+  absente » avant même la borne des pages. Compléter la table pour satisfaire le
+  témoin serait inventer une valeur que le guide Lulu ne donne pas, et laisser
+  le test dicter la production : écarté.
+
 ### Ce qui est décidé
 
-`app/src-tauri/temoin/manuscrit.md` : un texte écrit pour l'occasion, quatre
-chapitres, dimensionné pour composer une vingtaine de pages au gabarit Lulu.
+`app/src-tauri/temoin/manuscrit.md` : **Candide** (Voltaire, 1759), texte du
+domaine public, ses trente chapitres, environ 35 000 mots — de l'ordre de cent
+pages au gabarit `bod`, dont la tranche de gouttière unique couvre 24 à 900
+pages (`providers.rs:262`).
 
-Il n'est pas là pour se lire. Il est là pour porter ce qui casse en traversant
-une plateforme :
+Il n'est pas là pour se lire mais pour porter ce qui casse en traversant une
+plateforme, et il le porte sans qu'on ait à le fabriquer :
 
 - accents et caractères composés, sur lesquels se voit une substitution de
   police ;
-- apostrophes typographiques `’`, guillemets `« »`, tirets cadratins `—` ;
-- italiques, un titre de chapitre assez long pour se replier ;
-- une rupture de scène `---`.
+- apostrophes typographiques `’`, guillemets `« »`, tirets cadratins de
+  dialogue ;
+- des titres de chapitre authentiquement longs — « Comment Candide fut élevé
+  dans un beau château, et comment il fut chassé d'icelui » —, donc repliés ;
+- trente chapitres, assez pour que la pagination ne tienne pas à un seul saut.
 
-La rupture de scène est **présente sans être exigée au rendu**.
-`interieur::source` les ignore encore — dette consignée dans `NOTES.md` § 4, et
-le test `l_interieur_compose_a_l_identique_avec_ou_sans_rupture_de_scene` fige
-cet état. Le témoin ne doit pas le contredire ; il documente au contraire ce qui
-tombera le jour où la dette sera traitée.
+Le témoin **ne portera pas de rupture de scène** : *Candide* n'en a pas, et en
+insérer serait altérer le texte. Le sujet reste couvert par les tests unitaires
+et par le test `l_interieur_compose_a_l_identique_avec_ou_sans_rupture_de_scene`
+qui fige la dette consignée dans `NOTES.md` § 4.
+
+**Provenance et mise au format.** Le texte est récupéré une fois depuis Project
+Gutenberg, dépouillé de son en-tête et de sa licence — qui ne couvrent pas
+l'œuvre elle-même, du domaine public —, puis mis au format admis par
+`manuscrit.rs` : titre en `# `, chapitres en `## NN - Titre`, aucune des
+constructions que `refus()` rejette (listes, citations en bloc, tableaux,
+littéral entre accents graves, images). Les apostrophes sont normalisées en
+apostrophe typographique. La conversion se fait une fois, par un script jetable
+qui n'est pas versionné — seul son produit l'est. La provenance et la mention du
+domaine public sont notées dans la documentation de tête d'`examples/temoin.rs`,
+et non dans le manuscrit, qui doit rester composable tel quel.
 
 Un `.gitattributes` à la racine force `*.md text eol=lf`, pour que le manuscrit
 soit octet pour octet le même sur les deux plateformes.
@@ -86,8 +116,8 @@ ce que le moteur émet.
 
 Il construit un `Projet` par `Projet::nouveau` (`projet.rs:110`) à partir du
 manuscrit-témoin et de métadonnées écrites dans l'exemple — titre, auteur,
-éditeur, maquette Blanche, police par défaut. Il compose ensuite le package Lulu
-par `package::assembler`, puis **compare le compte de pages obtenu à une
+maquette Blanche, police par défaut. Il compose ensuite le package `bod` par
+`package::assembler`, puis **compare le compte de pages obtenu à une
 constante**.
 
 Écart → message affichant les deux valeurs, code de sortie non nul.
@@ -96,7 +126,7 @@ constante**.
 
 Elle est relevée sur macOS pendant l'implémentation, puis figée dans l'exemple,
 commentée à côté de ce dont elle dépend : Typst 0.15.1, EB Garamond, gabarit
-Lulu, corps et interligne du prestataire.
+`bod`, corps et interligne du prestataire.
 
 La faire bouger est un acte délibéré, à revalider — jamais un ajustement pour
 faire passer la CI. C'est la même discipline que la version épinglée de Typst.
