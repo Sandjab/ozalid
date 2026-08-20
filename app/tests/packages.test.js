@@ -249,6 +249,31 @@ test('changer de prestataire périme le dos de l\'aperçu', async () => {
 });
 
 /**
+ * Le papier est la cause la plus chère des trois, parce qu'il déplace le dos **sans
+ * passer par la pagination** : chez KDP, 0,0635 mm par page en crème contre 0,0572 en
+ * blanc, soit 1,65 mm d'écart sur 262 pages — l'épaisseur d'une couverture entière.
+ */
+test('un dos calculé sur un autre papier ne vaut plus rien', async () => {
+  const { els, appels } = await ouvre([KDP], {
+    projet_ouvrir: { ...PROJET, couverture: {} },
+    composer: COMPOSITION,
+  });
+  await els.get('btComposer').declenche('click');
+  await els.get('faces').children[2].declenche('click');
+  await attendreApercu();
+  assert.strictEqual(appels.filter(([c]) => c === 'couverture_apercu').pop()[1].dosMm, 17.427);
+
+  els.get('inPapier').value = 'blanc';
+  await els.get('inPapier').declenche('change');
+  await attendreApercu();
+  assert.strictEqual(
+    appels.filter(([c]) => c === 'couverture_apercu').pop()[1].dosMm,
+    null,
+    'dos du papier crème réutilisé pour le blanc'
+  );
+});
+
+/**
  * Même raison, autre cause : la police repagine le livre. Un dos calculé en Alegreya
  * n'est plus le dos du livre dès qu'on le compose en Cardo, et le laisser sur la
  * planche donnerait un chiffre faux — ce qui vaut moins que pas de chiffre.
@@ -272,4 +297,39 @@ test('un dos calculé pour une autre police ne vaut plus rien', async () => {
     null,
     'dos d\'Alegreya réutilisé pour Cardo'
   );
+});
+
+/**
+ * La dernière cause, et la seule qui ne se lise dans aucun contrôle : le texte fait la
+ * pagination. Un dos calculé sur le manuscrit d'avant ne vaut rien même si le gabarit,
+ * le papier et la police n'ont pas bougé — c'est précisément ce qui la rend facile à
+ * oublier. Les deux portes par lesquelles le texte est remplacé sont exercées ici.
+ */
+test('un dos calculé sur un autre manuscrit ne vaut plus rien', async () => {
+  const projetCouvert = { ...PROJET, couverture: {} };
+  const { els, appels } = await ouvre([LULU], {
+    projet_ouvrir: projetCouvert,
+    composer: COMPOSITION,
+    manuscrit_reimporter: projetCouvert,
+    manuscrit_choisir: projetCouvert,
+  });
+  const dernierDos = () =>
+    appels.filter(([c]) => c === 'couverture_apercu').pop()[1].dosMm;
+
+  await els.get('btComposer').declenche('click');
+  await els.get('faces').children[2].declenche('click');
+  await attendreApercu();
+  assert.strictEqual(dernierDos(), 17.427);
+
+  await els.get('btReimporter').declenche('click');
+  await attendreApercu();
+  assert.strictEqual(dernierDos(), null, 'dos gardé après une réimportation du manuscrit');
+
+  await els.get('btComposer').declenche('click');
+  await attendreApercu();
+  assert.strictEqual(dernierDos(), 17.427);
+
+  await els.get('btChoisirManuscrit').declenche('click');
+  await attendreApercu();
+  assert.strictEqual(dernierDos(), null, 'dos gardé après un changement de manuscrit');
 });

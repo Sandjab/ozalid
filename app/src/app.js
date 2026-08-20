@@ -19,8 +19,8 @@ let polices = [];
 let face = 'une';
 let attenteApercu = null;
 /**
- * Dos de la dernière composition, en mm, avec le prestataire et la police pour
- * lesquels il vaut.
+ * Dos de la dernière composition, en mm, avec le prestataire, le papier et la police
+ * pour lesquels il vaut.
  *
  * Il n'est jamais saisi : il vient de la pagination mesurée par Typst. C'est ce qui
  * permet à l'aperçu de planche d'être juste, et ce qui le fait refuser de s'afficher
@@ -185,8 +185,22 @@ async function majLivre() {
     afficherProjet(await invoke('livre_modifier', { livre: livre() })));
 }
 
+/**
+ * Le manuscrit vient d'être remplacé : le texte fait la pagination, donc le dos. Celui
+ * de la dernière composition ne vaut plus rien, et rien dans le panneau ne permettrait
+ * de s'en apercevoir — le gabarit, le papier et la police, eux, n'ont pas bougé.
+ *
+ * Périmé sans regarder si le texte a réellement changé : réimporter un manuscrit
+ * identique coûte une recomposition pour rien, comparer deux fois un roman entier à
+ * chaque clic coûterait davantage, et se tromper de ce côté-là n'imprime rien de faux.
+ */
+function manuscritRemplace(p) {
+  dosCompose = null;
+  afficherProjet(p);
+}
+
 async function reimporter() {
-  await tente(async () => afficherProjet(await invoke('manuscrit_reimporter')));
+  await tente(async () => manuscritRemplace(await invoke('manuscrit_reimporter')));
 }
 
 async function choisirManuscrit() {
@@ -196,7 +210,7 @@ async function choisirManuscrit() {
   });
   if (!choix) return;
   await tente(async () =>
-    afficherProjet(await invoke('manuscrit_choisir', { chemin: choix })));
+    manuscritRemplace(await invoke('manuscrit_choisir', { chemin: choix })));
 }
 
 /* ---------- intérieur ---------- */
@@ -298,11 +312,17 @@ function demanderApercu() {
   attenteApercu = setTimeout(rendreApercu, 180);
 }
 
-/** Dos à passer à l'aperçu : celui de la composition, et seulement s'il vaut pour le
- * prestataire et la police affichés. Changer de gabarit le périme aussitôt, et changer
- * de police aussi : elle repagine le livre, donc déplace le dos. */
+/**
+ * Dos à passer à l'aperçu : celui de la composition, et seulement s'il vaut pour ce
+ * qui est affiché. Trois choses le déplacent, et il faut les trois : le gabarit, parce
+ * que le même manuscrit ne fait pas le même nombre de pages en poche et en grand
+ * format ; la police, qui repagine ; le papier, qui change l'épaisseur d'une page sans
+ * même toucher à la pagination. La quatrième cause, le texte lui-même, n'a rien à
+ * comparer ici : elle périme `dosCompose` au moment du remplacement.
+ */
 function dosCourant() {
   return dosCompose?.provider === $('inProvider').value
+    && dosCompose?.papier === $('inPapier').value
     && dosCompose?.police === $('inPoliceInterieur').value
     ? dosCompose.mm
     : null;
@@ -391,6 +411,7 @@ async function composer() {
     // sert tel quel, sans que personne ne le retape.
     dosCompose = c.dos === null ? null : {
       provider: $('inProvider').value,
+      papier: $('inPapier').value,
       police: $('inPoliceInterieur').value,
       mm: c.dos,
     };
@@ -549,6 +570,9 @@ $('inProvider').addEventListener('change', () => {
   // de maquette n'a bougé.
   demanderApercu();
 });
+// Le papier ne change ni le format ni la maquette : il ne touche que le dos, et c'est
+// pour cela seul que l'aperçu doit repartir.
+$('inPapier').addEventListener('change', demanderApercu);
 construireFaces();
 for (const id of ['inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright', 'inChapitres']) {
   $(id).addEventListener('change', majLivre);
