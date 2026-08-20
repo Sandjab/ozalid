@@ -63,7 +63,12 @@ for f in "${FICHIERS[@]}"; do
   url="$BASE/${f//\[/%5B}"
   url="${url//\]/%5D}"
   url="${url//,/%2C}"
-  curl -fsSL "$url" -o "$cible"
+  # La sortie passe par un nom neutre, puis le shell renomme. Sous Git Bash — où ce
+  # script tourne sur les runners Windows —, un `-o` dont le nom porte des crochets et
+  # une virgule fait échouer curl à l'écriture (« curl: (23) »), et toutes les polices
+  # variables en portent. Le renommage, lui, ne passe pas par curl.
+  curl -fsSL "$url" -o "$DEST/.police-en-cours"
+  mv "$DEST/.police-en-cours" "$cible"
   echo "  $nom"
 done
 
