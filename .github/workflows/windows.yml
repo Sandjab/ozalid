@@ -20,6 +20,7 @@ concurrency:
 jobs:
   verifier:
     runs-on: windows-latest
+    timeout-minutes: 30
     defaults:
       run:
         shell: bash
@@ -90,6 +91,7 @@ jobs:
     needs: verifier
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
+    timeout-minutes: 30
     defaults:
       run:
         shell: bash
@@ -140,18 +142,34 @@ jobs:
       # `fonts`, mais rien ne garantit encore que le NSIS les y pose vraiment. On installe
       # en silencieux et on inspecte l'arborescence réelle plutôt que de la supposer.
       - name: Vérifier l'installation silencieuse
+        timeout-minutes: 5
         run: |
           exe=$(find app/src-tauri/target/release/bundle/nsis -name "*-setup.exe" | head -1)
           [ -n "$exe" ] || { echo "aucun installeur trouvé sous app/src-tauri/target/release/bundle/nsis" >&2; exit 1; }
 
-          "$exe" /S
-          # NSIS rend la main avant la fin de la copie des fichiers.
-          sleep 20
+          # L'installeur lance l'application en fin d'installation. Lui laisser la sortie
+          # de l'étape reviendrait à attendre que cette application se ferme — c'est-à-dire
+          # indéfiniment, personne n'étant là pour la fermer : un premier essai a tourné
+          # 1 h 40 sur cette seule ligne. On le détache donc, et on attend l'arborescence
+          # plutôt que le processus.
+          "$exe" /S >/dev/null 2>&1 </dev/null &
 
           # Le mode NSIS de Tauri installe par utilisateur (%LOCALAPPDATA%) ou par machine
           # (%PROGRAMFILES%) selon la configuration : on cherche aux deux emplacements
           # plutôt que d'en privilégier un.
-          trouve=$(find "$LOCALAPPDATA" "$PROGRAMFILES" -maxdepth 3 -iname "Ozalid Studio.exe" 2>/dev/null | head -1)
+          for _ in $(seq 1 60); do
+            trouve=$(find "$LOCALAPPDATA" "$PROGRAMFILES" -maxdepth 3 -iname "Ozalid Studio.exe" 2>/dev/null | head -1)
+            [ -n "$trouve" ] && break
+            sleep 2
+          done
+          # Les ressources sont copiées après l'exécutable : le trouver ne dit pas que
+          # l'installation est finie.
+          sleep 10
+
+          # L'application que l'installeur vient de lancer n'a plus lieu d'être, et elle
+          # tient ses fichiers ouverts.
+          taskkill //IM "Ozalid Studio.exe" //F >/dev/null 2>&1 || true
+
           if [ -z "$trouve" ]; then
             echo "exécutable « Ozalid Studio.exe » introuvable sous $LOCALAPPDATA ni $PROGRAMFILES" >&2
             echo "contenu de $LOCALAPPDATA :" >&2
