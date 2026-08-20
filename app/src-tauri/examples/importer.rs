@@ -40,12 +40,14 @@ fn main() -> Result<(), String> {
         relu.texte.split_whitespace().count(),
         taille as f64 / 1_048_576.0,
     );
-    match &relu.meta.couverture.atelier {
-        Some(a) => println!(
-            "  couverture : mode {}, format {:?}, {} réglages repris",
-            a.mode,
-            a.format,
-            a.champs.len()
+    match &relu.meta.couverture.maquette {
+        Some(m) => println!(
+            "  couverture : mode {:?}, titre en {} {}, papier {}, cadre {}",
+            m.mode,
+            m.titre.police,
+            m.titre.graisse,
+            m.papier,
+            if m.cadre.actif { "actif" } else { "éteint" },
         ),
         None => println!("  couverture : aucun réglage de l'atelier dans le PNG"),
     }

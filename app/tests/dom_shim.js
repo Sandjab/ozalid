@@ -55,6 +55,19 @@ class El {
     (this.ecouteurs[type] ||= []).push(fn);
   }
 
+  setAttribute(nom, valeur) {
+    this.attrs[nom] = String(valeur);
+  }
+
+  getAttribute(nom) {
+    return this.attrs[nom] ?? null;
+  }
+
+  removeAttribute(nom) {
+    delete this.attrs[nom];
+    if (nom === 'src') this.src = undefined;
+  }
+
   /** Déclenche les écouteurs, comme le ferait un clic ou un change. */
   async declenche(type) {
     for (const fn of this.ecouteurs[type] || []) await fn();
@@ -126,14 +139,22 @@ async function charge({
     },
     window: { __TAURI__: { core: { invoke }, dialog: { open, save } } },
     console,
+    // L'aperçu est débounce : sans minuteur, rien ne se déclenche.
+    setTimeout,
+    clearTimeout,
+    JSON,
+    Number,
+    String,
+    module: undefined,
   };
   contexte.globalThis = contexte;
   vm.createContext(contexte);
-  const src = fs.readFileSync(
-    path.join(__dirname, '..', 'src', 'app.js'),
-    'utf8'
-  );
-  vm.runInContext(src, contexte);
+  // Les deux scripts de l'application, dans l'ordre du HTML : les déclarations de
+  // couverture.js sont visibles depuis app.js, comme dans un navigateur.
+  for (const nom of ['couverture.js', 'app.js']) {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'src', nom), 'utf8');
+    vm.runInContext(src, contexte, { filename: nom });
+  }
   // chargerProviders() est asynchrone et lancé au chargement : lui laisser un tour.
   await new Promise((r) => setImmediate(r));
   return { els, contexte };

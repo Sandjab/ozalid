@@ -8,8 +8,9 @@ intérieur composé → couverture → packages prestataires. Elle succède à l
 Ce qu'elle règle : le nombre de pages ne transite plus par un humain. L'intérieur
 le produit, la couverture le consomme, et le dos suit le manuscrit sans ressaisie.
 
-**État : jalon 2** — projet `.ozalid`, import d'un livre existant, composition de
-l'intérieur et pagination. Pas encore de couverture ni de packages.
+**État : jalon 3** — projet `.ozalid`, import d'un livre existant, composition de
+l'intérieur, moteur de couverture avec aperçu. Pas encore d'assemblage de planche
+ni de packages.
 
 ## Stack
 
@@ -22,13 +23,19 @@ l'intérieur et pagination. Pas encore de couverture ni de packages.
 
 ```
 app/outils/typst.sh --local     # ou sans --local pour télécharger la version épinglée
+app/outils/polices.sh           # ~6 Mo de polices OFL
 cd app/src-tauri && cargo tauri dev
 ```
 
-`typst.sh` place le sidecar dans `src-tauri/binaries/`, répertoire non versionné.
-La version de Typst y est **épinglée** : deux versions ne composent pas forcément
-le même nombre de pages, donc pas le même dos. La relever est un changement
-délibéré, à revalider sur un manuscrit réel.
+`typst.sh` place le sidecar dans `src-tauri/binaries/`, `polices.sh` les polices
+dans `src-tauri/fonts/` — deux répertoires non versionnés. La version de Typst est
+**épinglée** : deux versions ne composent pas forcément le même nombre de pages,
+donc pas le même dos. La relever est un changement délibéré, à revalider sur un
+manuscrit réel.
+
+Typst est lancé avec `--ignore-system-fonts` : seules les polices embarquées
+comptent, sans quoi une police du poste pourrait s'y substituer et le rendu
+dépendrait de la machine.
 
 ## Modules
 
@@ -41,7 +48,10 @@ résultats. Tout le reste est testable sans fenêtre.
 | `manuscrit` | Markdown → chapitres → contenu Typst, avec refus explicite du non composable |
 | `projet` | Le `.ozalid` : lecture, écriture, identité du livre |
 | `png` | Lecture du bloc de réglages qu'`index.html` écrit dans ses PNG |
-| `import` | Un `livre.toml` de l'ancienne chaîne → un projet |
+| `import` | Un `livre.toml` et un PNG de l'atelier → un projet et sa maquette |
+| `image` | Dimensions naturelles d'une image, et cadrage dans une zone |
+| `couverture` | Maquette typée → source Typst des deux faces |
+| `maquettes` | Folio, Blanche et Surimpression |
 | `typst` | Invocation du sidecar : mesurer la pagination, compiler, rendre un aperçu |
 | `interieur` | Source Typst de l'intérieur, et convergence gouttière/parité |
 | `commands` | Frontière avec l'interface, et projet ouvert |
@@ -84,7 +94,12 @@ composition — le compte de pages est ce qu'on compare :
 cd app/src-tauri
 cargo run --example importer -- <livre.toml> <projet.ozalid>
 cargo run --example composer -- <projet.ozalid> lulu <sortie>
+cargo run --example maquette -- <projet.ozalid> lulu <sortie>
 ```
+
+`maquette` rend les maquettes en PNG : c'est la vérification qu'aucun test ne peut
+faire — la position du cadre, l'assiette du bloc titre, le voile. À rejouer et à
+regarder après toute modification du moteur de couverture.
 
 Les tests du front exécutent le vrai `src/app.js` dans un faux DOM qui lit l'état
 initial dans le vrai `src/index.html`. Ils couvrent le câblage, jamais le rendu :
@@ -98,9 +113,16 @@ tout ce qui se voit se vérifie dans l'application.
 - **Le manuscrit n'admet qu'un sous-ensemble de Markdown.** Tout le reste est
   refusé avec son numéro de ligne — un aplatissement silencieux donnerait un
   livre faux, découvert après tirage.
-- **Les réglages de couverture importés ne sont pas encore lus.** Ils sont
-  conservés tels quels sous `[couverture.atelier]`, avec leurs identifiants
-  d'origine (`inTitre`, `inFrameM`…) et leurs types. Le moteur Typst du jalon 3 les
-  traduira ; les figer dans un schéma maison avant que ce moteur existe reviendrait
-  à inventer une cible.
+- **Georgia et Helvetica ne sont pas reprises.** Elles appartiennent au système, ne
+  sont pas redistribuables, et Helvetica n'existe pas sous Windows. Une maquette
+  importée qui les utilise est refusée avec la liste des familles embarquées.
+- **Le prolongement panoramique dépend de la pagination.** La 4ème y montre la part
+  de l'image située au-delà du dos : le composer sans compte de pages est refusé,
+  pas approximé.
+- **L'aperçu et le PDF sortent de la même source.** Il n'y a donc pas d'écart
+  écran/export à surveiller — le piège que consignait le `CLAUDE.md` du projet
+  n'existe plus ici.
+- **Le panneau de réglages est construit depuis un schéma** (`src/couverture.js`),
+  pas écrit à la main : un chemin faux y laisse un contrôle vide, ce qui se voit
+  tout de suite, et un test vérifie que tous les chemins existent.
 - **L'icône est provisoire.** Un placeholder, pas une identité visuelle.

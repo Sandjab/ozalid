@@ -17,13 +17,23 @@ pub const MARQUEUR: &str = "#context [#metadata(counter(page).final().first()) <
 #[derive(Debug, Clone)]
 pub struct Typst {
     binaire: PathBuf,
+    /// Répertoire des polices embarquées. Sans lui, Typst n'a que les polices du
+    /// système : une maquette rendrait différemment d'une machine à l'autre, ou
+    /// serait substituée en silence.
+    polices: Option<PathBuf>,
 }
 
 impl Typst {
     pub fn new(binaire: impl Into<PathBuf>) -> Self {
         Self {
             binaire: binaire.into(),
+            polices: None,
         }
+    }
+
+    pub fn avec_polices(mut self, dossier: impl Into<PathBuf>) -> Self {
+        self.polices = Some(dossier.into());
+        self
     }
 
     /// Compte de pages final de la source, sans produire de PDF.
@@ -69,15 +79,19 @@ impl Typst {
     }
 
     fn lance(&self, args: &[&str]) -> Result<String, String> {
-        let r = Command::new(&self.binaire)
-            .args(args)
-            .output()
-            .map_err(|e| {
-                format!(
-                    "Typst introuvable ou inexécutable ({}) : {e}",
-                    self.binaire.display()
-                )
-            })?;
+        let mut cmd = Command::new(&self.binaire);
+        cmd.args(args);
+        if let Some(p) = &self.polices {
+            // `--ignore-system-fonts` : sans lui, une police du poste pourrait se
+            // substituer à une police embarquée et le rendu dépendrait de la machine.
+            cmd.arg("--font-path").arg(p).arg("--ignore-system-fonts");
+        }
+        let r = cmd.output().map_err(|e| {
+            format!(
+                "Typst introuvable ou inexécutable ({}) : {e}",
+                self.binaire.display()
+            )
+        })?;
         if !r.status.success() {
             // Le message de Typst est le seul indice exploitable : le remonter entier.
             return Err(String::from_utf8_lossy(&r.stderr).trim().to_string());

@@ -1,7 +1,10 @@
 pub mod commands;
+pub mod couverture;
+pub mod image;
 pub mod import;
 pub mod interieur;
 pub mod manuscrit;
+pub mod maquettes;
 pub mod png;
 pub mod projet;
 pub mod providers;
@@ -19,6 +22,11 @@ pub fn run() {
             commands::manuscrit_choisir,
             commands::manuscrit_reimporter,
             commands::livre_modifier,
+            commands::maquettes_liste,
+            commands::polices_liste,
+            commands::maquette_choisir,
+            commands::couverture_modifier,
+            commands::couverture_apercu,
             commands::composer
         ])
         .run(tauri::generate_context!())

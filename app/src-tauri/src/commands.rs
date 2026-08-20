@@ -8,9 +8,11 @@ use std::sync::Mutex;
 use serde::Serialize;
 use tauri::State;
 
+use crate::couverture::{self, Couverture, Ressource};
 use crate::import;
 use crate::interieur::{self, Reglage};
 use crate::manuscrit;
+use crate::maquettes;
 use crate::projet::{Livre, Projet};
 use crate::providers::{self, Provider};
 use crate::typst::Typst;
@@ -73,7 +75,8 @@ pub struct ProjetVue {
     /// Chapitres réellement trouvés dans le manuscrit embarqué.
     pub chapitres_trouves: u32,
     pub mots: u32,
-    /// Réglages de couverture repris de l'atelier, en attente du moteur Typst.
+    /// Maquette de couverture du projet, si le projet en porte une.
+    pub couverture: Option<Couverture>,
     pub couverture_importee: bool,
     pub images: Vec<String>,
 }
@@ -188,7 +191,7 @@ pub fn composer(
         )
     })?;
 
-    let typst = Typst::new(binaire_typst()?);
+    let typst = typst()?;
     let src = dossier.join(format!("interieur-{}.typ", pr.cle));
 
     // La convergence ne mesure que le compte de pages : aucun PDF n'est produit tant
@@ -214,6 +217,121 @@ pub fn composer(
         dos: papier.dos.mm(r.pages),
         pdf: pdf.to_string_lossy().into_owned(),
     })
+}
+
+/* ---------- couverture ---------- */
+
+#[derive(Serialize)]
+pub struct MaquetteVue {
+    cle: String,
+    libelle: String,
+}
+
+#[tauri::command]
+pub fn maquettes_liste() -> Vec<MaquetteVue> {
+    maquettes::toutes()
+        .into_iter()
+        .map(|(cle, libelle, _)| MaquetteVue {
+            cle: cle.into(),
+            libelle: libelle.into(),
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub fn polices_liste() -> Vec<&'static str> {
+    couverture::POLICES.to_vec()
+}
+
+/// Charge une maquette de départ. Elle remplace la mise en page, jamais l'identité du
+/// livre : le titre et l'auteur imprimés restent ceux du projet.
+#[tauri::command]
+pub fn maquette_choisir(cle: String, atelier: State<Atelier>) -> Result<ProjetVue, String> {
+    let m = maquettes::par_cle(&cle).ok_or_else(|| format!("maquette inconnue : {cle}"))?;
+    let mut garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_mut().ok_or_else(aucun_projet)?;
+    o.projet.meta.couverture.maquette = Some(m);
+    vue(o)
+}
+
+#[tauri::command]
+pub fn couverture_modifier(
+    couverture: Couverture,
+    atelier: State<Atelier>,
+) -> Result<ProjetVue, String> {
+    let mut garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_mut().ok_or_else(aucun_projet)?;
+    o.projet.meta.couverture.maquette = Some(couverture);
+    vue(o)
+}
+
+/// Aperçu d'une face de couverture, en PNG encodé dans une URL `data:`.
+///
+/// L'aperçu sort du **même** moteur et de la même source que le PDF final : il n'y a
+/// donc pas d'écart écran/export à surveiller, contrairement à l'atelier HTML.
+#[tauri::command]
+pub fn couverture_apercu(
+    face: String,
+    provider_cle: String,
+    dos_mm: Option<f64>,
+    atelier: State<Atelier>,
+) -> Result<String, String> {
+    let garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_ref().ok_or_else(aucun_projet)?;
+    let cv = o
+        .projet
+        .meta
+        .couverture
+        .maquette
+        .as_ref()
+        .ok_or("aucune maquette : en choisir une.")?;
+    let pr = providers::provider(&provider_cle)
+        .ok_or_else(|| format!("prestataire inconnu : {provider_cle}"))?;
+
+    // Répertoire de travail de l'aperçu : temporaire, jamais à côté du projet. Un
+    // aperçu n'est pas une sortie, et il est réécrit à chaque réglage.
+    let dossier = std::env::temp_dir().join("ozalid-apercu");
+    std::fs::create_dir_all(&dossier).map_err(|e| format!("aperçu impossible : {e}"))?;
+
+    let (une, quatre) = ecrire_images(&o.projet, &dossier)?;
+    let src = match face.as_str() {
+        "une" => couverture::source_une(&o.projet.meta.livre, cv, pr.format, une.as_ref()),
+        "quatre" => {
+            couverture::source_quatre(cv, pr.format, quatre.as_ref(), une.as_ref(), dos_mm)?
+        }
+        autre => return Err(format!("face inconnue : {autre}")),
+    };
+
+    let typ = dossier.join(format!("apercu-{face}.typ"));
+    let png = dossier.join(format!("apercu-{face}.png"));
+    ecrire(&typ, &src)?;
+    typst()?.apercu(&typ, &png, 1, 150)?;
+
+    let octets = std::fs::read(&png).map_err(|e| format!("aperçu illisible : {e}"))?;
+    Ok(format!(
+        "data:image/png;base64,{}",
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, octets)
+    ))
+}
+
+/// Écrit les images du projet à côté de la source, et rend leurs descriptions.
+/// Typst lit ses images par chemin relatif, comme n'importe quel document.
+fn ecrire_images(
+    projet: &Projet,
+    dossier: &Path,
+) -> Result<(Option<Ressource>, Option<Ressource>), String> {
+    let (mut une, mut quatre) = (None, None);
+    for (nom, octets) in &projet.images {
+        std::fs::write(dossier.join(nom), octets).map_err(|e| format!("{nom} : {e}"))?;
+        let r = Ressource::depuis(nom, octets)
+            .ok_or_else(|| format!("{nom} : dimensions illisibles (ni PNG ni JPEG)."))?;
+        if nom.starts_with("quatrieme") {
+            quatre = Some(r);
+        } else {
+            une = Some(r);
+        }
+    }
+    Ok((une, quatre))
 }
 
 /// Répertoire des sorties d'un prestataire : à côté du `.ozalid`, jamais dedans.
@@ -255,7 +373,8 @@ fn vue(o: &Ouvert) -> Result<ProjetVue, String> {
         manuscrit_source: o.projet.meta.manuscrit.source.clone(),
         chapitres_trouves,
         mots: o.projet.texte.split_whitespace().count() as u32,
-        couverture_importee: o.projet.meta.couverture.atelier.is_some(),
+        couverture: o.projet.meta.couverture.maquette.clone(),
+        couverture_importee: o.projet.meta.couverture.maquette.is_some(),
         images: o.projet.images.keys().cloned().collect(),
     })
 }
@@ -285,6 +404,25 @@ fn binaire_typst() -> Result<PathBuf, String> {
         None if cfg!(debug_assertions) => Ok(PathBuf::from("typst")),
         None => Err("Typst embarqué introuvable : l'application est mal empaquetée.".into()),
     }
+}
+
+/// Typst prêt à composer, polices embarquées comprises.
+fn typst() -> Result<Typst, String> {
+    let b = binaire_typst()?;
+    let voisin = b.parent().map(Path::to_path_buf).unwrap_or_default();
+    let candidats = [
+        voisin.join("fonts"),
+        // Empaquetage macOS : les ressources sont dans Contents/Resources, pas à côté
+        // du binaire. Le chemin réel en release se vérifie au jalon 5.
+        voisin.join("../Resources/fonts"),
+        // Développement : les polices vivent dans les sources.
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("fonts"),
+    ];
+    let dossier = candidats
+        .into_iter()
+        .find(|p| p.is_dir())
+        .ok_or("polices embarquées introuvables : lancer app/outils/polices.sh.")?;
+    Ok(Typst::new(b).avec_polices(dossier))
 }
 
 fn nom_sidecar() -> &'static str {

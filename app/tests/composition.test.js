@@ -6,10 +6,11 @@ const { charge } = require('./dom_shim');
 
 const IDS = [
   'btOuvrir', 'btImporter', 'btEnregistrer', 'cheminProjet',
-  'secLivre', 'secManuscrit', 'secComposer',
+  'secLivre', 'secManuscrit', 'secCouverture', 'secComposer',
   'inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright', 'inChapitres',
   'etatManuscrit', 'sourceManuscrit', 'btReimporter', 'btChoisirManuscrit',
-  'etatCouverture',
+  'etatImages', 'maquettes', 'etatCouverture', 'faces', 'apercu', 'etatApercu',
+  'reglages',
   'inProvider', 'inPapier', 'noteFormat',
   'btComposer', 'etat', 'resultat',
 ];
@@ -48,6 +49,11 @@ const PROJET = {
 function faux(providers, sur = {}) {
   return async (cmd, args) => {
     if (cmd === 'providers_liste') return providers;
+    if (cmd === 'polices_liste') return ['Bodoni Moda', 'Archivo', 'Spectral'];
+    if (cmd === 'maquettes_liste') {
+      return [{ cle: 'folio', libelle: 'Folio' }, { cle: 'blanche', libelle: 'Blanche' }];
+    }
+    if (cmd === 'couverture_apercu') return 'data:image/png;base64,AAAA';
     if (cmd in sur) {
       const v = sur[cmd];
       return typeof v === 'function' ? v(args) : v;
@@ -108,8 +114,7 @@ test('un projet importé remplit les champs et ouvre les sections', async () => 
   assert.strictEqual(els.get('inChapitres').value, 64);
   assert.strictEqual(els.get('secComposer').hidden, false);
   assert.strictEqual(els.get('btEnregistrer').disabled, false);
-  assert.match(els.get('etatCouverture').textContent, /Réglages de couverture repris/);
-  assert.match(els.get('etatCouverture').textContent, /couverture\.jpg/);
+  assert.match(els.get('etatImages').textContent, /couverture\.jpg/);
 });
 
 /**
@@ -219,14 +224,13 @@ test('un prestataire sans formule n\'affiche jamais de dos chiffré', async () =
  */
 test('une erreur de composition efface le résultat précédent', async () => {
   let echoue = false;
-  const invoke = async (cmd) => {
-    if (cmd === 'providers_liste') return [LULU];
-    if (cmd === 'projet_ouvrir') return PROJET;
+  const base = faux([LULU], { projet_ouvrir: PROJET });
+  const invoke = async (cmd, args) => {
     if (cmd === 'composer') {
       if (echoue) throw '64 chapitres attendus (projet), 61 trouvés.';
       return COMPOSITION;
     }
-    throw new Error(`commande inattendue : ${cmd}`);
+    return base(cmd, args);
   };
   const { els } = await charge({
     ids: IDS, invoke, open: async () => '/livres/LHC.ozalid',

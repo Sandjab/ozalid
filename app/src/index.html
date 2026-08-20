@@ -43,7 +43,24 @@
       <button id="btReimporter" type="button" disabled>Réimporter le manuscrit</button>
       <button id="btChoisirManuscrit" type="button">Choisir un autre manuscrit…</button>
     </div>
+    <p class="note" id="etatImages"></p>
+  </section>
+
+  <section id="secCouverture" hidden>
+    <h2>Couverture</h2>
+    <div class="ligne">
+      <span class="lab">Maquette de départ</span>
+      <span id="maquettes" class="ligne"></span>
+    </div>
     <p class="note" id="etatCouverture"></p>
+    <div class="couv">
+      <div>
+        <div class="ligne onglets" id="faces"></div>
+        <img id="apercu" class="apercu" alt="Aperçu de la couverture">
+        <p class="note" id="etatApercu"></p>
+      </div>
+      <div id="reglages" class="reglages"></div>
+    </div>
   </section>
 
   <section id="secComposer" hidden>
@@ -59,6 +76,7 @@
   </section>
 </main>
 
+<script src="couverture.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -25,7 +25,9 @@ use serde::{Deserialize, Serialize};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
-pub const VERSION: u32 = 1;
+/// Version 2 : la maquette de couverture y est typée, dans le vocabulaire du moteur
+/// Typst, là où la 1 conservait le bloc de réglages brut de l'atelier HTML.
+pub const VERSION: u32 = 2;
 const PROJET_TOML: &str = "projet.toml";
 const MANUSCRIT_MD: &str = "manuscrit.md";
 const IMAGES: &str = "images/";
@@ -66,25 +68,15 @@ pub struct Manuscrit {
     pub source: Option<String>,
 }
 
-/// Réglages de couverture repris de l'atelier HTML, conservés **tels quels**.
+/// La maquette de couverture du projet, dans le vocabulaire du moteur Typst.
 ///
-/// Les clés sont les identifiants de contrôles d'`index.html` (`inTitre`, `inFrameM`…).
-/// Le moteur Typst du jalon 3 les traduira ; les figer dans un schéma maison avant que
-/// ce moteur existe reviendrait à inventer une cible.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct Atelier {
-    #[serde(default)]
-    pub mode: String,
-    #[serde(default)]
-    pub format: Vec<f64>,
-    #[serde(default)]
-    pub champs: BTreeMap<String, toml::Value>,
-}
-
+/// Absente tant qu'aucune maquette n'a été choisie ni importée : composer la
+/// couverture n'a alors pas d'objet, et l'interface le dit plutôt que d'en inventer
+/// une par défaut.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Couverture {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub atelier: Option<Atelier>,
+    pub maquette: Option<crate::couverture::Couverture>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -252,15 +244,11 @@ mod tests {
     fn un_projet_complet_survit_a_l_aller_retour() {
         let mut p = Projet::nouveau(livre(), "## 01 - Un\n\nTexte.\n".into());
         p.meta.manuscrit.source = Some("/travail/roman.md".into());
-        p.meta.couverture.atelier = Some(Atelier {
-            mode: "band".into(),
-            format: vec![108.0, 178.0],
-            champs: BTreeMap::from([
-                ("inPadX".to_string(), toml::Value::from("7")),
-                ("inFrameOn".to_string(), toml::Value::from(false)),
-                ("inTitleSize".to_string(), toml::Value::from(8.0)),
-            ]),
-        });
+        let mut maquette = crate::maquettes::blanche();
+        maquette.pad_x = 16.5;
+        maquette.titre.taille = 9.25;
+        maquette.pastille.texte = "collection « Ozalid »".into();
+        p.meta.couverture.maquette = Some(maquette);
         p.images
             .insert("couverture.jpg".into(), vec![0xFF, 0xD8, 0xFF]);
 
@@ -275,21 +263,23 @@ mod tests {
         assert_eq!(r.texte, p.texte);
         assert_eq!(r.images["couverture.jpg"], vec![0xFF, 0xD8, 0xFF]);
 
-        let a = r.meta.couverture.atelier.unwrap();
-        assert_eq!(a.mode, "band");
-        assert_eq!(a.format, vec![108.0, 178.0]);
-        // Les types des réglages sont préservés : une case cochée reste un booléen,
-        // pas la chaîne « false », que le jalon 3 lirait comme vraie.
-        assert_eq!(a.champs["inFrameOn"], toml::Value::from(false));
-        assert_eq!(a.champs["inTitleSize"], toml::Value::from(8.0));
-        assert_eq!(a.champs["inPadX"], toml::Value::from("7"));
+        // La maquette entière survit, y compris les valeurs affinées à la main : la
+        // reperdre obligerait à refaire le réglage fin de la couverture.
+        let m = r.meta.couverture.maquette.unwrap();
+        assert_eq!(m.mode, crate::couverture::Mode::Typo);
+        assert_eq!(m.pad_x, 16.5);
+        assert_eq!(m.titre.taille, 9.25);
+        assert_eq!(m.titre.casse, crate::couverture::Casse::Capitales);
+        assert!(m.cadre.actif);
+        assert_eq!(m.cadre.filet2_couleur, "#c00000");
+        assert_eq!(m.pastille.texte, "collection « Ozalid »");
     }
 
     #[test]
     fn un_projet_sans_couverture_ni_images_reste_valide() {
         let p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
         let r = aller_retour(&p);
-        assert!(r.meta.couverture.atelier.is_none());
+        assert!(r.meta.couverture.maquette.is_none());
         assert!(r.images.is_empty());
     }
 

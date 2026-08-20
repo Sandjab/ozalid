@@ -111,3 +111,58 @@ dl {
 
 dt { color: #5c564d; }
 dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+/* ---------- couverture ---------- */
+
+.lab { color: #5c564d; }
+
+.couv {
+  display: grid;
+  grid-template-columns: minmax(14rem, 22rem) 1fr;
+  gap: 1.5rem;
+  margin-top: 1rem;
+  align-items: start;
+}
+
+.onglets button {
+  background: transparent;
+  color: var(--encre);
+  border-color: var(--trait);
+}
+
+.onglets button[aria-pressed="true"] {
+  background: var(--encre);
+  color: var(--papier);
+  border-color: var(--encre);
+}
+
+.apercu {
+  display: block;
+  width: 100%;
+  margin-top: .8rem;
+  background: #fff;
+  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, .4);
+}
+
+.reglages {
+  max-height: 34rem;
+  overflow-y: auto;
+  padding-right: .6rem;
+}
+
+.groupe { margin-bottom: 1.2rem; }
+
+.groupe h3 {
+  margin: 0 0 .5rem;
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #7a7368;
+  border-bottom: 1px solid var(--trait);
+  padding-bottom: .3rem;
+}
+
+.groupe label { grid-template-columns: 10rem 1fr; }
+.groupe input[type="color"] { padding: 0; height: 1.8rem; }
+.groupe input[type="checkbox"] { width: auto; justify-self: start; }

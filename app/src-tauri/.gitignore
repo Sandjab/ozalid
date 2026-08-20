@@ -2,6 +2,8 @@
 /gen/schemas
 # Sidecar Typst : ~30 Mo par plateforme, récupéré par outils/typst.sh — pas versionné.
 /binaries
+# Polices OFL : ~6 Mo, récupérées par outils/polices.sh, qui en épingle la source.
+/fonts
 # Icônes mobiles produites par « cargo tauri icon » : hors périmètre (macOS + Windows).
 /icons/android
 /icons/ios

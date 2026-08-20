@@ -15,6 +15,9 @@ function h(tag, texte, classe) {
 
 let projet = null;
 let providers = [];
+let polices = [];
+let face = 'une';
+let attenteApercu = null;
 
 const nb = (v, d = 2) => v.toLocaleString('fr-FR', {
   minimumFractionDigits: d, maximumFractionDigits: d
@@ -26,6 +29,15 @@ async function chargerProviders() {
   providers = await invoke('providers_liste');
   for (const p of providers) $('inProvider').append(new Option(p.libelle, p.cle));
   majPapiers();
+  polices = await invoke('polices_liste');
+  for (const m of await invoke('maquettes_liste')) {
+    const b = h('button', m.libelle);
+    b.type = 'button';
+    b.addEventListener('click', () => tente(async () =>
+      afficherProjet(await invoke('maquette_choisir', { cle: m.cle }))));
+    $('maquettes').append(b);
+  }
+  construireReglages();
 }
 
 function providerCourant() {
@@ -51,7 +63,9 @@ function afficherProjet(p) {
   projet = p;
   $('cheminProjet').textContent = p.chemin ?? 'projet non enregistré';
   $('btEnregistrer').disabled = false;
-  for (const s of ['secLivre', 'secManuscrit', 'secComposer']) $(s).hidden = false;
+  for (const s of ['secLivre', 'secManuscrit', 'secCouverture', 'secComposer']) {
+    $(s).hidden = false;
+  }
 
   $('inTitre').value = p.livre.titre;
   $('inTitrePage').value = p.livre.titre_page ?? '';
@@ -72,13 +86,16 @@ function afficherProjet(p) {
   $('sourceManuscrit').textContent = p.manuscrit_source ?? 'aucune source mémorisée';
   $('btReimporter').disabled = !p.manuscrit_source;
 
-  const morceaux = [];
-  if (p.couverture_importee) {
-    morceaux.push('Réglages de couverture repris de l\'atelier — le moteur Typst les '
-      + 'traduira au jalon 3.');
-  }
-  if (p.images.length) morceaux.push(`Photos source : ${p.images.join(', ')}.`);
-  $('etatCouverture').textContent = morceaux.join(' ');
+  $('etatImages').textContent = p.images.length
+    ? `Photos source : ${p.images.join(', ')}.`
+    : 'Aucune photo source : les modes Bandeau et Surimpression composeront sur le papier seul.';
+
+  $('etatCouverture').textContent = p.couverture
+    ? ''
+    : 'Aucune maquette : en choisir une pour composer la couverture.';
+  $('reglages').hidden = !p.couverture;
+  if (p.couverture) afficherCouverture(p.couverture);
+  demanderApercu();
 }
 
 /** Enveloppe commune : affiche l'erreur au lieu de la laisser filer dans la console. */
@@ -156,6 +173,141 @@ async function choisirManuscrit() {
     afficherProjet(await invoke('manuscrit_choisir', { chemin: choix })));
 }
 
+/* ---------- couverture ---------- */
+
+/** Un contrôle du schéma. Son id porte le chemin, ce qui suffit à le relire. */
+function controle(c) {
+  let el;
+  if (c.type === 'liste' || c.type === 'polices') {
+    el = h('select');
+    const options = c.type === 'polices' ? polices.map((p) => [p, p]) : c.options;
+    for (const [v, l] of options) el.append(new Option(l, v));
+  } else if (c.type === 'zone') {
+    el = h('textarea');
+    el.rows = 4;
+  } else {
+    el = h('input');
+    el.type = c.type === 'couleur' ? 'color' : c.type === 'case' ? 'checkbox' : c.type === 'nombre' ? 'number' : 'text';
+    if (c.type === 'nombre') {
+      el.min = c.min; el.max = c.max; el.step = c.pas;
+    }
+  }
+  el.addEventListener('change', majCouverture);
+  return el;
+}
+
+/** Contrôles construits, avec leur champ de schéma et leur ligne. */
+let controles = [];
+/** Blocs du panneau, avec la face et les modes qui les concernent. */
+let blocs = [];
+
+function construireReglages() {
+  const box = $('reglages');
+  box.replaceChildren();
+  controles = [];
+  blocs = [];
+  for (const g of groupes()) {
+    const bloc = h('div', undefined, 'groupe');
+    bloc.append(h('h3', g.titre));
+    for (const c of g.champs) {
+      const ligne = h('label');
+      const lib = c.unite ? `${c.libelle} (${c.unite})` : c.libelle;
+      const el = controle(c);
+      ligne.append(h('span', lib), el);
+      bloc.append(ligne);
+      controles.push({ champ: c, el, ligne });
+    }
+    blocs.push({ el: bloc, face: g.face ?? 'une', modes: g.modes ?? null });
+    box.append(bloc);
+  }
+}
+
+/** Remplit les contrôles depuis la maquette, et masque ce qui est sans objet. */
+function afficherCouverture(cv) {
+  for (const { champ, el, ligne } of controles) {
+    const v = lire(cv, champ.chemin);
+    if (champ.type === 'case') el.checked = !!v;
+    else el.value = v ?? '';
+    // Un réglage sans objet dans l'état courant est masqué plutôt que grisé : le
+    // panneau est long, et un contrôle inopérant y serait un piège.
+    ligne.hidden = !!champ.modes && !champ.modes.includes(cv.mode);
+  }
+  for (const b of blocs) {
+    b.el.hidden = b.face !== face || (!!b.modes && !b.modes.includes(cv.mode));
+  }
+}
+
+/** Relit les contrôles et renvoie la maquette modifiée. */
+function couvertureSaisie() {
+  const cv = JSON.parse(JSON.stringify(projet.couverture));
+  for (const { champ, el } of controles) {
+    let v;
+    if (champ.type === 'case') v = el.checked;
+    else if (champ.type === 'nombre') v = Number(el.value);
+    else v = el.value;
+    ecrire(cv, champ.chemin, v);
+  }
+  return cv;
+}
+
+async function majCouverture() {
+  await tente(async () =>
+    afficherProjet(await invoke('couverture_modifier', { couverture: couvertureSaisie() })));
+}
+
+/**
+ * Aperçu, avec un délai de grâce : chaque réglage relance une composition Typst, et
+ * enchaîner les crans d'un curseur en lancerait une par cran.
+ */
+function demanderApercu() {
+  clearTimeout(attenteApercu);
+  attenteApercu = setTimeout(rendreApercu, 180);
+}
+
+async function rendreApercu() {
+  if (!projet?.couverture) {
+    $('apercu').removeAttribute('src');
+    $('etatApercu').textContent = 'Choisir une maquette de départ.';
+    return;
+  }
+  $('etatApercu').textContent = 'composition de l\'aperçu…';
+  try {
+    const data = await invoke('couverture_apercu', {
+      face,
+      providerCle: $('inProvider').value,
+      dosMm: null,
+    });
+    $('apercu').src = data;
+    $('etatApercu').textContent = '';
+    $('etatApercu').className = 'note';
+  } catch (e) {
+    $('apercu').removeAttribute('src');
+    $('etatApercu').textContent = String(e);
+    $('etatApercu').className = 'note alerte';
+  }
+}
+
+const FACES = [['une', '1ère'], ['quatre', '4ème']];
+
+function construireFaces() {
+  for (const [cle, libelle] of FACES) {
+    const b = h('button', libelle);
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(cle === face));
+    b.addEventListener('click', () => choisirFace(cle));
+    $('faces').append(b);
+  }
+}
+
+function choisirFace(v) {
+  face = v;
+  $('faces').children.forEach((b, i) => {
+    b.setAttribute('aria-pressed', String(FACES[i][0] === v));
+  });
+  if (projet?.couverture) afficherCouverture(projet.couverture);
+  demanderApercu();
+}
+
 /* ---------- composition ---------- */
 
 function afficher(c) {
@@ -204,7 +356,13 @@ $('btEnregistrer').addEventListener('click', enregistrer);
 $('btReimporter').addEventListener('click', reimporter);
 $('btChoisirManuscrit').addEventListener('click', choisirManuscrit);
 $('btComposer').addEventListener('click', composer);
-$('inProvider').addEventListener('change', majPapiers);
+$('inProvider').addEventListener('change', () => {
+  majPapiers();
+  // Le format vient du prestataire : l'aperçu change avec lui, même si aucun réglage
+  // de maquette n'a bougé.
+  demanderApercu();
+});
+construireFaces();
 for (const id of ['inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright', 'inChapitres']) {
   $(id).addEventListener('change', majLivre);
 }
