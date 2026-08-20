@@ -47,8 +47,8 @@ fn quatrieme_commune() -> Quatrieme {
     }
 }
 
-/// Le dos des trois maquettes : auteur et titre au pied, éditeur en tête, comme le
-/// faisait l'atelier HTML. Seule la couleur d'encre change d'une maquette à l'autre,
+/// Le dos des trois maquettes : auteur et titre en tête, éditeur au pied, comme un
+/// poche en rayon. Seule la couleur d'encre change d'une maquette à l'autre,
 /// selon la couleur du papier — le reste se règle élément par élément dans le panneau.
 fn dos(couleur: &str) -> Dos {
     let d = Dos::defaut();

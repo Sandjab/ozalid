@@ -425,15 +425,16 @@ mod tests {
         let mut cv = maquettes::blanche();
         let g = gabarit("lulu", 244);
 
-        // Par défaut : auteur puis titre au pied, éditeur en tête.
+        // Par défaut : éditeur au pied, puis auteur et titre en tête. La source liste
+        // les places dans l'ordre pied, centre, tête.
         let s = bloc_dos(&livre(), &cv, &g, None, 0.0);
         let ordre = |s: &str| {
             ["Ivan Pjig", "Les Heures creuses", "GALLIMARD"]
                 .map(|t| s.find(t).unwrap_or(usize::MAX))
         };
         let [auteur, titre, editeur] = ordre(&s);
-        assert!(auteur < titre, "titre avant auteur au pied");
-        assert!(titre < editeur, "éditeur avant le pied");
+        assert!(editeur < auteur, "l'éditeur n'est pas au pied");
+        assert!(auteur < titre, "titre avant auteur en tête");
 
         // Rangs inversés : le titre passe devant l'auteur, sans changer de place.
         cv.dos.auteur.rang = 2;
@@ -441,13 +442,13 @@ mod tests {
         let [auteur, titre, _] = ordre(&bloc_dos(&livre(), &cv, &g, None, 0.0));
         assert!(titre < auteur, "le rang n'ordonne rien");
 
-        // Le titre envoyé en tête quitte le pied, où l'auteur reste seul.
-        cv.dos.titre.place = PlaceDos::Tete;
-        cv.dos.editeur.place = PlaceDos::Pied;
+        // L'auteur renvoyé au pied y rejoint l'éditeur, et le titre reste seul en tête.
+        cv.dos.auteur.place = PlaceDos::Pied;
+        cv.dos.auteur.rang = 2;
         let [auteur, titre, editeur] = ordre(&bloc_dos(&livre(), &cv, &g, None, 0.0));
         assert!(
-            editeur < titre && auteur < titre,
-            "le titre n'est pas en tête"
+            editeur < auteur && auteur < titre,
+            "l'auteur n'est pas descendu au pied"
         );
     }
 

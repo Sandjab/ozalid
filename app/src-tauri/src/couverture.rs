@@ -242,15 +242,15 @@ fn element(place: PlaceDos, rang: u8) -> ElementDos {
 }
 
 fn dos_auteur() -> ElementDos {
-    element(PlaceDos::Pied, 1)
+    element(PlaceDos::Tete, 1)
 }
 
 fn dos_titre() -> ElementDos {
-    element(PlaceDos::Pied, 2)
+    element(PlaceDos::Tete, 2)
 }
 
 fn dos_editeur() -> ElementDos {
-    element(PlaceDos::Tete, 1)
+    element(PlaceDos::Pied, 1)
 }
 
 // Les deux écarts que le CSS d'origine fixait en dur, devenus réglables.
@@ -279,8 +279,10 @@ fn dos_defaut() -> Dos {
 }
 
 impl Dos {
-    /// Le dos d'origine : auteur puis titre au pied, éditeur en tête. Les maquettes
-    /// partent de là et n'en changent que ce qui leur est propre.
+    /// Le dos d'un poche courant : auteur puis titre en tête, mention d'éditeur au
+    /// pied. L'atelier HTML faisait l'inverse — c'était une fidélité à son CSS, pas à
+    /// un livre. Les maquettes partent de là et n'en changent que ce qui leur est
+    /// propre.
     pub fn defaut() -> Self {
         dos_defaut()
     }
