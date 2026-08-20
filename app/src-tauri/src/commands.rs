@@ -208,6 +208,7 @@ pub fn composer(
 
     let livre = &o.projet.meta.livre;
     let int = &o.projet.meta.interieur;
+    // `interieur::source` interpole la police sans échappement : la validation est ici.
     int.verifie()?;
     let chapitres = manuscrit::decoupe(&o.projet.texte, livre.chapitres)?;
 

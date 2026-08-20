@@ -57,6 +57,7 @@ pub fn assembler(
     typst: &Typst,
 ) -> Result<Package, String> {
     let int = &projet.meta.interieur;
+    // `interieur::source` interpole la police sans échappement : la validation est ici.
     int.verifie()?;
     std::fs::create_dir_all(dossier)
         .map_err(|e| format!("répertoire inutilisable ({}) : {e}", dossier.display()))?;

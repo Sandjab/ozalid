@@ -68,8 +68,8 @@ function faux(providers, sur = {}) {
 }
 
 const COMPOSITION = {
-  pages: 278, chapitres: 64, gouttiere: 25, blanche: true,
-  dos: 17.427, pdf: '/livres/LHC/lulu/interieur-lulu.pdf',
+  pages: 262, chapitres: 64, gouttiere: 25, blanche: true,
+  dos: 16.513, pdf: '/livres/LHC/lulu/interieur-lulu.pdf',
 };
 
 /* ---------- prestataires ---------- */
@@ -197,7 +197,7 @@ test('le dos calculé est affiché avec le compte de pages qui le produit', asyn
   const res = els.get('resultat');
   assert.strictEqual(res.hidden, false);
   assert.deepStrictEqual(res.textes('dd'), [
-    '278', '64', '25,00 mm', 'ajoutée (parité)', '17,43 mm',
+    '262', '64', '25,00 mm', 'ajoutée (parité)', '16,51 mm',
   ]);
 });
 

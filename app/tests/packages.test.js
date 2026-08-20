@@ -53,8 +53,8 @@ const PROJET = {
 };
 
 const COMPOSITION = {
-  pages: 278, chapitres: 64, gouttiere: 25, blanche: true,
-  dos: 17.427, pdf: '/livres/LHC/lulu/interieur-lulu.pdf',
+  pages: 262, chapitres: 64, gouttiere: 25, blanche: true,
+  dos: 16.513, pdf: '/livres/LHC/lulu/interieur-lulu.pdf',
 };
 
 function paquet(sur = {}) {
@@ -62,12 +62,12 @@ function paquet(sur = {}) {
     provider: 'lulu',
     libelle: 'Lulu — poche 108 × 175',
     papier: 'Papier standard',
-    pages: 278,
+    pages: 262,
     gouttiere: 25,
     blanche: true,
-    dos: 17.427,
+    dos: 16.513,
     fond_perdu: 3.175,
-    planche: [239.779, 181.35],
+    planche: [238.863, 181.35],
     chemins: ['/livres/LHC/lulu/interieur-lulu.pdf', '/livres/LHC/lulu/couverture-lulu.pdf'],
     ...sur,
   };
@@ -170,7 +170,7 @@ test('un prestataire en échec est signalé sans masquer ceux qui ont abouti', a
   const box = els.get('packages');
   assert.strictEqual(box.hidden, false);
   assert.deepStrictEqual(box.textes('h3'), ['Lulu', 'Amazon KDP']);
-  assert.match(box.textContent, /17,43 mm/, 'dos du package abouti absent');
+  assert.match(box.textContent, /16,51 mm/, 'dos du package abouti absent');
   assert.match(box.textContent, /tranche de gouttière absente/);
 });
 
@@ -183,11 +183,11 @@ test('un package affiche le dos, la planche et les fichiers produits', async () 
 
   const dd = els.get('packages').textes('dd');
   assert.deepStrictEqual(dd, [
-    '278 (blanche de parité)',
+    '262 (blanche de parité)',
     'Papier standard',
     '25,0 mm',
-    '17,43 mm',
-    '239,78 × 181,35 mm, fond perdu 3,175 mm',
+    '16,51 mm',
+    '238,86 × 181,35 mm, fond perdu 3,175 mm',
   ]);
   assert.match(els.get('packages').textContent, /couverture-lulu\.pdf/);
 });
@@ -219,7 +219,7 @@ test('une fois l\'intérieur composé, l\'aperçu de planche reçoit ce dos-là'
   await attendreApercu();
 
   const dernier = appels.filter(([c]) => c === 'couverture_apercu').pop();
-  assert.strictEqual(dernier[1].dosMm, 17.427);
+  assert.strictEqual(dernier[1].dosMm, 16.513);
 });
 
 /**
@@ -236,7 +236,7 @@ test('changer de prestataire périme le dos de l\'aperçu', async () => {
   await els.get('btComposer').declenche('click');
   await els.get('faces').children[2].declenche('click');
   await attendreApercu();
-  assert.strictEqual(appels.filter(([c]) => c === 'couverture_apercu').pop()[1].dosMm, 17.427);
+  assert.strictEqual(appels.filter(([c]) => c === 'couverture_apercu').pop()[1].dosMm, 16.513);
 
   els.get('inProvider').value = 'kdp-6x9';
   await els.get('inProvider').declenche('change');
@@ -261,7 +261,7 @@ test('un dos calculé sur un autre papier ne vaut plus rien', async () => {
   await els.get('btComposer').declenche('click');
   await els.get('faces').children[2].declenche('click');
   await attendreApercu();
-  assert.strictEqual(appels.filter(([c]) => c === 'couverture_apercu').pop()[1].dosMm, 17.427);
+  assert.strictEqual(appels.filter(([c]) => c === 'couverture_apercu').pop()[1].dosMm, 16.513);
 
   els.get('inPapier').value = 'blanc';
   await els.get('inPapier').declenche('change');
@@ -287,7 +287,7 @@ test('un dos calculé pour une autre police ne vaut plus rien', async () => {
   await els.get('btComposer').declenche('click');
   await els.get('faces').children[2].declenche('click');
   await attendreApercu();
-  assert.strictEqual(appels.filter(([c]) => c === 'couverture_apercu').pop()[1].dosMm, 17.427);
+  assert.strictEqual(appels.filter(([c]) => c === 'couverture_apercu').pop()[1].dosMm, 16.513);
 
   els.get('inPoliceInterieur').value = 'Cardo';
   await els.get('inPoliceInterieur').declenche('change');
@@ -319,7 +319,7 @@ test('un dos calculé sur un autre manuscrit ne vaut plus rien', async () => {
   await els.get('btComposer').declenche('click');
   await els.get('faces').children[2].declenche('click');
   await attendreApercu();
-  assert.strictEqual(dernierDos(), 17.427);
+  assert.strictEqual(dernierDos(), 16.513);
 
   await els.get('btReimporter').declenche('click');
   await attendreApercu();
@@ -327,7 +327,7 @@ test('un dos calculé sur un autre manuscrit ne vaut plus rien', async () => {
 
   await els.get('btComposer').declenche('click');
   await attendreApercu();
-  assert.strictEqual(dernierDos(), 17.427);
+  assert.strictEqual(dernierDos(), 16.513);
 
   await els.get('btChoisirManuscrit').declenche('click');
   await attendreApercu();

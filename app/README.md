@@ -8,7 +8,7 @@ intérieur composé → couverture → packages prestataires. Elle succède à l
 Ce qu'elle règle : le nombre de pages ne transite plus par un humain. L'intérieur
 le produit, la couverture le consomme, et le dos suit le manuscrit sans ressaisie.
 
-**État : jalon 4** — projet `.ozalid`, import d'un livre existant, composition de
+**État : jalon 5** — projet `.ozalid`, import d'un livre existant, composition de
 l'intérieur, moteur de couverture, assemblage de la planche, packages
 multi-prestataires et épreuve de relecture. Reste la release Windows.
 
