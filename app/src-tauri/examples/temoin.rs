@@ -25,6 +25,14 @@ use ozalid_lib::typst::Typst;
 
 const PROVIDER: &str = "bod";
 
+/// Pagination attendue du témoin.
+///
+/// Relevée sur macOS avec Typst 0.15.1 et EB Garamond, au corps et à l'interligne que
+/// `providers` fixe pour BoD. Elle dépend de chacun de ces éléments : la déplacer est un
+/// acte délibéré, à revalider sur un livre réel — jamais un ajustement pour faire passer
+/// l'intégration continue.
+const PAGES_ATTENDUES: u32 = 98;
+
 fn main() -> Result<(), String> {
     let sortie = std::env::args()
         .nth(1)
@@ -70,5 +78,14 @@ fn main() -> Result<(), String> {
             ""
         }
     );
+    if p.pages != PAGES_ATTENDUES {
+        return Err(format!(
+            "pagination déplacée : {} pages, {PAGES_ATTENDUES} attendues.\n\
+             Si le changement est voulu — police, gabarit, version de Typst —, relever la \
+             nouvelle valeur et la figer dans PAGES_ATTENDUES. Sinon, cette plateforme ne \
+             compose pas comme l'autre, et aucun dos calculé ici ne vaut ailleurs.",
+            p.pages
+        ));
+    }
     Ok(())
 }
