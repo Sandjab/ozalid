@@ -1,0 +1,87 @@
+# Établit que Windows compile, teste et pagine comme macOS, puis produit sur tag
+# l'installeur NSIS. L'app n'est testable sous Windows que par ici : c'est le second
+# volet du jalon 5 (docs/superpowers/specs/2026-08-20-release-windows-ci-design.md).
+name: Windows
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verifier:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # La compilation Rust d'un projet Tauri dépasse largement le reste du job ; sans
+      # cache, chaque push coûterait une dizaine de minutes.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+
+      # Le sidecar et les polices ne sont pas versionnés. La clé porte les scripts
+      # eux-mêmes : relever la version épinglée de Typst ou changer la liste des polices
+      # invalide le cache, ce qui est le comportement voulu.
+      - name: Cache du sidecar et des polices
+        uses: actions/cache@v4
+        with:
+          path: |
+            app/src-tauri/binaries
+            app/src-tauri/fonts
+          key: typst-polices-${{ hashFiles('app/outils/typst.sh', 'app/outils/polices.sh') }}
+
+      - name: Sidecar Typst et polices embarquées
+        run: |
+          app/outils/typst.sh x86_64-pc-windows-msvc
+          app/outils/polices.sh
+
+      # `temoin` et `packager` prennent le Typst du PATH, comme en local : la CI ne se
+      # donne pas une procédure à elle.
+      - name: Typst dans le PATH
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          cp app/src-tauri/binaries/typst-x86_64-pc-windows-msvc.exe "$RUNNER_TEMP/bin/typst.exe"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Version de Typst
+        run: typst --version
+
+      - name: Format
+        working-directory: app/src-tauri
+        run: cargo fmt --check
+
+      # `-D warnings` en plus de la commande du README : en local un avertissement se
+      # lit, ici personne ne lit le journal d'un job vert.
+      - name: Clippy
+        working-directory: app/src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Tests Rust
+        working-directory: app/src-tauri
+        run: cargo test --lib
+
+      - name: Tests du front
+        working-directory: app
+        run: node --test "tests/*.test.js"
+
+      # L'assertion centrale du volet : la pagination ne dépend pas de la plateforme.
+      - name: Témoin de pagination
+        working-directory: app/src-tauri
+        run: cargo run --example temoin -- "$RUNNER_TEMP/temoin"
