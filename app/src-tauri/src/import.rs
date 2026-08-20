@@ -717,7 +717,11 @@ couverture = "in/covers/LHC-Photo.png"
             Path::new(&source).is_absolute(),
             "source relative : {source}"
         );
-        assert!(source.ends_with("in/texts/roman.md"), "{source}");
+        // Le séparateur appartient à la plateforme : Windows canonise en
+        // « \\?\C:\…\in\texts\roman.md ». Ce que le test vérifie est le chemin désigné,
+        // pas la forme qu'il prend.
+        let normalise = source.replace('\\', "/");
+        assert!(normalise.ends_with("in/texts/roman.md"), "{source}");
     }
 
     /// Un manuscrit désigné mais absent doit être signalé avec son chemin : c'est la
