@@ -109,10 +109,14 @@ pub fn folio() -> Couverture {
         genre_visible: false,
         genre: style("Spectral", 400, 2.2, "#191917"),
         genre_ecart: 6.0,
+        // Le pied s'inspire de chartes réelles (bandeau monogramme + nom d'éditeur en
+        // capitales espacées), mais le nom et le monogramme doivent être ceux de
+        // l'utilisateur, pas une marque déposée reprise par défaut (NOTES.md § 5). Le
+        // monogramme est un logotype : il n'a pas de générique honnête, donc il est vide.
         pied: Pied {
             actif: false,
-            monogramme: "nrf".into(),
-            editeur: "GALLIMARD".into(),
+            monogramme: "".into(),
+            editeur: "ÉDITEUR".into(),
             y: 11.0,
             style_mono: Style {
                 italique: true,
@@ -176,8 +180,8 @@ pub fn blanche() -> Couverture {
         genre_ecart: 6.0,
         pied: Pied {
             actif: true,
-            monogramme: "nrf".into(),
-            editeur: "GALLIMARD".into(),
+            monogramme: "".into(),
+            editeur: "ÉDITEUR".into(),
             // 13,5 % et non les 11 % du CSS d'origine : à 11 %, le pied éditeur passe
             // sous le filet interne du cadre et le traverse. C'est le seul écart assumé
             // vis-à-vis d'`index.html` dans les maquettes — l'atelier a le même défaut,
@@ -238,8 +242,8 @@ pub fn surimpression() -> Couverture {
         genre_ecart: 6.0,
         pied: Pied {
             actif: false,
-            monogramme: "nrf".into(),
-            editeur: "GALLIMARD".into(),
+            monogramme: "".into(),
+            editeur: "ÉDITEUR".into(),
             y: 11.0,
             style_mono: Style {
                 italique: true,

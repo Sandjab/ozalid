@@ -58,7 +58,7 @@ function maquette(mode = 'bandeau') {
     genre: style('Spectral', 2.2, '#191917'),
     genre_ecart: 6,
     pied: {
-      actif: false, monogramme: 'nrf', editeur: 'GALLIMARD', y: 11,
+      actif: false, monogramme: '', editeur: 'ÉDITEUR', y: 11,
       style_mono: { ...style('Spectral', 7, '#191917'), italique: true },
       style_editeur: style('Archivo', 3.2, '#191917'),
     },

@@ -414,7 +414,7 @@ mod tests {
         assert!(s.contains("rotate(-90deg"), "dos non tourné");
         assert!(s.contains("Les Heures creuses"));
         assert!(s.contains("Ivan Pjig"));
-        assert!(s.contains("GALLIMARD"), "éditeur du pied absent du dos");
+        assert!(s.contains("ÉDITEUR"), "éditeur du pied absent du dos");
     }
 
     /// Les trois éléments du dos se règlent séparément : le rang les ordonne au sein
@@ -429,8 +429,7 @@ mod tests {
         // les places dans l'ordre pied, centre, tête.
         let s = bloc_dos(&livre(), &cv, &g, None, 0.0);
         let ordre = |s: &str| {
-            ["Ivan Pjig", "Les Heures creuses", "GALLIMARD"]
-                .map(|t| s.find(t).unwrap_or(usize::MAX))
+            ["Ivan Pjig", "Les Heures creuses", "ÉDITEUR"].map(|t| s.find(t).unwrap_or(usize::MAX))
         };
         let [auteur, titre, editeur] = ordre(&s);
         assert!(editeur < auteur, "l'éditeur n'est pas au pied");
@@ -480,7 +479,7 @@ mod tests {
         let mut cv = maquettes::folio();
         cv.dos.editeur.actif = false;
         let s = bloc_dos(&livre(), &cv, &gabarit("lulu", 244), None, 0.0);
-        assert!(!s.contains("GALLIMARD"), "éditeur éteint pourtant composé");
+        assert!(!s.contains("ÉDITEUR"), "éditeur éteint pourtant composé");
         assert!(
             s.contains("Les Heures creuses"),
             "le reste du dos a disparu"
