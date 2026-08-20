@@ -949,6 +949,11 @@ pub fn source(livre: &Livre, int: &Interieur, chapitres: &[Chapitre], corps_pt: 
 }
 ```
 
+> **Corrigé après coup — le code ci-dessus ne compilait pas.** Le littéral doit être
+> délimité par `r##"…"##` et non `r#"…"#` : il contient `rgb("#808080")`, et la séquence
+> `"#` referme un raw string à un seul dièse. Aucune séquence `"##` n'apparaît dans le
+> corps, donc deux dièses suffisent.
+
 > **Piège déjà rencontré, ne pas le réintroduire :** dans l'en-tête, le rappel de
 > chapitre doit filtrer sur `h.location().page() <= n` et **non** sur
 > `selector(...).before(here())`. Avec `before(here())`, le titre du chapitre qui ouvre
@@ -1361,6 +1366,34 @@ rendre déplacerait le compte de pages de tous les livres déjà composés — l
 non-régression du projet — ce qui mérite un passage à part, mesuré. Un test
 (`l_interieur_compose_a_l_identique_avec_ou_sans_rupture_de_scene`) fige l'état actuel :
 il tombera le jour où on s'y mettra, et c'est voulu.
+
+**Un guillemet droit dans le titre casse la composition.** `manuscrit::echappe` protège
+le markup Typst — il fait précéder `#`, `*`, `_` et leurs semblables d'une contre-oblique
+— mais laisse passer le `"`. Or le titre et l'auteur arrivent aussi *à l'intérieur d'une
+chaîne* Typst, dans `#set document(title: "…", author: "…")`. Un titre portant un
+guillemet droit y referme la chaîne : `expected comma`, vérifié au compilateur. Le défaut
+est identique dans `interieur.rs` et dans `epreuve.rs`, donc le correctif appartient à
+`manuscrit.rs` — une seconde fonction pour l'échappement de chaîne, distincte de celle
+qui protège le markup.
+
+> **Corrigé après vérification au compilateur.** Ce paragraphe affirmait d'abord que la
+> contre-oblique et le saut de ligne cassaient « la même ligne de la même façon ». Faux
+> pour les deux. La contre-oblique est sauve par accident : `echappe` la double toujours,
+> et `\\` est un échappement valide en chaîne Typst. Le saut de ligne ne casse pas la
+> compilation non plus — Typst accepte les chaînes multi-lignes — mais il casse ailleurs
+> et plus salement : le titre est aussi interpolé dans la ligne de commentaire
+> `// Intérieur — {titre} ({provider})`, et ce qui suit le saut en sort pour devenir du
+> contenu. Constaté sur le PDF produit, où la première ligne imprimée était
+> `soir (lulu)`. Seul le `"` casse la compilation.
+
+Jamais rencontré parce qu'aucun titre de test n'en porte.
+
+**Le manuscrit n'emploie pas `---` comme le format le dit.** Les 64 `---` des *Heures
+creuses* précèdent tous un `## ` : ce sont des filets de chapitre, pas des ruptures de
+scène, et le livre n'en contient aucune à l'intérieur d'un chapitre. Le format documenté
+appelle pourtant `---` un « séparateur de scène ». L'épreuve n'en affichera donc aucune
+sur ce livre — c'est correct, et il faut le savoir avant de conclure que la
+fonctionnalité ne marche pas.
 ```
 
 - [ ] **Étape 2 : mettre le README à jour**
