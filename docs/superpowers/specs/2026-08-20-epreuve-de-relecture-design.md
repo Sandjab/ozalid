@@ -85,10 +85,15 @@ pour être regardées côte à côte :
 police change l'épaisseur du dos et le prix d'impression. Ce n'est pas un
 réglage de goût.
 
-263 reste dans l'unique tranche de gouttière de Lulu (151–400), et la parité
-ajoutera la blanche : **264 pages attendues**. C'est la nouvelle valeur du
-témoin, à relever pour de bon après implémentation — les mesures ci-dessus ont
-été prises sur la source déjà composée, sans rejouer la convergence.
+263 reste dans l'unique tranche de gouttière de Lulu (151–400).
+
+**Le témoin relevé après implémentation vaut 262 pages, et non les 264 que ce
+paragraphe annonçait d'abord.** L'erreur tenait à la mesure : elle a été prise
+sur une source **déjà convergée, qui portait déjà sa blanche de parité**. Les
+263 pages la comptaient donc — 262 de texte, plus une blanche devenue inutile
+puisque 262 est pair. La convergence s'arrête là, sans blanche. C'est un pas de
+raisonnement sauté, pas un écart de composition : une mesure prise hors de la
+boucle de convergence ne dit rien de la parité finale.
 
 ### Le jeu embarqué s'élargit
 
@@ -284,7 +289,7 @@ Vérifications de bout en bout, qu'aucun test unitaire ne remplace :
 - `cargo run --example epreuve` sur *Les Heures creuses*, PDF compilé puis
   **regardé** : numéros de ligne, marge d'annotation, en-tête, garde ;
 - le témoin de non-régression rejoué (`cargo run --example packager`), compte
-  de pages relevé et comparé à 278 — attendu autour de 264 ;
+  de pages relevé et comparé à 278 — **relevé à 262** ;
 - les polices réellement embarquées dans le PDF d'intérieur relues
   (`EBGaramond`, plus de `LibertinusSerif`) — c'est la seule vérification qui
   aurait attrapé la dérive d'origine ;

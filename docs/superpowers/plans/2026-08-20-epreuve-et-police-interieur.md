@@ -293,8 +293,12 @@ git commit -m "La police de l'intérieur devient un réglage du projet, validé"
 ## Tâche 3 : L'intérieur déclare la police du projet
 
 Cette tâche **déplace le témoin de non-régression**. Le compte de pages des *Heures
-creuses* au gabarit Lulu passe de 278 à 264 attendus (263 mesurés + la blanche de
-parité). C'est voulu, mesuré, et à relever de nouveau en fin de tâche.
+creuses* au gabarit Lulu passe de 278 à **262** — relevé après implémentation.
+
+> **Corrigé après coup.** Ce paragraphe annonçait d'abord 264, en additionnant les 263
+> pages mesurées et une blanche de parité. Faux : la mesure avait été prise sur une
+> source déjà convergée, qui portait **déjà** sa blanche. 263 la comptait donc, soit 262
+> de texte ; 262 étant pair, la convergence s'arrête sans blanche.
 
 **Fichiers :**
 - Modifier : `app/src-tauri/src/interieur.rs:71` (signature) et `:83-106` (l'en-tête de source)
@@ -372,8 +376,17 @@ la police est validée en amont, donc aucun échappement n'est nécessaire, mais
           costs: (orphan: 100%, widow: 100%))
 ```
 
-en insérant `int.police` comme **premier** argument positionnel du `format!`, avant
-`echappe(&livre.titre)`.
+en insérant `int.police` dans les arguments positionnels du `format!` **à la place
+qu'occupe le `{}` de `font:` dans l'ordre d'apparition** — c'est-à-dire entre
+`pr.exterieur` et `pr.corps_pt`.
+
+> **Corrigé après coup.** Ce plan disait d'abord « comme premier argument positionnel,
+> avant `echappe(&livre.titre)` ». C'était faux, et faux d'une manière qui ne se voit
+> pas : `format!` consomme ses positionnels dans l'ordre des `{}`, or celui de `font:`
+> arrive en neuvième position. Placée en premier, la police serait partie dans le
+> commentaire d'en-tête et la marge extérieure serait devenue la police — **le code
+> compile quand même**, le nombre d'arguments restant le même. Seul le test l'aurait
+> arrêté.
 
 - [ ] **Étape 4 : mettre à jour les cinq points d'appel**
 
@@ -435,10 +448,14 @@ cargo run --quiet --example importer -- ../../build/LHC/livre.toml /tmp/lhc.ozal
 cargo run --quiet --example packager -- /tmp/lhc.ozalid /tmp/pkg lulu
 ```
 
-Attendu : la ligne de résultat annonce **264 pages** (et non 278), gouttière 25,0 mm,
-dos autour de 16,6 mm. Si le compte diffère de plus d'une page ou deux de 264,
-**s'arrêter et le signaler** : la mesure de la spec a été prise sans rejouer la
-convergence, un écart franc veut dire autre chose.
+Relevé : **262 pages** (et non 278), gouttière 25,0 mm, dos 16,51 mm, sans blanche de
+parité — 262 est pair.
+
+`examples/composer.rs` construisait son `Typst` sans `.avec_polices(...)`, donc sans
+`--font-path` ni `--ignore-system-fonts` : il mesurait avec les polices du poste et
+rendait encore 278. Corrigé dans cette tâche, sur le patron de `examples/packager.rs`.
+Un témoin de non-régression aveugle à la police est précisément le dispositif qui a
+laissé passer la dérive d'origine.
 
 - [ ] **Étape 7 : vérifier la police réellement embarquée dans le PDF**
 
@@ -638,7 +655,7 @@ Attendu : SUCCÈS, 106 tests.
 cd app/src-tauri && cargo run --quiet --example packager -- /tmp/lhc.ozalid /tmp/pkg2 lulu
 ```
 
-Attendu : **le même compte de pages qu'à la tâche 3** (264). Si le compte bouge, une
+Attendu : **le même compte de pages qu'à la tâche 3** (262). Si le compte bouge, une
 rupture de scène s'est glissée dans la composition de l'intérieur : c'est un défaut, pas
 un progrès, et il faut le corriger avant d'aller plus loin.
 
