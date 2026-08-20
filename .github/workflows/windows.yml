@@ -154,11 +154,13 @@ jobs:
           # plutôt que le processus.
           "$exe" /S >/dev/null 2>&1 </dev/null &
 
+          # L'exécutable porte le nom du paquet Cargo — « ozalid-studio.exe » — et non le
+          # `productName`, qui ne nomme que le bundle et le dossier d'installation.
           # Le mode NSIS de Tauri installe par utilisateur (%LOCALAPPDATA%) ou par machine
           # (%PROGRAMFILES%) selon la configuration : on cherche aux deux emplacements
           # plutôt que d'en privilégier un.
           for _ in $(seq 1 60); do
-            trouve=$(find "$LOCALAPPDATA" "$PROGRAMFILES" -maxdepth 3 -iname "Ozalid Studio.exe" 2>/dev/null | head -1)
+            trouve=$(find "$LOCALAPPDATA" "$PROGRAMFILES" -maxdepth 3 -iname "ozalid-studio.exe" 2>/dev/null | head -1)
             [ -n "$trouve" ] && break
             sleep 2
           done
@@ -168,14 +170,16 @@ jobs:
 
           # L'application que l'installeur vient de lancer n'a plus lieu d'être, et elle
           # tient ses fichiers ouverts.
-          taskkill //IM "Ozalid Studio.exe" //F >/dev/null 2>&1 || true
+          taskkill //IM "ozalid-studio.exe" //F >/dev/null 2>&1 || true
 
           if [ -z "$trouve" ]; then
-            echo "exécutable « Ozalid Studio.exe » introuvable sous $LOCALAPPDATA ni $PROGRAMFILES" >&2
-            echo "contenu de $LOCALAPPDATA :" >&2
-            find "$LOCALAPPDATA" -maxdepth 3 >&2 2>/dev/null
-            echo "contenu de $PROGRAMFILES :" >&2
-            find "$PROGRAMFILES" -maxdepth 3 >&2 2>/dev/null
+            echo "exécutable « ozalid-studio.exe » introuvable sous $LOCALAPPDATA ni $PROGRAMFILES" >&2
+            # Les répertoires de premier niveau seulement : déverser l'arborescence
+            # entière de Program Files noie le journal sans rien apprendre.
+            echo "répertoires de $LOCALAPPDATA :" >&2
+            find "$LOCALAPPDATA" -maxdepth 1 -type d >&2 2>/dev/null
+            echo "répertoires de $PROGRAMFILES :" >&2
+            find "$PROGRAMFILES" -maxdepth 1 -type d >&2 2>/dev/null
             exit 1
           fi
 
