@@ -56,6 +56,8 @@ pub fn assembler(
     dossier: &Path,
     typst: &Typst,
 ) -> Result<Package, String> {
+    let int = &projet.meta.interieur;
+    int.verifie()?;
     std::fs::create_dir_all(dossier)
         .map_err(|e| format!("répertoire inutilisable ({}) : {e}", dossier.display()))?;
 
@@ -64,8 +66,6 @@ pub fn assembler(
 
     // 1. L'intérieur, et la pagination qui en sort.
     let src_int = dossier.join(nom(pr, "interieur", "typ"));
-    let int = &projet.meta.interieur;
-    int.verifie()?;
     let r = interieur::converge(pr, |reglage| {
         ecrire(
             &src_int,

@@ -459,12 +459,7 @@ mod tests {
             police: "Cardo".into(),
         };
         let s = source(&livre(), &int, pr, &r, &chapitres());
-        assert_eq!(
-            s.matches("font:").count(),
-            1,
-            "police déclarée {} fois",
-            s.matches("font:").count()
-        );
+        assert_eq!(s.matches("font:").count(), 1);
         assert!(s.contains(r#"font: "Cardo""#), "police du projet ignorée");
     }
 
