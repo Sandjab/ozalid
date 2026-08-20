@@ -9,40 +9,50 @@
 
 <header>
   <h1>Ozalid Studio</h1>
-  <p class="sous">Jalon 1 — composition de l'intérieur et pagination</p>
+  <p class="sous">Jalon 2 — projet .ozalid, import d'un livre existant, pagination</p>
 </header>
 
 <main>
   <section>
-    <h2>Manuscrit</h2>
+    <h2>Projet</h2>
     <div class="ligne">
-      <button id="btChoisir" type="button">Choisir un manuscrit…</button>
-      <span id="cheminManuscrit" class="chemin">aucun fichier</span>
+      <button id="btOuvrir" type="button">Ouvrir un .ozalid…</button>
+      <button id="btImporter" type="button">Importer un livre.toml…</button>
+      <button id="btEnregistrer" type="button" disabled>Enregistrer sous…</button>
     </div>
+    <p class="chemin" id="cheminProjet">aucun projet ouvert</p>
   </section>
 
-  <section>
+  <section id="secLivre" hidden>
     <h2>Livre</h2>
     <label><span>Titre</span><input type="text" id="inTitre"></label>
     <label><span>Titre de la page de titre</span>
       <textarea id="inTitrePage" rows="2" placeholder="vide : le titre ci-dessus"></textarea></label>
     <label><span>Auteur</span><input type="text" id="inAuteur"></label>
-    <label><span>Genre</span><input type="text" id="inGenre" value="roman"></label>
+    <label><span>Genre</span><input type="text" id="inGenre"></label>
     <label><span>Copyright</span><textarea id="inCopyright" rows="3"></textarea></label>
     <label><span>Chapitres attendus</span>
       <input type="number" id="inChapitres" min="1" placeholder="facultatif — contrôle d'intégrité"></label>
   </section>
 
-  <section>
+  <section id="secManuscrit" hidden>
+    <h2>Manuscrit</h2>
+    <p class="note" id="etatManuscrit"></p>
+    <p class="chemin" id="sourceManuscrit"></p>
+    <div class="ligne">
+      <button id="btReimporter" type="button" disabled>Réimporter le manuscrit</button>
+      <button id="btChoisirManuscrit" type="button">Choisir un autre manuscrit…</button>
+    </div>
+    <p class="note" id="etatCouverture"></p>
+  </section>
+
+  <section id="secComposer" hidden>
     <h2>Prestataire</h2>
     <label><span>Gabarit</span><select id="inProvider"></select></label>
     <label><span>Papier</span><select id="inPapier"></select></label>
     <p class="note" id="noteFormat"></p>
-  </section>
-
-  <section>
     <div class="ligne">
-      <button id="btComposer" type="button" disabled>Composer l'intérieur</button>
+      <button id="btComposer" type="button">Composer l'intérieur</button>
       <span id="etat" class="etat"></span>
     </div>
     <div id="resultat" class="resultat" hidden></div>

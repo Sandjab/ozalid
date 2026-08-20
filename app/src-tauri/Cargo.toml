@@ -15,6 +15,16 @@ tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+toml = "0.8"
+# Archive .ozalid : deflate pour le TOML et le manuscrit, stocké tel quel pour les
+# images, déjà compressées. Aucune autre méthode n'est utile ici.
+zip = { version = "7", default-features = false, features = ["deflate"] }
+# Le bloc de réglages des PNG de l'atelier est du base64.
+base64 = "0.22"
+
+[dev-dependencies]
+# Répertoires de travail jetables pour les tests d'import (qui touchent au disque).
+tempfile = "3"
 
 [profile.release]
 strip = true

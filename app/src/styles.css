@@ -89,6 +89,7 @@ button:disabled { opacity: .4; cursor: default; }
 }
 
 .note { margin: .6rem 0 0; color: #7a7368; font-size: .85rem; }
+.note.alerte { color: var(--rouge); }
 
 .etat { font-size: .85rem; color: #7a7368; }
 .etat.erreur { color: var(--rouge); white-space: pre-wrap; }

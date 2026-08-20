@@ -95,7 +95,12 @@ function depuisHtml(html, id) {
  * `ids` : identifiants à créer ; leur balise et leur état initial viennent d'index.html.
  * `invoke` : implémentation des commandes Rust.
  */
-async function charge({ ids, invoke, open = async () => null }) {
+async function charge({
+  ids,
+  invoke,
+  open = async () => null,
+  save = async () => null,
+}) {
   const html = fs.readFileSync(
     path.join(__dirname, '..', 'src', 'index.html'),
     'utf8'
@@ -119,7 +124,7 @@ async function charge({ ids, invoke, open = async () => null }) {
         this.value = valeur;
       }
     },
-    window: { __TAURI__: { core: { invoke }, dialog: { open } } },
+    window: { __TAURI__: { core: { invoke }, dialog: { open, save } } },
     console,
   };
   contexte.globalThis = contexte;

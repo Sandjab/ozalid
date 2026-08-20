@@ -1,17 +1,40 @@
-//! Identité du livre.
+//! Le projet : un livre entier dans un fichier `.ozalid`.
 //!
-//! Elle fait foi pour la composition : le titre et l'auteur embarqués dans une image
-//! de couverture sont un rendu, jamais une source. Au jalon 2, cette structure sera
-//! sérialisée dans le `projet.toml` du `.ozalid` ; elle vit ici dès maintenant parce
-//! que la composition de l'intérieur en dépend.
+//! L'archive est auto-portante — on l'ouvre, on la déplace, on la sauvegarde comme un
+//! document, et elle reste complète sur une autre machine :
+//!
+//! ```text
+//! projet.toml     identité du livre, réglages de couverture, chemin source du manuscrit
+//! manuscrit.md
+//! images/         photos source de la 1ère et de la 4ème
+//! ```
+//!
+//! `projet.toml` garde la forme et l'esprit du `livre.toml` historique : dézippée,
+//! l'archive reste lisible et diffable.
+//!
+//! Les **sorties n'y sont pas**. Un `.ozalid` ne contient que des sources ; les
+//! packages sont écrits à côté. L'archive reste légère, et aucune sortie périmée ne
+//! survit à un déplacement du projet.
+
+use std::collections::BTreeMap;
+use std::fs::File;
+use std::io::{Read, Seek, Write};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+use zip::write::SimpleFileOptions;
+use zip::{CompressionMethod, ZipArchive, ZipWriter};
+
+pub const VERSION: u32 = 1;
+const PROJET_TOML: &str = "projet.toml";
+const MANUSCRIT_MD: &str = "manuscrit.md";
+const IMAGES: &str = "images/";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Livre {
     pub titre: String,
     /// Titre de la page de titre, avec ses sauts de ligne voulus. Absent, le titre sert.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub titre_page: Option<String>,
     pub auteur: String,
     #[serde(default = "genre_defaut")]
@@ -19,7 +42,7 @@ pub struct Livre {
     #[serde(default)]
     pub copyright: String,
     /// Contrôle d'intégrité facultatif : il n'a de sens qu'au gel du manuscrit.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chapitres: Option<u32>,
 }
 
@@ -31,5 +54,294 @@ impl Livre {
     /// Titre tel qu'il doit paraître sur la page de titre, sauts de ligne compris.
     pub fn titre_page(&self) -> &str {
         self.titre_page.as_deref().unwrap_or(&self.titre)
+    }
+}
+
+/// Le manuscrit est **embarqué** dans l'archive : c'est ce qui rend le `.ozalid`
+/// auto-portant. Son chemin d'origine est mémorisé pour que « Réimporter le
+/// manuscrit » soit un bouton, et non une navigation dans un sélecteur de fichiers.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Manuscrit {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+}
+
+/// Réglages de couverture repris de l'atelier HTML, conservés **tels quels**.
+///
+/// Les clés sont les identifiants de contrôles d'`index.html` (`inTitre`, `inFrameM`…).
+/// Le moteur Typst du jalon 3 les traduira ; les figer dans un schéma maison avant que
+/// ce moteur existe reviendrait à inventer une cible.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Atelier {
+    #[serde(default)]
+    pub mode: String,
+    #[serde(default)]
+    pub format: Vec<f64>,
+    #[serde(default)]
+    pub champs: BTreeMap<String, toml::Value>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Couverture {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub atelier: Option<Atelier>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Entete {
+    pub version: u32,
+}
+
+/// Ce que porte `projet.toml`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Metadonnees {
+    pub ozalid: Entete,
+    pub livre: Livre,
+    #[serde(default)]
+    pub manuscrit: Manuscrit,
+    #[serde(default)]
+    pub couverture: Couverture,
+}
+
+/// Un projet ouvert : les métadonnées, le texte du manuscrit, les images.
+#[derive(Debug, Clone)]
+pub struct Projet {
+    pub meta: Metadonnees,
+    pub texte: String,
+    /// Nom de fichier (sans `images/`) → contenu.
+    pub images: BTreeMap<String, Vec<u8>>,
+}
+
+impl Projet {
+    pub fn nouveau(livre: Livre, texte: String) -> Self {
+        Self {
+            meta: Metadonnees {
+                ozalid: Entete { version: VERSION },
+                livre,
+                manuscrit: Manuscrit::default(),
+                couverture: Couverture::default(),
+            },
+            texte,
+            images: BTreeMap::new(),
+        }
+    }
+
+    pub fn ouvrir(chemin: &Path) -> Result<Self, String> {
+        let f = File::open(chemin).map_err(|e| format!("{} : {e}", chemin.display()))?;
+        Self::lire(f).map_err(|e| format!("{} : {e}", chemin.display()))
+    }
+
+    pub fn enregistrer(&self, chemin: &Path) -> Result<(), String> {
+        let f = File::create(chemin).map_err(|e| format!("{} : {e}", chemin.display()))?;
+        self.ecrire(f)
+            .map_err(|e| format!("{} : {e}", chemin.display()))
+    }
+
+    fn lire<R: Read + Seek>(source: R) -> Result<Self, String> {
+        let mut zip = ZipArchive::new(source).map_err(|e| format!("archive illisible : {e}"))?;
+
+        let toml_brut = fichier(&mut zip, PROJET_TOML)?.ok_or_else(|| {
+            format!("archive sans {PROJET_TOML} : ce n'est pas un projet Ozalid.")
+        })?;
+        let toml_brut = String::from_utf8(toml_brut)
+            .map_err(|_| format!("{PROJET_TOML} n'est pas de l'UTF-8."))?;
+        let meta: Metadonnees =
+            toml::from_str(&toml_brut).map_err(|e| format!("{PROJET_TOML} : {e}"))?;
+        if meta.ozalid.version > VERSION {
+            return Err(format!(
+                "projet en version {}, cette application lit jusqu'à la {VERSION}.",
+                meta.ozalid.version
+            ));
+        }
+
+        let texte = fichier(&mut zip, MANUSCRIT_MD)?
+            .ok_or_else(|| format!("archive sans {MANUSCRIT_MD}."))?;
+        let texte = String::from_utf8(texte)
+            .map_err(|_| format!("{MANUSCRIT_MD} n'est pas de l'UTF-8."))?;
+
+        let mut images = BTreeMap::new();
+        let noms: Vec<String> = zip.file_names().map(str::to_owned).collect();
+        for nom in noms {
+            if let Some(court) = nom.strip_prefix(IMAGES) {
+                if court.is_empty() {
+                    continue;
+                }
+                if let Some(oct) = fichier(&mut zip, &nom)? {
+                    images.insert(court.to_string(), oct);
+                }
+            }
+        }
+
+        Ok(Self {
+            meta,
+            texte,
+            images,
+        })
+    }
+
+    fn ecrire<W: Write + Seek>(&self, sortie: W) -> Result<(), String> {
+        let mut zip = ZipWriter::new(sortie);
+        let texte_opts =
+            SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+        // Les images sont déjà compressées (PNG, JPEG) : les dégonfler coûte du temps
+        // pour un gain nul, parfois négatif.
+        let brut_opts = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+
+        let toml_brut = toml::to_string_pretty(&self.meta)
+            .map_err(|e| format!("sérialisation de {PROJET_TOML} : {e}"))?;
+        ajoute(&mut zip, PROJET_TOML, toml_brut.as_bytes(), texte_opts)?;
+        ajoute(&mut zip, MANUSCRIT_MD, self.texte.as_bytes(), texte_opts)?;
+        for (nom, oct) in &self.images {
+            ajoute(&mut zip, &format!("{IMAGES}{nom}"), oct, brut_opts)?;
+        }
+        zip.finish().map_err(|e| format!("clôture : {e}"))?;
+        Ok(())
+    }
+}
+
+fn ajoute<W: Write + Seek>(
+    zip: &mut ZipWriter<W>,
+    nom: &str,
+    contenu: &[u8],
+    opts: SimpleFileOptions,
+) -> Result<(), String> {
+    zip.start_file(nom, opts)
+        .map_err(|e| format!("{nom} : {e}"))?;
+    zip.write_all(contenu).map_err(|e| format!("{nom} : {e}"))
+}
+
+fn fichier<R: Read + Seek>(zip: &mut ZipArchive<R>, nom: &str) -> Result<Option<Vec<u8>>, String> {
+    match zip.by_name(nom) {
+        Ok(mut f) => {
+            let mut buf = Vec::with_capacity(f.size() as usize);
+            f.read_to_end(&mut buf)
+                .map_err(|e| format!("{nom} : {e}"))?;
+            Ok(Some(buf))
+        }
+        Err(zip::result::ZipError::FileNotFound) => Ok(None),
+        Err(e) => Err(format!("{nom} : {e}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    fn livre() -> Livre {
+        Livre {
+            titre: "Les Heures creuses".into(),
+            titre_page: Some("Les Heures\ncreuses".into()),
+            auteur: "Ivan Pjig".into(),
+            genre: "roman".into(),
+            copyright: "© Ivan Pjig, 2026.\nTous droits réservés.".into(),
+            chapitres: Some(64),
+        }
+    }
+
+    fn aller_retour(p: &Projet) -> Projet {
+        let mut buf = Vec::new();
+        p.ecrire(Cursor::new(&mut buf)).unwrap();
+        Projet::lire(Cursor::new(buf)).unwrap()
+    }
+
+    /// Le `.ozalid` est le document de l'utilisateur : ce qui y entre doit en ressortir
+    /// identique, sauts de ligne du titre et réglages de couverture compris. Une perte
+    /// silencieuse ici, c'est une maquette à refaire.
+    #[test]
+    fn un_projet_complet_survit_a_l_aller_retour() {
+        let mut p = Projet::nouveau(livre(), "## 01 - Un\n\nTexte.\n".into());
+        p.meta.manuscrit.source = Some("/travail/roman.md".into());
+        p.meta.couverture.atelier = Some(Atelier {
+            mode: "band".into(),
+            format: vec![108.0, 178.0],
+            champs: BTreeMap::from([
+                ("inPadX".to_string(), toml::Value::from("7")),
+                ("inFrameOn".to_string(), toml::Value::from(false)),
+                ("inTitleSize".to_string(), toml::Value::from(8.0)),
+            ]),
+        });
+        p.images
+            .insert("couverture.jpg".into(), vec![0xFF, 0xD8, 0xFF]);
+
+        let r = aller_retour(&p);
+        assert_eq!(r.meta.livre.titre_page(), "Les Heures\ncreuses");
+        assert_eq!(r.meta.livre.chapitres, Some(64));
+        assert_eq!(r.meta.livre.copyright, p.meta.livre.copyright);
+        assert_eq!(
+            r.meta.manuscrit.source.as_deref(),
+            Some("/travail/roman.md")
+        );
+        assert_eq!(r.texte, p.texte);
+        assert_eq!(r.images["couverture.jpg"], vec![0xFF, 0xD8, 0xFF]);
+
+        let a = r.meta.couverture.atelier.unwrap();
+        assert_eq!(a.mode, "band");
+        assert_eq!(a.format, vec![108.0, 178.0]);
+        // Les types des réglages sont préservés : une case cochée reste un booléen,
+        // pas la chaîne « false », que le jalon 3 lirait comme vraie.
+        assert_eq!(a.champs["inFrameOn"], toml::Value::from(false));
+        assert_eq!(a.champs["inTitleSize"], toml::Value::from(8.0));
+        assert_eq!(a.champs["inPadX"], toml::Value::from("7"));
+    }
+
+    #[test]
+    fn un_projet_sans_couverture_ni_images_reste_valide() {
+        let p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
+        let r = aller_retour(&p);
+        assert!(r.meta.couverture.atelier.is_none());
+        assert!(r.images.is_empty());
+    }
+
+    /// Ouvrir autre chose qu'un projet doit le dire clairement, plutôt que d'échouer
+    /// plus loin sur un manuscrit vide.
+    #[test]
+    fn une_archive_etrangere_est_refusee_explicitement() {
+        let mut buf = Vec::new();
+        {
+            let mut zip = ZipWriter::new(Cursor::new(&mut buf));
+            zip.start_file("autre.txt", SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(b"rien a voir").unwrap();
+            zip.finish().unwrap();
+        }
+        let err = Projet::lire(Cursor::new(buf)).unwrap_err();
+        assert!(err.contains("projet Ozalid"), "{err}");
+    }
+
+    #[test]
+    fn un_fichier_qui_n_est_pas_une_archive_est_refuse() {
+        let err = Projet::lire(Cursor::new(b"pas un zip".to_vec())).unwrap_err();
+        assert!(err.contains("archive illisible"), "{err}");
+    }
+
+    /// Un projet écrit par une version future doit être refusé, pas lu de travers :
+    /// un champ ignoré silencieusement se traduirait par une planche fausse.
+    #[test]
+    fn un_projet_plus_recent_que_l_application_est_refuse() {
+        let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
+        p.meta.ozalid.version = VERSION + 1;
+        let mut buf = Vec::new();
+        p.ecrire(Cursor::new(&mut buf)).unwrap();
+        let err = Projet::lire(Cursor::new(buf)).unwrap_err();
+        assert!(err.contains("version"), "{err}");
+    }
+
+    /// L'archive ne doit contenir que des sources : y glisser des sorties la ferait
+    /// gonfler et transporter des PDF périmés.
+    #[test]
+    fn l_archive_ne_contient_que_des_sources() {
+        let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
+        p.images.insert("quatrieme.png".into(), vec![1, 2, 3]);
+        let mut buf = Vec::new();
+        p.ecrire(Cursor::new(&mut buf)).unwrap();
+
+        let zip = ZipArchive::new(Cursor::new(buf)).unwrap();
+        let mut noms: Vec<&str> = zip.file_names().collect();
+        noms.sort_unstable();
+        assert_eq!(
+            noms,
+            vec!["images/quatrieme.png", "manuscrit.md", "projet.toml"]
+        );
     }
 }
