@@ -12,8 +12,20 @@ use crate::interieur::Interieur;
 use crate::manuscrit::{echappe, inline, Bloc, Chapitre};
 use crate::projet::Livre;
 
-/// Marque de rupture de scène. Un blanc seul ne survit pas à une fin de page.
-pub const SCENE: &str = "✳";
+/// Marque de rupture de scène : trois astérisques espacées.
+///
+/// Un blanc seul ne survit pas à une fin de page, il faut donc un signe visible. Mais
+/// ce signe doit exister dans les **sept** polices de `POLICES_TEXTE`, sinon Typst le
+/// compose par repli sur une autre police, sans un mot — le mécanisme même contre
+/// lequel `Interieur::verifie` a été posé, et qui ne se verrait qu'après tirage.
+///
+/// Relevé sur les 29 fichiers de `fonts/` : `✳` (U+2733) et l'astérisme `⁂` (U+2042)
+/// ne sont portés que par Cardo ; l'astérisque `*` (U+002A) est dans les 29. La marque
+/// suit donc le caractère du livre au lieu de le trahir, et le jour où Cardo quitterait
+/// `polices.sh` rien ne bougera.
+///
+/// Les `\*` sont échappés : en markup Typst, `*` ouvre une emphase.
+pub const SCENE: &str = r"\*#h(0.8em)\*#h(0.8em)\*";
 
 /// Format de la page, en mm. La marge de droite est celle où l'on écrit.
 const MARGE_HAUT: f64 = 25.0;
@@ -29,7 +41,7 @@ pub fn source(livre: &Livre, int: &Interieur, chapitres: &[Chapitre], corps_pt: 
     // validée par `Interieur::verifie`, qui seul connaît les polices admises.
     let police = &int.police;
     // Les mots du texte seul : ni les titres de chapitres, ni les `---` du manuscrit.
-    // `commands.rs:489` compte, lui, `projet.texte.split_whitespace()` sur le Markdown
+    // `commands.rs:540` compte, lui, `projet.texte.split_whitespace()` sur le Markdown
     // brut, et annonce donc toujours un peu plus. La divergence est assumée et va
     // toujours dans ce sens : le compte de la garde est celui qu'un auteur appelle des
     // mots. Les deux chiffres se voient — ne pas « corriger » l'un vers l'autre.
@@ -208,6 +220,54 @@ mod tests {
         let s = src();
         assert!(s.contains("justify: false"), "épreuve justifiée");
         assert!(s.contains("hyphenate: false"), "épreuve coupée");
+    }
+
+    /// La marge de droite **est** la raison d'être du document : c'est là qu'on écrit.
+    /// La ramener à une marge de livre donnerait une épreuve inannotable, sans qu'un
+    /// seul des autres tests ne s'en aperçoive — ils ne regardent que le texte.
+    #[test]
+    fn la_page_est_un_a4_portrait_avec_sa_marge_d_annotation() {
+        let s = src();
+        assert!(
+            s.contains("width: 210mm, height: 297mm"),
+            "l'épreuve n'est plus un A4 portrait"
+        );
+        assert!(
+            s.contains("right: 50mm"),
+            "marge d'annotation absente ou rognée : plus de place pour écrire"
+        );
+        for m in ["top: 25mm", "bottom: 25mm", "left: 30mm"] {
+            assert!(s.contains(m), "marge « {m} » perdue");
+        }
+    }
+
+    /// Une épreuve annotée circule en pages détachées, et souvent une seule revient.
+    /// Sans rappel du livre et du chapitre en tête, ni « p. n / total » en pied, cette
+    /// page-là n'est plus rattachable à rien. La garde seule en est exemptée.
+    #[test]
+    fn chaque_page_de_texte_porte_son_en_tete_et_son_pied() {
+        let s = src();
+        assert!(s.contains("header: context"), "épreuve sans en-tête");
+        assert!(s.contains("footer: context"), "épreuve sans pied");
+        assert!(
+            s.contains("Les Heures creuses — Ivan Pjig"),
+            "en-tête sans rappel du livre"
+        );
+        assert!(
+            s.contains("query(heading.where(level: 1))"),
+            "en-tête sans rappel de chapitre"
+        );
+        assert!(
+            s.contains("p. #n / #counter(page).final().first()"),
+            "pied sans folio rapporté au total"
+        );
+        // Une fois dans l'en-tête, une fois dans le pied : la garde n'a ni l'un ni
+        // l'autre, et c'est ce qui la distingue d'une page de texte.
+        assert_eq!(
+            s.matches("if n <= 1 { return }").count(),
+            2,
+            "la garde n'est plus exemptée d'en-tête et de pied"
+        );
     }
 
     /// La rupture de scène paraît — c'est toute la différence avec l'intérieur.
