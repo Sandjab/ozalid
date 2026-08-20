@@ -10,7 +10,11 @@ le produit, la couverture le consomme, et le dos suit le manuscrit sans ressaisi
 
 **État : jalon 5** — projet `.ozalid`, import d'un livre existant, composition de
 l'intérieur, moteur de couverture, assemblage de la planche, packages
-multi-prestataires et épreuve de relecture. Reste la release Windows.
+multi-prestataires, épreuve de relecture et vérification Windows par intégration
+continue : chaque push et chaque pull request compilent, testent et paginent le
+témoin sur `windows-latest`. Reste la publication de l'installeur sur tag, et la
+vérification manuelle du premier lancement sur une machine Windows — aucun runner
+ne lance l'application avec sa fenêtre.
 
 ## Stack
 
@@ -36,6 +40,17 @@ manuscrit réel.
 Typst est lancé avec `--ignore-system-fonts` : seules les polices embarquées
 comptent, sans quoi une police du poste pourrait s'y substituer et le rendu
 dépendrait de la machine.
+
+## Installer sous Windows
+
+L'installeur (`.exe` NSIS) proviendra de la publication automatique déclenchée par un
+tag `v*` : ce job produira le binaire et le déposera en release draft sur GitHub — il
+n'existe pas encore. Une fois publié, Windows affichera au premier lancement
+« Windows a protégé votre PC » : SmartScreen ne reconnaît pas l'éditeur tant que le
+binaire n'est pas signé. Il faut alors choisir « Informations complémentaires », puis
+« Exécuter quand même » ; l'installation elle-même ne demande aucun droit
+administrateur. Un certificat de signature de code lèverait l'avertissement ; il n'a
+pas été pris tant que la diffusion reste confidentielle.
 
 ## Modules
 
@@ -119,6 +134,19 @@ regarder après toute modification du moteur de couverture.
 `epreuve` tire l'épreuve de relecture sans interface. Elle se regarde de la même
 façon : les numéros de ligne repartent-ils de 1 à chaque page, la marge d'annotation
 est-elle libre, un chapitre commence-t-il bien en tête de page.
+
+`temoin` diffère des exercices ci-dessus : lui seul porte sa propre valeur attendue, et
+il échoue au lieu d'afficher un résultat à interpréter.
+
+```
+cd app/src-tauri && cargo run --example temoin
+```
+
+Le manuscrit qu'il compose est *Candide* (Voltaire, 1759, domaine public), versionné
+dans `temoin/manuscrit.md` parce que `build/` ne l'est pas et qu'un manuscrit personnel
+n'a rien à faire sur un runner GitHub. Sa réussite sous Windows établit que Typst y
+pagine comme sur macOS — donc qu'un dos calculé sur l'une des deux plateformes vaut
+pour l'autre.
 
 Les tests du front exécutent le vrai `src/app.js` dans un faux DOM qui lit l'état
 initial dans le vrai `src/index.html`. Ils couvrent le câblage, jamais le rendu :
