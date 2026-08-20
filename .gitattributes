@@ -1,0 +1,9 @@
+# Le manuscrit-témoin est composé sur macOS et sur Windows, et les deux comptes de
+# pages doivent coïncider. Sans fins de ligne normalisées, un checkout Windows
+# pourrait livrer un texte différent octet pour octet, et l'on ne saurait plus dire
+# si un écart de pagination vient de Typst ou de git.
+*.md text eol=lf
+*.rs text eol=lf
+*.toml text eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
