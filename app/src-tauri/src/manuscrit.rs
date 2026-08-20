@@ -360,4 +360,32 @@ mod tests {
         assert_eq!(inline("il a dit *bonjour"), "il a dit \\*bonjour");
         assert_eq!(inline("3 ** 2"), "3 \\*\\* 2");
     }
+
+    /// Le manuscrit-témoin de la CI, embarqué à la compilation des tests.
+    const TEMOIN: &str = include_str!("../temoin/manuscrit.md");
+
+    /// Ce que la CI compose doit d'abord passer la porte du format. Ce test échoue en
+    /// une seconde là où l'exemple `temoin` coûte une composition entière.
+    #[test]
+    fn le_manuscrit_temoin_est_composable() {
+        let chapitres = decoupe(TEMOIN, Some(30)).expect("le témoin doit être composable");
+        assert_eq!(chapitres.len(), 30);
+        assert_eq!(chapitres[0].numero, 1);
+        assert!(
+            !chapitres[0].titre.is_empty(),
+            "un chapitre sans titre : la conversion a mangé l'en-tête"
+        );
+    }
+
+    /// Un checkout Windows peut convertir les fins de ligne malgré `.gitattributes` si
+    /// celui-ci venait à disparaître. Les `\r` ne se verraient pas dans le découpage —
+    /// `str::lines` les retire — mais ils entreraient dans les paragraphes, donc dans la
+    /// source Typst, et déplaceraient peut-être la pagination sans rien dire.
+    #[test]
+    fn le_manuscrit_temoin_est_en_fins_de_ligne_unix() {
+        assert!(
+            !TEMOIN.contains('\r'),
+            "le témoin porte des retours chariot : .gitattributes n'a pas joué"
+        );
+    }
 }
