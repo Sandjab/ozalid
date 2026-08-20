@@ -54,7 +54,7 @@ résultats. Tout le reste est testable sans fenêtre.
 | `maquettes` | Folio, Blanche et Surimpression |
 | `typst` | Invocation du sidecar : mesurer la pagination, compiler, rendre un aperçu |
 | `interieur` | Source Typst de l'intérieur, et convergence gouttière/parité |
-| `planche` | Assemblage 4ème \| dos \| 1ère au gabarit, et dos composé |
+| `planche` | Assemblage 4ème \| dos \| 1ère au gabarit, et dos composé élément par élément |
 | `package` | Un prestataire, un intérieur, une planche, dans son répertoire |
 | `commands` | Frontière avec l'interface, et projet ouvert |
 
@@ -130,6 +130,10 @@ tout ce qui se voit se vérifie dans l'application.
   papier nu tant qu'on n'avait pas grossi l'image à la main.
 - **La planche ne porte aucun trait de coupe.** Lulu, KDP et Bookvault les refusent
   explicitement ; le fond perdu suffit à dire où couper.
+- **Le dos se règle élément par élément.** Auteur, titre et éditeur y ont chacun leur
+  style, leur place — pied, centre ou tête — et leur rang, parce que les collections
+  ne s'accordent pas là-dessus. Seule sa **largeur** échappe au réglage : elle vient
+  de la pagination, et c'est tout l'objet de l'application.
 - **L'aperçu et le PDF sortent de la même source.** Il n'y a donc pas d'écart
   écran/export à surveiller — le piège que consignait le `CLAUDE.md` du projet
   n'existe plus ici.

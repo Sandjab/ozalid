@@ -28,6 +28,11 @@ const style = (police, taille, couleur) => ({
 
 const CADRAGE = { proportions: false, x: 0.5, y: 0.5, zoom: 1, etirement: 1 };
 
+/** Un élément du dos, au format que sérialise le Rust. */
+const elementDos = (place, rang) => ({
+  actif: true, place, rang, style: style('Archivo', 2.6, '#191917'),
+});
+
 /** Maquette au format exact que sérialise le Rust. */
 function maquette(mode = 'bandeau') {
   return {
@@ -72,7 +77,11 @@ function maquette(mode = 'bandeau') {
       cadrage: { ...CADRAGE }, voile: 'aucun', voile_opacite: 0.55,
     },
     dos: {
-      style: style('Archivo', 2.6, '#191917'),
+      auteur: elementDos('pied', 1),
+      titre: elementDos('pied', 2),
+      editeur: elementDos('tete', 1),
+      ecart: 2,
+      marge: 3,
       fond_propre: false,
       fond: '#fcf0d8',
     },
@@ -197,6 +206,27 @@ test('basculer sur la 4ème change les groupes offerts', async () => {
   await els.get('faces').children[1].declenche('click');
   assert.ok(titres().some((t) => t.startsWith('4ème')));
   assert.ok(!titres().includes('Cadre'));
+});
+
+/**
+ * Les réglages du dos n'ont de sens que sur la planche : c'est là qu'il se voit. Les
+ * offrir sur la 1ère donnerait à régler un élément absent de l'aperçu affiché.
+ */
+test('les trois éléments du dos ne sont offerts que sur la planche', async () => {
+  const { els } = await ouvre(maquette());
+  const titres = () => els.get('reglages').children
+    .filter((g) => !g.hidden)
+    .map((g) => g.children[0].textContent);
+
+  assert.ok(!titres().some((t) => t.startsWith('Dos')), 'dos offert sur la 1ère');
+
+  await els.get('faces').children[2].declenche('click');
+  const t = titres();
+  assert.ok(t.includes('Dos — auteur'));
+  assert.ok(t.includes('Dos — titre'));
+  assert.ok(t.includes('Dos — éditeur'));
+  assert.ok(t.includes('Dos — fond et espacements'));
+  assert.ok(!t.includes('Cadre'), 'réglages de 1ère laissés sur la planche');
 });
 
 /**

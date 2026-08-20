@@ -30,6 +30,28 @@ function style(prefixe, libelle, opts = {}) {
   return { titre: libelle, champs };
 }
 
+/** Les trois places du dos, du début de la lecture — de bas en haut — vers la fin. */
+const PLACES_DOS = [['pied', 'Pied'], ['centre', 'Centre'], ['tete', 'Tête']];
+
+/**
+ * Un élément du dos : où il se place, dans quel ordre, et son style entier.
+ *
+ * Les trois éléments ont exactement les mêmes réglages — le dos d'une collection met
+ * le titre en tête et l'auteur au pied, celui d'une autre les groupe : rien ici ne
+ * doit privilégier un usage.
+ */
+function elementDos(cle, libelle) {
+  return {
+    ...style(`dos.${cle}.style`, `Dos — ${libelle}`),
+    face: 'planche',
+    avant: [
+      { chemin: `dos.${cle}.actif`, libelle: 'Afficher', type: 'case' },
+      { chemin: `dos.${cle}.place`, libelle: 'Position', type: 'liste', options: PLACES_DOS },
+      { chemin: `dos.${cle}.rang`, libelle: 'Ordre à cette position', type: 'nombre', min: 1, max: 9, pas: 1 },
+    ],
+  };
+}
+
 const SCHEMA = [
   {
     titre: 'Page',
@@ -152,14 +174,18 @@ const SCHEMA = [
     // Le dos n'a pas de contrôle de largeur : elle vient de la pagination. C'est le
     // seul réglage de la maquette que l'utilisateur ne peut pas toucher, et c'est
     // exactement ce que l'application apporte.
-    titre: 'Dos — fond',
+    titre: 'Dos — fond et espacements',
     face: 'planche',
     champs: [
       { chemin: 'dos.fond_propre', libelle: 'Fond distinct du papier', type: 'case' },
       { chemin: 'dos.fond', libelle: 'Couleur du fond', type: 'couleur' },
+      { chemin: 'dos.marge', libelle: 'Retrait aux extrémités', type: 'nombre', min: 0, max: 20, pas: 0.5, unite: '% larg.' },
+      { chemin: 'dos.ecart', libelle: 'Écart entre éléments', type: 'nombre', min: 0, max: 20, pas: 0.5, unite: '% larg.' },
     ],
   },
-  { ...style('dos.style', 'Dos — texte', { casse: false }), face: 'planche' },
+  elementDos('auteur', 'auteur'),
+  elementDos('titre', 'titre'),
+  elementDos('editeur', 'éditeur'),
   {
     titre: '4ème — pied et ISBN',
     face: 'quatre',

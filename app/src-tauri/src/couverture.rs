@@ -162,33 +162,127 @@ pub struct Pied {
     pub style_editeur: Style,
 }
 
-/// Le dos, tel qu'il paraît sur la planche : auteur et titre à une extrémité,
-/// éditeur à l'autre, en lecture de bas en haut.
+/// Où un élément se cale sur le dos, en lecture de bas en haut.
+///
+/// Le vocabulaire est celui de la reliure : la **tête** est le haut du livre posé
+/// debout, le **pied** son bas. Sur un dos qui se lit de bas en haut, le pied est donc
+/// le début de la lecture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PlaceDos {
+    Pied,
+    Centre,
+    Tete,
+}
+
+/// Un élément du dos : l'auteur, le titre ou l'éditeur.
+///
+/// Chacun porte son propre style et sa propre place, parce que les usages divergent :
+/// une collection met le titre en tête et son logo en pied, une autre groupe auteur et
+/// titre au pied. `rang` départage ceux qui partagent une place.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ElementDos {
+    pub actif: bool,
+    pub place: PlaceDos,
+    /// Ordre au sein d'une même place, du début de la lecture vers la fin.
+    pub rang: u8,
+    pub style: Style,
+}
+
+/// Le dos, tel qu'il paraît sur la planche.
 ///
 /// Il ne porte aucun texte propre — l'auteur et le titre viennent du livre, l'éditeur
 /// du pied de la 1ère. Sa **largeur** n'est pas réglable : elle vient de la pagination,
 /// et c'est tout l'objet de l'application.
+///
+/// Les champs sont tous facultatifs à la lecture : un projet écrit avant que le dos
+/// ne devienne réglable élément par élément s'ouvre avec les valeurs par défaut plutôt
+/// que d'être refusé.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Dos {
-    pub style: Style,
+    #[serde(default = "dos_auteur")]
+    pub auteur: ElementDos,
+    #[serde(default = "dos_titre")]
+    pub titre: ElementDos,
+    #[serde(default = "dos_editeur")]
+    pub editeur: ElementDos,
+    /// Écart entre deux éléments d'une même place, % de la largeur de couverture.
+    #[serde(default = "dos_ecart")]
+    pub ecart: f64,
+    /// Retrait aux deux extrémités, % de la largeur de couverture.
+    #[serde(default = "dos_marge")]
+    pub marge: f64,
     /// Fond distinct du papier de la 1ère.
+    #[serde(default)]
     pub fond_propre: bool,
+    #[serde(default = "dos_fond")]
     pub fond: String,
+}
+
+/// Style commun aux trois éléments : c'est celui que portait le dos d'`index.html`.
+pub fn dos_style() -> Style {
+    Style {
+        police: "Archivo".into(),
+        graisse: 600,
+        italique: false,
+        taille: 2.6,
+        couleur: "#191917".into(),
+        tracking: 0.0,
+        casse: Casse::Telle,
+    }
+}
+
+fn element(place: PlaceDos, rang: u8) -> ElementDos {
+    ElementDos {
+        actif: true,
+        place,
+        rang,
+        style: dos_style(),
+    }
+}
+
+fn dos_auteur() -> ElementDos {
+    element(PlaceDos::Pied, 1)
+}
+
+fn dos_titre() -> ElementDos {
+    element(PlaceDos::Pied, 2)
+}
+
+fn dos_editeur() -> ElementDos {
+    element(PlaceDos::Tete, 1)
+}
+
+// Les deux écarts que le CSS d'origine fixait en dur, devenus réglables.
+fn dos_ecart() -> f64 {
+    2.0
+}
+
+fn dos_marge() -> f64 {
+    3.0
+}
+
+fn dos_fond() -> String {
+    "#fcf0d8".into()
 }
 
 fn dos_defaut() -> Dos {
     Dos {
-        style: Style {
-            police: "Archivo".into(),
-            graisse: 600,
-            italique: false,
-            taille: 2.6,
-            couleur: "#191917".into(),
-            tracking: 0.0,
-            casse: Casse::Telle,
-        },
+        auteur: dos_auteur(),
+        titre: dos_titre(),
+        editeur: dos_editeur(),
+        ecart: dos_ecart(),
+        marge: dos_marge(),
         fond_propre: false,
-        fond: "#fcf0d8".into(),
+        fond: dos_fond(),
+    }
+}
+
+impl Dos {
+    /// Le dos d'origine : auteur puis titre au pied, éditeur en tête. Les maquettes
+    /// partent de là et n'en changent que ce qui leur est propre.
+    pub fn defaut() -> Self {
+        dos_defaut()
     }
 }
 

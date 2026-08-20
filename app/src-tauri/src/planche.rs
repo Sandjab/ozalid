@@ -10,7 +10,7 @@
 //! fond perdu suffit à dire où couper. Ce qui aide l'œil vit dans l'épreuve, pas dans
 //! le fichier remis à l'imprimeur.
 
-use crate::couverture::{self, Boite, Couverture, FondQuatre, Panorama, Ressource};
+use crate::couverture::{self, Boite, Couverture, FondQuatre, Panorama, PlaceDos, Ressource};
 use crate::projet::Livre;
 use crate::providers::{Papier, Provider};
 
@@ -115,9 +115,10 @@ fn zone(dx: f64, largeur: f64, hauteur: f64, contenu: &str) -> String {
 
 /// Le dos : fond sur toute la hauteur, texte en lecture de bas en haut.
 ///
-/// Auteur et titre à une extrémité, éditeur à l'autre, comme sur une tranche de
-/// librairie. Le texte est calé sur la couverture **rognée**, pas sur la planche : le
-/// fond perdu n'est pas de la surface imprimée utile.
+/// Auteur, titre et éditeur s'y placent chacun où sa maquette le dit — au pied, au
+/// centre ou en tête — et dans l'ordre que fixe son rang. Le texte est calé sur la
+/// couverture **rognée**, pas sur la planche : le fond perdu n'est pas de la surface
+/// imprimée utile.
 fn bloc_dos(
     livre: &Livre,
     cv: &Couverture,
@@ -154,36 +155,57 @@ fn bloc_dos(
         }
     }
 
-    let auteur = livre.auteur.trim();
-    let titre = livre.titre.trim();
-    let editeur = cv.pied.editeur.trim();
-    if auteur.is_empty() && titre.is_empty() && editeur.is_empty() {
+    // Chaque élément est rangé à sa place, puis les éléments d'une même place sont
+    // ordonnés par leur rang. Un élément éteint, ou dont le texte est vide, ne laisse
+    // pas de trou : c'est ce qui permet de composer un dos sans éditeur, ou un dos qui
+    // ne porte que le titre.
+    let mut places: [Vec<(u8, String)>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+    for (el, texte) in [
+        (&d.auteur, livre.auteur.trim()),
+        (&d.titre, livre.titre.trim()),
+        (&d.editeur, cv.pied.editeur.trim()),
+    ] {
+        if !el.actif || texte.is_empty() {
+            continue;
+        }
+        let i = match el.place {
+            PlaceDos::Pied => 0,
+            PlaceDos::Centre => 1,
+            PlaceDos::Tete => 2,
+        };
+        places[i].push((el.rang, format!("#{}", el.style.applique(fw, texte))));
+    }
+    if places.iter().all(Vec::is_empty) {
         return s;
     }
 
-    // Les retraits et l'écart auteur → titre sont ceux du CSS d'origine : 3 % et 2 % de
-    // la largeur de couverture.
-    let debut = [auteur, titre]
-        .iter()
-        .filter(|t| !t.is_empty())
-        .map(|t| format!("#{}", d.style.applique(fw, t)))
-        .collect::<Vec<_>>()
-        .join(&format!("#h({})", mm(0.02 * fw)));
-    let fin = if editeur.is_empty() {
-        String::new()
-    } else {
-        format!("#{}", d.style.applique(fw, editeur))
-    };
+    let ecart = format!("#h({})", mm(d.ecart / 100.0 * fw));
+    let cellules: Vec<String> = places
+        .iter_mut()
+        .map(|p| {
+            p.sort_by_key(|(rang, _)| *rang);
+            p.iter()
+                .map(|(_, t)| t.as_str())
+                .collect::<Vec<_>>()
+                .join(&ecart)
+        })
+        .collect();
 
+    // Cinq colonnes : pied, ressort, centre, ressort, tête. Les ressorts poussent les
+    // extrémités contre les bords quel que soit le nombre d'éléments, et le centre
+    // reste centré même quand une extrémité est vide.
     s.push_str(&format!(
         "#place(center + horizon, rotate(-90deg, reflow: true, \
          block(width: {}, height: {}, inset: (x: {}))[\n\
          #set align(horizon)\n\
-         #grid(columns: (auto, 1fr, auto), align: horizon,\n  \
-         [{debut}], [], [{fin}])\n]))\n",
+         #grid(columns: (auto, 1fr, auto, 1fr, auto), align: horizon,\n  \
+         [{}], [], [{}], [], [{}])\n]))\n",
         mm(fh),
         mm(g.dos),
-        mm(0.03 * fw),
+        mm(d.marge / 100.0 * fw),
+        cellules[0],
+        cellules[1],
+        cellules[2],
     ));
     s
 }
@@ -393,6 +415,75 @@ mod tests {
         assert!(s.contains("Les Heures creuses"));
         assert!(s.contains("Ivan Pjig"));
         assert!(s.contains("GALLIMARD"), "éditeur du pied absent du dos");
+    }
+
+    /// Les trois éléments du dos se règlent séparément : le rang les ordonne au sein
+    /// d'une place, la place les envoie d'un bout à l'autre. Une maquette qui met le
+    /// titre en tête et l'auteur au pied doit produire exactement cela.
+    #[test]
+    fn la_place_et_le_rang_ordonnent_les_elements_du_dos() {
+        let mut cv = maquettes::blanche();
+        let g = gabarit("lulu", 244);
+
+        // Par défaut : auteur puis titre au pied, éditeur en tête.
+        let s = bloc_dos(&livre(), &cv, &g, None, 0.0);
+        let ordre = |s: &str| {
+            ["Ivan Pjig", "Les Heures creuses", "GALLIMARD"]
+                .map(|t| s.find(t).unwrap_or(usize::MAX))
+        };
+        let [auteur, titre, editeur] = ordre(&s);
+        assert!(auteur < titre, "titre avant auteur au pied");
+        assert!(titre < editeur, "éditeur avant le pied");
+
+        // Rangs inversés : le titre passe devant l'auteur, sans changer de place.
+        cv.dos.auteur.rang = 2;
+        cv.dos.titre.rang = 1;
+        let [auteur, titre, _] = ordre(&bloc_dos(&livre(), &cv, &g, None, 0.0));
+        assert!(titre < auteur, "le rang n'ordonne rien");
+
+        // Le titre envoyé en tête quitte le pied, où l'auteur reste seul.
+        cv.dos.titre.place = PlaceDos::Tete;
+        cv.dos.editeur.place = PlaceDos::Pied;
+        let [auteur, titre, editeur] = ordre(&bloc_dos(&livre(), &cv, &g, None, 0.0));
+        assert!(
+            editeur < titre && auteur < titre,
+            "le titre n'est pas en tête"
+        );
+    }
+
+    /// Chaque élément porte son propre style : c'est ce qui permet un titre en
+    /// capitales et un éditeur discret sur le même dos.
+    #[test]
+    fn chaque_element_du_dos_a_son_style() {
+        let mut cv = maquettes::folio();
+        cv.dos.auteur.style.couleur = "#c00000".into();
+        cv.dos.titre.style.casse = crate::couverture::Casse::Capitales;
+        cv.dos.editeur.style.taille = 1.8;
+
+        let s = bloc_dos(&livre(), &cv, &gabarit("lulu", 244), None, 0.0);
+        assert!(s.contains("#c00000"), "couleur d'auteur ignorée");
+        assert!(
+            s.contains("#upper[Les Heures creuses]"),
+            "casse du titre ignorée"
+        );
+        assert!(
+            s.contains(&format!("size: {}", mm(1.8 / 100.0 * 108.0))),
+            "corps de l'éditeur ignoré"
+        );
+    }
+
+    /// Éteindre un élément le retire sans laisser d'espace : un dos sans mention
+    /// d'éditeur est un cas courant, pas une anomalie.
+    #[test]
+    fn un_element_eteint_ne_parait_pas_sur_le_dos() {
+        let mut cv = maquettes::folio();
+        cv.dos.editeur.actif = false;
+        let s = bloc_dos(&livre(), &cv, &gabarit("lulu", 244), None, 0.0);
+        assert!(!s.contains("GALLIMARD"), "éditeur éteint pourtant composé");
+        assert!(
+            s.contains("Les Heures creuses"),
+            "le reste du dos a disparu"
+        );
     }
 
     /// Un dos sans texte reste un dos : la bande de fond doit être peinte même quand

@@ -47,13 +47,20 @@ fn quatrieme_commune() -> Quatrieme {
     }
 }
 
-/// Le dos reprend la police de titrage de la maquette ; seule sa couleur d'encre change
-/// d'une maquette à l'autre, selon la couleur du papier.
+/// Le dos des trois maquettes : auteur et titre au pied, éditeur en tête, comme le
+/// faisait l'atelier HTML. Seule la couleur d'encre change d'une maquette à l'autre,
+/// selon la couleur du papier — le reste se règle élément par élément dans le panneau.
 fn dos(couleur: &str) -> Dos {
-    Dos {
+    let d = Dos::defaut();
+    let encre = |e: ElementDos| ElementDos {
         style: style("Archivo", 600, 2.6, couleur),
-        fond_propre: false,
-        fond: "#fcf0d8".into(),
+        ..e
+    };
+    Dos {
+        auteur: encre(d.auteur),
+        titre: encre(d.titre),
+        editeur: encre(d.editeur),
+        ..Dos::defaut()
     }
 }
 
