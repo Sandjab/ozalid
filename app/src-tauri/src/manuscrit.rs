@@ -113,6 +113,22 @@ fn refus(ligne: &str) -> Option<&'static str> {
     }
 }
 
+/// Une rupture de scène sépare deux passages d'un même chapitre ; une rupture qui
+/// ouvre ou ferme un chapitre ne sépare rien. Cet invariant vaut quel que soit l'usage
+/// que l'auteur fait de `---` dans son manuscrit — y compris l'usage réel observé sur
+/// *WIP7* (build/in/texts/WIP7.md) : ses 64 `---` précèdent chacun un `## `, comme un
+/// filet de fin de chapitre plutôt qu'une séparation de scène. Sans cet élagage,
+/// `decoupe` laisserait un `Bloc::Scene` orphelin en fin de chaque chapitre — invisible
+/// tant que l'intérieur ignore les `Scene`, mais que l'épreuve afficherait comme une
+/// astérisque parasite avant chaque saut de page.
+fn elague_rupture_finale(ch: Option<&mut Chapitre>) {
+    if let Some(ch) = ch {
+        if matches!(ch.blocs.last(), Some(Bloc::Scene)) {
+            ch.blocs.pop();
+        }
+    }
+}
+
 /// Découpe le manuscrit. `attendu` est le contrôle d'intégrité facultatif du
 /// `projet.toml` : il n'a de sens qu'au gel, quand le compte ne doit plus bouger.
 pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Chapitre>, String> {
@@ -126,11 +142,19 @@ pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Chapitre>, String> 
             ));
         }
         if let Some(reste) = t.strip_prefix("## ") {
+            // Le chapitre qui se ferme ne doit pas garder de rupture en dernière
+            // position : elle ne séparerait rien.
+            elague_rupture_finale(chapitres.last_mut());
             chapitres.push(entete(reste.trim(), no)?);
         } else if t == "---" {
-            // Hors chapitre, la rupture appartient aux liminaires : rien à garder.
+            // Hors chapitre, la rupture appartient aux liminaires : rien à garder. Dans
+            // un chapitre, elle n'est gardée qu'à la suite d'un paragraphe : ni en tête
+            // de chapitre, ni après une rupture déjà posée (deux `---` consécutifs ne
+            // séparent qu'une fois).
             if let Some(courant) = chapitres.last_mut() {
-                courant.blocs.push(Bloc::Scene);
+                if matches!(courant.blocs.last(), Some(Bloc::Paragraphe(_))) {
+                    courant.blocs.push(Bloc::Scene);
+                }
             }
         } else if t.starts_with("# ") || t.is_empty() {
             // Titre du livre : le projet fait foi, pas le manuscrit.
@@ -142,6 +166,9 @@ pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Chapitre>, String> 
             continue;
         }
     }
+    // Le dernier chapitre du manuscrit n'a pas de « ## » suivant pour déclencher
+    // l'élagage : il faut le faire une dernière fois en sortie de boucle.
+    elague_rupture_finale(chapitres.last_mut());
     if chapitres.is_empty() {
         return Err("aucun chapitre trouvé (attendu : « ## NN - Titre »).".into());
     }
@@ -263,6 +290,45 @@ mod tests {
         let ch = decoupe("# Le Livre\n\n---\n\n## 01 - Un\n\nTexte.\n", None).unwrap();
         assert_eq!(ch.len(), 1);
         assert_eq!(ch[0].blocs, vec![Bloc::Paragraphe("Texte.".into())]);
+    }
+
+    /// Une rupture qui ouvre un chapitre ne sépare rien : elle n'a pas de passage
+    /// précédent dans ce chapitre à séparer d'un passage suivant.
+    #[test]
+    fn une_rupture_en_tete_de_chapitre_ne_laisse_pas_de_bloc() {
+        let ch = decoupe("## 01 - Un\n\n---\n\nTexte.\n", None).unwrap();
+        assert_eq!(ch[0].blocs, vec![Bloc::Paragraphe("Texte.".into())]);
+    }
+
+    /// Une rupture qui ferme un chapitre ne sépare rien non plus : c'est le cas réel du
+    /// manuscrit *WIP7*, où chaque `---` annonce le chapitre suivant plutôt que de
+    /// séparer deux scènes du même chapitre. Sans élagage, chaque chapitre du livre
+    /// composé garderait un `Bloc::Scene` orphelin en dernière position.
+    #[test]
+    fn une_rupture_en_fin_de_chapitre_ne_laisse_pas_de_bloc() {
+        let ch = decoupe(
+            "## 01 - Un\n\nTexte.\n\n---\n\n## 02 - Deux\n\nSuite.\n",
+            None,
+        )
+        .unwrap();
+        assert_eq!(ch[0].blocs, vec![Bloc::Paragraphe("Texte.".into())]);
+        assert_eq!(ch[1].blocs, vec![Bloc::Paragraphe("Suite.".into())]);
+    }
+
+    /// Deux ruptures consécutives ne séparent qu'une fois : la seconde ne trouve aucun
+    /// paragraphe à sa suite immédiate dans le chapitre, elle est donc ignorée plutôt
+    /// que d'empiler une deuxième `Bloc::Scene`.
+    #[test]
+    fn deux_ruptures_consecutives_n_en_font_qu_une() {
+        let ch = decoupe("## 01 - Un\n\nAvant.\n\n---\n\n---\n\nAprès.\n", None).unwrap();
+        assert_eq!(
+            ch[0].blocs,
+            vec![
+                Bloc::Paragraphe("Avant.".into()),
+                Bloc::Scene,
+                Bloc::Paragraphe("Après.".into()),
+            ]
+        );
     }
 
     #[test]
