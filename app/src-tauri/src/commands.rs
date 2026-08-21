@@ -164,8 +164,7 @@ pub fn projet_enregistrer(atelier: State<Atelier>) -> Result<ProjetVue, String> 
         .chemin
         .clone()
         .ok_or_else(|| "projet jamais enregistré : choisir où le poser.".to_string())?;
-    o.projet.enregistrer(&chemin)?;
-    vue_enregistree(o)
+    enregistrer_a(o, &chemin)
 }
 
 #[tauri::command]
@@ -182,10 +181,7 @@ pub fn projet_enregistrer_sous(
 ) -> Result<ProjetVue, String> {
     let mut garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_mut().ok_or_else(aucun_projet)?;
-    let c = PathBuf::from(&chemin);
-    o.projet.enregistrer(&c)?;
-    o.chemin = Some(c);
-    vue_enregistree(o)
+    enregistrer_a(o, &PathBuf::from(&chemin))
 }
 
 /// Relit le manuscrit à sa source d'origine et remplace la copie embarquée.
@@ -677,6 +673,16 @@ fn vue_modifiee(o: &mut Ouvert) -> Result<ProjetVue, String> {
 fn vue_enregistree(o: &mut Ouvert) -> Result<ProjetVue, String> {
     o.modifie = false;
     vue(o)
+}
+
+/// Écrit le projet à un chemin, et le retient comme le sien.
+///
+/// Le noyau commun d'« Enregistrer » et d'« Enregistrer sous… » : les deux ne
+/// diffèrent que par la façon dont le chemin est trouvé.
+fn enregistrer_a(o: &mut Ouvert, chemin: &Path) -> Result<ProjetVue, String> {
+    o.projet.enregistrer(chemin)?;
+    o.chemin = Some(chemin.to_path_buf());
+    vue_enregistree(o)
 }
 
 fn aucun_projet() -> String {
