@@ -109,9 +109,13 @@ test('le menu « Aller » montre la même étape que l\'onglet', async () => {
 });
 
 /**
- * Les onglets sont grisés sans projet ; le menu, lui, offre toujours ses entrées.
- * Sans garde ici, ⌘3 sur l'accueil montrerait une étape vide — et une exception
- * remonterait dans le rappel de `listen`, que personne n'attrape.
+ * Le menu « Aller » n'est jamais grisé : le Rust offre ses quatre entrées sans savoir
+ * si un projet est ouvert. ⌘3 sur l'accueil est donc un geste que rien n'empêche, et
+ * c'est à l'interface de n'en rien faire — le même partage des rôles qu'« Enregistrer ».
+ *
+ * Deux gardes s'y emploient, `allerA` et `majEtapes`, et l'une suffirait à faire passer
+ * ce test. Ce qu'il vérifie est ce qui se voit : que l'accueil reste, et qu'aucune étape
+ * ne paraît sous lui.
  */
 test('sans projet, « Aller » ne montre rien et ne lève rien', async () => {
   const a = atelier();
