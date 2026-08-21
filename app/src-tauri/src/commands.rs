@@ -216,6 +216,69 @@ pub fn recents_liste(app: tauri::AppHandle) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// Libellés des trois boutons de la garde.
+///
+/// Ce sont eux qui font foi au retour : avec une variante personnalisée, le plugin
+/// rend `MessageDialogResult::Custom(libellé)` et non un `Yes`/`No`. Les garder en
+/// constantes évite que la comparaison et l'affichage divergent.
+const ENREGISTRER: &str = "Enregistrer";
+const IGNORER: &str = "Ne pas enregistrer";
+const ANNULER: &str = "Annuler";
+
+/// Demande quoi faire des modifications non enregistrées.
+///
+/// Rend `"enregistrer"`, `"ignorer"` ou `"annuler"`, et `"ignorer"` d'emblée quand
+/// il n'y a rien à perdre. La commande **ne fait rien** de la réponse : c'est
+/// l'interface qui agit, parce qu'elle seule possède le sélecteur de fichiers dont
+/// « Enregistrer sous… » a besoin.
+///
+/// `async` par nécessité : `blocking_show_with_result` bloque son fil jusqu'au clic,
+/// et le plugin interdit de l'appeler depuis le fil principal — ce qui serait le cas
+/// d'une commande synchrone, dont le corps s'exécute en ligne dans le gestionnaire
+/// de protocole de la webview.
+#[tauri::command]
+pub async fn garde_modifications(
+    app: tauri::AppHandle,
+    atelier: State<'_, Atelier>,
+) -> Result<String, String> {
+    // Le verrou est relâché avant la boîte : la tenir pendant que l'utilisateur
+    // réfléchit condamnerait toute autre commande.
+    let modifie = {
+        let garde = atelier.ouvert.lock().unwrap();
+        garde.as_ref().is_some_and(|o| o.modifie)
+    };
+    if !modifie {
+        return Ok("ignorer".into());
+    }
+
+    use tauri_plugin_dialog::{
+        DialogExt, MessageDialogButtons, MessageDialogKind, MessageDialogResult,
+    };
+    let reponse = app
+        .dialog()
+        .message("Ce projet porte des modifications qui ne sont pas enregistrées.")
+        .title("Enregistrer avant de continuer ?")
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::YesNoCancelCustom(
+            ENREGISTRER.into(),
+            IGNORER.into(),
+            ANNULER.into(),
+        ))
+        .blocking_show_with_result();
+
+    Ok(match reponse {
+        MessageDialogResult::Custom(s) if s == ENREGISTRER => "enregistrer",
+        MessageDialogResult::Custom(s) if s == IGNORER => "ignorer",
+        // Filet : si une plateforme rendait les valeurs canoniques plutôt que les
+        // libellés, le sens resterait le même. Tout le reste — fermeture de la
+        // boîte comprise — est un refus, parce que c'est le choix qui ne perd rien.
+        MessageDialogResult::Yes => "enregistrer",
+        MessageDialogResult::No => "ignorer",
+        _ => "annuler",
+    }
+    .to_string())
+}
+
 /// Relit le manuscrit à sa source d'origine et remplace la copie embarquée.
 ///
 /// Le `.ozalid` est auto-portant : le manuscrit y est copié, donc une correction faite

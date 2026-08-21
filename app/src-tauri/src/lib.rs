@@ -32,6 +32,22 @@ pub fn run() {
                 eprintln!("menu : événement non transmis à l'interface : {e}");
             }
         })
+        // Fermer la fenêtre, c'est fermer l'application : la même garde doit s'y
+        // appliquer. Elle ne peut pas être posée ici — la réponse « Enregistrer »
+        // demande un sélecteur de fichiers, que seule l'interface possède — donc on
+        // retient la fermeture et on lui passe la main.
+        .on_window_event(|fenetre, ev| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = ev {
+                use tauri::Emitter;
+                api.prevent_close();
+                if let Err(e) = fenetre.emit("fermeture-demandee", ()) {
+                    // L'interface est injoignable : mieux vaut fermer que coincer
+                    // l'utilisateur dans une fenêtre qui refuse de partir.
+                    eprintln!("fermeture : interface injoignable ({e}), fermeture forcée.");
+                    let _ = fenetre.destroy();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             commands::providers_liste,
             commands::projet_importer,
@@ -54,7 +70,8 @@ pub fn run() {
             commands::couverture_apercu,
             commands::composer,
             commands::packager,
-            commands::recents_liste
+            commands::recents_liste,
+            commands::garde_modifications
         ])
         .run(tauri::generate_context!())
         .expect("démarrage de l'application impossible");
