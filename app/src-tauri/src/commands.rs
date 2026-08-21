@@ -663,9 +663,10 @@ fn config(app: &tauri::AppHandle) -> Option<PathBuf> {
 
 /// Mémorise un projet dans les récents.
 ///
-/// **Au mieux** : ne pas pouvoir écrire les préférences se signale sur la sortie
-/// d'erreur et n'interrompt rien. Une liste de raccourcis perdue ne coûte rien ; un
-/// enregistrement refusé parce qu'un confort a échoué coûterait un livre.
+/// **Au mieux** : un échec s'écrit sur la sortie d'erreur, visible en développement,
+/// invisible pour qui lance le binaire empaqueté. C'est assumé : ce qui se perd ici
+/// est une liste de raccourcis, pas un livre, et faire remonter cet échec jusqu'à
+/// l'interface coûterait plus qu'il ne vaut.
 fn memoriser(app: &tauri::AppHandle, chemin: &Path) {
     let Some(dir) = config(app) else {
         eprintln!("préférences : répertoire de configuration introuvable, récents non mémorisés.");
@@ -916,6 +917,41 @@ mod tests {
         let mut blancs = ouvert_neuf();
         blancs.projet.texte = "  \n\n\t \n".into();
         assert!(vue(&blancs).unwrap().manuscrit_absent);
+    }
+
+    /// Écrire, c'est aussi retenir où : un « Enregistrer » suivant doit réécrire au
+    /// même endroit sans rien redemander.
+    #[test]
+    fn enregistrer_retient_le_chemin_ecrit() {
+        let dir = tempfile::tempdir().unwrap();
+        let chemin = dir.path().join("livre.ozalid");
+        let mut o = ouvert_neuf();
+        o.modifie = true;
+
+        let v = enregistrer_a(&mut o, &chemin).unwrap();
+        assert!(!v.modifie, "le drapeau retombe à l'écriture");
+        assert_eq!(o.chemin.as_deref(), Some(chemin.as_path()));
+        assert!(chemin.is_file(), "l'archive est bien sur le disque");
+    }
+
+    /// Une écriture refusée ne doit ni faire retomber le drapeau, ni faire croire que
+    /// le projet a changé d'adresse. C'est le cas où l'on croirait avoir sauvegardé.
+    #[test]
+    fn une_ecriture_refusee_ne_deplace_ni_le_projet_ni_le_drapeau() {
+        let dir = tempfile::tempdir().unwrap();
+        // Un répertoire existant ne peut pas être ouvert en création de fichier :
+        // c'est un échec d'écriture qui n'exige ni permission ni disque plein.
+        let impossible = dir.path().join("sous-repertoire");
+        std::fs::create_dir(&impossible).unwrap();
+
+        let ancien = dir.path().join("ancien.ozalid");
+        let mut o = ouvert_neuf();
+        o.modifie = true;
+        o.chemin = Some(ancien.clone());
+
+        assert!(enregistrer_a(&mut o, &impossible).is_err());
+        assert!(o.modifie, "le drapeau reste levé");
+        assert_eq!(o.chemin.as_deref(), Some(ancien.as_path()));
     }
 
     /// Le genre par défaut ne doit vivre qu'à un endroit : un projet neuf et un
