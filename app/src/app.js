@@ -155,6 +155,25 @@ async function tente(fn) {
 }
 
 /**
+ * Efface ce que le projet précédent avait laissé à l'écran.
+ *
+ * Pagination, dos, chemins de fichiers : ces chiffres ne valent que pour le livre
+ * qui les a produits. Les laisser en place pendant qu'on en ouvre un autre donnerait
+ * à lire la pagination du mauvais livre — précisément l'erreur que l'application
+ * existe pour supprimer.
+ */
+function oublierLesSorties() {
+  dosCompose = null;
+  for (const id of ['resultat', 'packages']) {
+    $(id).replaceChildren();
+    $(id).hidden = true;
+  }
+  $('cheminEpreuve').textContent = '';
+  $('etat').textContent = '';
+  $('etat').className = 'etat';
+}
+
+/**
  * L'écran sans projet : les rubriques disparaissent, les récents s'offrent.
  *
  * Appelé au démarrage et après « Fermer le projet ». Il ne se contente pas de vider
@@ -163,7 +182,7 @@ async function tente(fn) {
  */
 async function afficherAucunProjet() {
   projet = null;
-  dosCompose = null;
+  oublierLesSorties();
   $('cheminProjet').textContent = 'aucun projet ouvert';
   $('etatEnregistrement').textContent = '';
   $('btEnregistrer').disabled = true;
@@ -172,15 +191,6 @@ async function afficherAucunProjet() {
                    'secComposer', 'secPackages', 'secEpreuve']) {
     $(s).hidden = true;
   }
-  // Les sorties du projet qu'on referme ne le suivent pas : leurs chiffres et leurs
-  // chemins ne vaudraient plus pour rien.
-  for (const id of ['resultat', 'packages']) {
-    $(id).replaceChildren();
-    $(id).hidden = true;
-  }
-  $('cheminEpreuve').textContent = '';
-  $('etat').textContent = '';
-  $('etat').className = 'etat';
   await afficherRecents();
 }
 
@@ -231,6 +241,7 @@ async function enregistrerQuelquePart() {
 
 async function nouveau() {
   if (!await garde()) return;
+  oublierLesSorties();
   await tente(async () => afficherProjet(await invoke('projet_nouveau')));
 }
 
@@ -251,6 +262,7 @@ async function ouvrir() {
 }
 
 async function ouvrirChemin(chemin) {
+  oublierLesSorties();
   await tente(async () => afficherProjet(await invoke('projet_ouvrir', { chemin })));
 }
 
@@ -261,6 +273,7 @@ async function importer() {
     filters: [{ name: 'Livre de l\'ancienne chaîne', extensions: ['toml'] }],
   });
   if (!choix) return;
+  oublierLesSorties();
   await tente(async () =>
     afficherProjet(await invoke('projet_importer', { livreToml: choix })));
 }
