@@ -175,11 +175,13 @@ pub fn source(
     s.push_str(&liminaires(livre));
 
     // — Corps, folio rétabli. La numérotation court depuis le faux-titre, seul son
-    //   affichage était supprimé : le premier chapitre s'ouvre donc en page 5. —
+    //   affichage était supprimé : le premier chapitre s'ouvre donc en page 5, ou en 7
+    //   quand le livre porte une dédicace. —
     s.push_str(&format!("#set page(footer: {folio})\n"));
 
     for (i, ch) in chapitres.iter().enumerate() {
-        // Le premier chapitre suit le saut de page du copyright : ne pas en ajouter un.
+        // Le premier chapitre suit le dernier saut de page des liminaires : ne pas en
+        // ajouter un.
         if i > 0 {
             s.push_str("#pagebreak()\n");
         }
@@ -212,7 +214,8 @@ pub fn source(
     s
 }
 
-/// Les pages liminaires : faux-titre, blanche, page de titre, copyright.
+/// Les pages liminaires : faux-titre, blanche, page de titre, copyright, et — quand le
+/// livre en porte une — la dédicace et sa blanche.
 ///
 /// Toutes sans folio, et sans avoir à le dire : `footer: none`, posé par l'entête que
 /// `source` écrit, court jusqu'au `#set page(footer: …)` qui ouvre le corps.
@@ -613,6 +616,9 @@ mod tests {
         let s = liminaires(&l);
 
         assert!(s.contains(r"À \#M.,"), "dédicace non échappée : {s}");
-        assert!(s.contains(r"\ qui a tenu la lampe."), "saut de ligne perdu : {s}");
+        assert!(
+            s.contains(r"\ qui a tenu la lampe."),
+            "saut de ligne perdu : {s}"
+        );
     }
 }
