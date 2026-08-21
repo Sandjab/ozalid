@@ -135,6 +135,97 @@ pub fn assembler(
     })
 }
 
+/// Les noms de répertoire des envois, dans l'ordre de la liste.
+///
+/// Séparé d'`assembler_envois` pour être éprouvé sans toucher au disque ni à Typst :
+/// c'est ici que se joue le fait qu'un exemplaire ne parte pas avec le mot d'un autre.
+fn dossiers_d_envoi(envois: &[crate::envoi::Envoi]) -> Vec<String> {
+    let mut pris: Vec<String> = Vec::with_capacity(envois.len());
+    for e in envois {
+        let d = crate::envoi::distinct(&crate::envoi::assaini(&e.dedicataire), &pris);
+        pris.push(d);
+    }
+    pris
+}
+
+/// Compose un package par envoi, tous chez le même prestataire.
+///
+/// **La convergence n'a lieu qu'une fois.** L'envoi se pose par `#place`, qui ne peut
+/// pas créer de page : la gouttière, la parité, le compte de pages, le dos et la
+/// planche sont donc les mêmes pour tous. Converger M fois ne coûterait pas seulement
+/// M fois le temps — cela laisserait croire que le résultat pourrait différer.
+pub fn assembler_envois(
+    projet: &Projet,
+    pr: &Provider,
+    papier: &Papier,
+    releve: Releve,
+    racine: &Path,
+    typst: &Typst,
+) -> Result<Vec<(String, Package)>, String> {
+    let envois = &projet.meta.envois;
+    envois.verifie()?;
+    if envois.liste.is_empty() {
+        return Err("aucun envoi : en écrire un avant de générer.".into());
+    }
+
+    // Le package de référence, sans envoi : c'est lui qui converge, calcule le dos et
+    // compose la planche. Les envois n'en reprennent que le réglage et les fichiers.
+    let reference = racine.join(".reference");
+    let base = assembler(projet, pr, papier, releve, &reference, typst)?;
+
+    let livre = &projet.meta.livre;
+    let int = &projet.meta.interieur;
+    let chapitres = manuscrit::decoupe(&projet.texte, livre.chapitres)?;
+    let reglage = Reglage {
+        gouttiere: base.gouttiere,
+        blanche: base.blanche,
+    };
+    let crate::envoi::Main::Police { police } = &envois.main;
+
+    let mut sorties = Vec::with_capacity(envois.liste.len());
+    for (e, nom_dossier) in envois.liste.iter().zip(dossiers_d_envoi(&envois.liste)) {
+        let dossier = racine.join(&nom_dossier);
+        std::fs::create_dir_all(&dossier)
+            .map_err(|err| format!("répertoire inutilisable ({}) : {err}", dossier.display()))?;
+
+        let src = dossier.join(nom(pr, "interieur", "typ"));
+        ecrire(
+            &src,
+            &interieur::source(
+                livre,
+                int,
+                pr,
+                &reglage,
+                &chapitres,
+                Some(interieur::Trace {
+                    police,
+                    texte: &e.contenu,
+                }),
+            ),
+        )?;
+        let pdf = dossier.join(nom(pr, "interieur", "pdf"));
+        typst.compile(&src, &pdf)?;
+
+        // La planche ne dépend pas de l'envoi : elle est recopiée, pas recomposée.
+        let mut p = base.clone();
+        p.chemins = vec![
+            affiche(&pdf),
+            copier(&reference, &dossier, &nom(pr, "couverture", "pdf"))?,
+        ];
+        p.vignette = copier(&reference, &dossier, &nom(pr, "couverture", "png"))?;
+        sorties.push((nom_dossier, p));
+    }
+    Ok(sorties)
+}
+
+/// Recopie un fichier de la référence vers le répertoire d'un envoi, et rend son chemin.
+fn copier(depuis: &Path, vers: &Path, fichier: &str) -> Result<String, String> {
+    let cible = vers.join(fichier);
+    std::fs::copy(depuis.join(fichier), &cible)
+        .map_err(|e| format!("{fichier} : copie impossible : {e}"))?;
+    Ok(affiche(&cible))
+}
+
 /// Quelle face une image sert : c'est son nom qui le dit, et rien d'autre.
 ///
 /// Le projet embarque ses images à plat, sans champ qui leur donnerait un rôle : la
@@ -178,6 +269,30 @@ fn ecrire(chemin: &Path, contenu: &str) -> Result<(), String> {
 mod tests {
     use super::*;
     use crate::providers::provider;
+
+    /// Les répertoires d'envoi portent le nom du dédicataire, assaini et rendu unique.
+    /// Deux dédicataires qui se confondraient enverraient au second le mot du premier.
+    #[test]
+    fn les_repertoires_d_envoi_sont_distincts_et_sans_chemin() {
+        let envois = [
+            crate::envoi::Envoi {
+                dedicataire: "Marie/Léa".into(),
+                contenu: "A.".into(),
+            },
+            crate::envoi::Envoi {
+                dedicataire: "Marie-Léa".into(),
+                contenu: "B.".into(),
+            },
+            crate::envoi::Envoi {
+                dedicataire: "..".into(),
+                contenu: "C.".into(),
+            },
+        ];
+        assert_eq!(
+            dossiers_d_envoi(&envois),
+            vec!["Marie-Léa", "Marie-Léa-2", "envoi"]
+        );
+    }
 
     /// Les deux sorties d'un package portent la clé du prestataire : dans un répertoire
     /// où plusieurs packages ont été produits, un fichier ne peut pas être remis au
