@@ -590,6 +590,34 @@ test('recomposer éteint le témoin de l\'Intérieur', async () => {
 });
 
 /**
+ * Une police refusée ne périme rien : le Rust n'a rien changé, et le panneau revient à
+ * ce que le projet porte. Le témoin se lit pourtant dans les contrôles autant que dans
+ * le projet — c'est `dosCourant()` qui compare le dos mesuré au gabarit, au papier et à
+ * la police *choisis à l'écran*. Remis d'accord trop tôt, il compare le dos à une police
+ * que le refus vient d'annuler, et envoie recomposer un livre dont le dos est juste :
+ * une erreur dans l'entête, un témoin rouge, et rien à réparer.
+ */
+test('une police refusée n\'allume pas le témoin de l\'Intérieur', async () => {
+  const base = atelierCompose([LULU]);
+  const invoke = async (cmd, args) => {
+    if (cmd === 'interieur_modifier') throw new Error('police d\'intérieur inconnue');
+    return base(cmd, args);
+  };
+  const { els } = await charge({ invoke });
+  await els.get('btNouveau').declenche('click');
+  await els.get('btComposer').declenche('click');
+
+  els.get('inPoliceInterieur').value = 'Alegreya';
+  await els.get('inPoliceInterieur').declenche('change');
+
+  assert.match(els.get('alerte').textContent, /police d'intérieur inconnue/);
+  assert.equal(els.get('inPoliceInterieur').value, 'EB Garamond',
+    'le panneau n\'est pas revenu au projet : le témoin ne prouverait rien');
+  assert.equal(sous(els, 'interieur'), 'EB Garamond');
+  assert.equal(alerte(els, 'interieur'), false);
+});
+
+/**
  * Un dos jamais composé ne réclame rien : c'est l'état d'un projet qu'on vient
  * d'ouvrir, et le pied le dit déjà. Seul un dos qui a existé et ne vaut plus allume.
  */

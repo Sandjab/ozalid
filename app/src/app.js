@@ -97,6 +97,12 @@ function allerA(cle) {
  * d'intégrité ; une couverture sans maquette ; un dos qui ne vaut plus pour ce qui est
  * affiché, et qui s'allume à l'Intérieur parce que c'est là qu'on le répare. Un
  * manuscrit absent n'en est pas un : c'est l'état d'un projet neuf, pas une anomalie.
+ *
+ * La signature ment à moitié : l'état de l'Intérieur ne se déduit pas de `p` seul. Le
+ * dos mesuré se compare au gabarit, au papier et à la police tels que les contrôles les
+ * portent — `dosCourant()` les y lit. D'où deux contraintes sur les appelants : reposer
+ * le panneau avant d'appeler, et rappeler après tout geste qui déplace un de ces trois
+ * contrôles sans repasser par `afficherProjet`.
  */
 function etatEtapes(p) {
   const attendu = p.livre.chapitres;
@@ -240,7 +246,6 @@ function afficherProjet(p) {
   $('etatEnregistrement').textContent = p.modifie
     ? 'modifié'
     : (p.chemin ? 'enregistré' : 'jamais enregistré');
-  majEtapes();
 
   $('inTitre').value = p.livre.titre;
   $('inTitrePage').value = p.livre.titre_page ?? '';
@@ -280,6 +285,10 @@ function afficherProjet(p) {
   if (p.couverture) afficherCouverture(p.couverture);
   demanderApercu();
   majPied();
+  // Après les contrôles, jamais avant : le témoin de l'Intérieur compare le dos mesuré
+  // à la police *choisie à l'écran*, et un panneau pas encore reposé porte encore la
+  // saisie qu'un refus vient d'annuler.
+  majEtapes();
 }
 
 /**
