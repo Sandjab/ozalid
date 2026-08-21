@@ -1126,9 +1126,9 @@ cd app/src-tauri && cargo test --lib && cargo clippy --all-targets && cargo fmt 
 
 Attendu : tout passe. Le comportement se vérifiera à l'écran en Task 8, quand l'interface écoutera.
 
-Attention : à ce stade, la fenêtre **refuse de se fermer** — la fermeture est retenue et personne ne l'écoute encore. Interrompre le terminal pour arrêter `cargo tauri dev`. C'est temporaire et réglé en Task 8.
+Note, après le correctif du trou ⌘Q décrit en tête de ce plan : à ce stade l'interface n'appelle pas encore `interface_prete` — la tâche 8 le fera — donc le témoin reste baissé, et c'est ce qui sauve la mise. La fermeture n'est pas retenue, ⌘Q appelle `app.exit(0)`, et l'application se ferme normalement.
 
-Ne pas se rabattre sur ⌘Q : c'est précisément parce qu'il fonctionne ici, en traversant la garde sans la voir, qu'il fallait le corriger (voir « Écarts assumés » en tête de ce plan). Après le correctif, ⌘Q passe par l'interface comme le reste, et le témoin `Interface::prete` évite qu'une interface non démarrée ne rende l'application inquittable.
+C'est exactement le comportement que le témoin existe pour produire : tant que l'interface ne s'est pas annoncée, on ne lui demande rien et on la laisse partir. Aucune question n'est posée, mais il n'y a encore rien à perdre.
 
 - [ ] **Step 5 : Commit**
 
@@ -1743,8 +1743,6 @@ async function routerMenu(id) {
   await MENU[id]?.();
 }
 
-listen('menu', (ev) => routerMenu(ev.payload));
-
 /**
  * La fenêtre a demandé à se fermer, et le Rust a retenu la fermeture.
  *
@@ -1752,17 +1750,22 @@ listen('menu', (ev) => routerMenu(ev.payload));
  * ne peut pas s'en charger — répondre « Enregistrer » demande un sélecteur de
  * fichiers, que seule l'interface possède.
  */
-listen('fermeture-demandee', quitter);
-
 // Les écouteurs sont posés : le Rust peut désormais compter sur nous pour répondre.
 // Tant qu'il ne l'a pas su, il laisse la fenêtre se fermer sans rien demander — une
 // interface qui n'a jamais démarré n'a rien à perdre, et une application qu'on ne
 // peut plus quitter serait pire que la question qu'on aurait manqué de poser.
-invoke('interface_prete');
+//
+// `await` et non un simple ordre d'écriture : `listen` rend une promesse, et
+// l'écouteur n'existe côté Rust qu'à sa résolution. Annoncer qu'on écoute avant
+// d'écouter vraiment ouvrirait la fenêtre de temps que ce témoin existe pour fermer.
+Promise.all([
+  listen('menu', (ev) => routerMenu(ev.payload)),
+  listen('fermeture-demandee', quitter),
+]).then(() => invoke('interface_prete'));
 ```
 
-Ces trois lignes doivent venir **après** l'enregistrement des deux `listen`, et rien de
-faillible ne doit s'intercaler : c'est tout l'objet du témoin.
+Ce bloc remplace les deux appels `listen` isolés : il ne doit y avoir qu'un seul endroit
+où les écouteurs se posent, et l'annonce doit suivre leur résolution.
 
 Le menu « Aller » n'a pas d'entrée dans `MENU` : les quatre étapes n'existent pas encore. `MENU[id]?.()` les ignore sans erreur, et le lot 2 les branchera.
 
