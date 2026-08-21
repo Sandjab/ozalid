@@ -402,6 +402,28 @@ test('changer de papier retire le dos du pied', async () => {
 });
 
 /**
+ * Sans gabarit lisible, il n'y a pas de prestataire à nommer — mais les boutons de
+ * l'accueil restent cliquables, et le pied est le premier à demander le prestataire quand
+ * un projet s'ouvre. Muet, il laisse l'application dégradée ; sans garde, il lève depuis
+ * `afficherProjet`, et l'exception traverse `tente()` en laissant l'écran à moitié dessiné.
+ */
+test('un démarrage en échec ne fait pas lever le pied au premier projet', async () => {
+  const a = atelier();
+  const invoke = async (cmd, args) => {
+    if (cmd === 'providers_liste') throw new Error('aucun gabarit lisible');
+    return a.invoke(cmd, args);
+  };
+  const { els } = await charge({ invoke });
+
+  await els.get('btNouveau').declenche('click');
+
+  // Le projet s'ouvre : c'est ce qui rend l'assertion suivante probante — le pied s'est
+  // bien dessiné, il n'est pas resté muet faute d'avoir été appelé.
+  assert.equal(els.get('titreLivre').textContent, 'Les Heures creuses');
+  assert.equal(els.get('piedPrestataire').textContent, '');
+});
+
+/**
  * Ce test lit le balisage au lieu de passer par l'application, et ne prouve donc rien
  * de son comportement. Ce n'est pas un exemple à suivre : c'est le seul filet possible
  * pour cette propriété-là.

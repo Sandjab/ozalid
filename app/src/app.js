@@ -126,12 +126,16 @@ function alerter(message) {
  * périmé écrit en bas de l'écran est exactement ce qu'on ne relirait pas.
  */
 function majPied() {
-  if (!projet) {
+  // Le prestataire, pas seulement le projet : un démarrage qui n'a pas pu lire les
+  // gabarits laisse la liste vide, et le premier projet ouvert ferait lever le pied
+  // au lieu de dire ce qu'il sait — c'est-à-dire rien.
+  const p = projet ? providerCourant() : null;
+  if (!p) {
     $('piedPrestataire').textContent = '';
     return;
   }
   const dos = dosCourant();
-  $('piedPrestataire').textContent = `Vu pour : ${providerCourant().libelle} · `
+  $('piedPrestataire').textContent = `Vu pour : ${p.libelle} · `
     + (dos === null ? 'dos non composé' : `dos ${nb(dos, 1)} mm`);
 }
 
