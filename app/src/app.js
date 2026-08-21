@@ -221,14 +221,20 @@ async function afficherRecents() {
  */
 async function garde() {
   const choix = await invoke('garde_modifications');
-  if (choix === 'annuler') return false;
   if (choix === 'enregistrer') return enregistrerQuelquePart();
-  return true;
+  if (choix === 'ignorer') return true;
+  // « annuler », et tout ce qu'on n'aurait pas compris : le défaut penche du côté
+  // qui ne perd rien, comme il le fait déjà côté Rust. Une divergence de
+  // vocabulaire entre les deux devient ainsi inoffensive.
+  return false;
 }
 
 /** Enregistre en place si le projet a un chemin, sinon demande où. Rend vrai si écrit. */
 async function enregistrerQuelquePart() {
-  if (projet?.chemin) {
+  // Les boutons sont grisés sans projet ; le menu, lui, ne l'est pas. C'est ici
+  // que la protection doit vivre, puisque les deux chemins s'y rejoignent.
+  if (!projet) return false;
+  if (projet.chemin) {
     try {
       afficherProjet(await invoke('projet_enregistrer'));
       return true;
@@ -292,6 +298,8 @@ async function importer() {
 
 /** « Enregistrer sous… » : demande où poser le projet. Rend vrai si écrit. */
 async function enregistrerSous() {
+  // Le menu y mène directement, sans passer par « Enregistrer » : la garde s'y répète.
+  if (!projet) return false;
   const choix = await save({
     defaultPath: `${projet.livre.titre || 'projet'}.ozalid`,
     filters: [{ name: 'Projet Ozalid', extensions: ['ozalid'] }],

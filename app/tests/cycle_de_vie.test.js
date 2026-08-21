@@ -173,6 +173,45 @@ test('le menu passe par le même code que les boutons', async () => {
   assert.equal(els.get('secLivre').hidden, true);
 });
 
+/**
+ * Les boutons sont grisés sans projet ; le menu, lui, offre toujours ses entrées.
+ * Une exception y remonterait dans le rappel de `listen`, que personne n'attrape :
+ * le geste ne ferait rien, sans un mot.
+ */
+test('enregistrer depuis le menu sans projet ne lève rien', async () => {
+  const a = atelier();
+  let demande = 0;
+  let router;
+  await charge({
+    ids: IDS,
+    invoke: a.invoke,
+    save: async () => { demande += 1; return null; },
+    listen: async (nom, fn) => { if (nom === 'menu') router = fn; return () => {}; },
+  });
+
+  await router({ payload: 'fichier.enregistrer' });
+  await router({ payload: 'fichier.enregistrer_sous' });
+
+  assert.equal(demande, 0, 'aucun sélecteur de fichiers ne doit s\'ouvrir');
+  assert.ok(!a.noms().includes('projet_enregistrer'));
+  assert.ok(!a.noms().includes('projet_enregistrer_sous'));
+});
+
+/**
+ * Le Rust ne rend que trois réponses connues. Si un jour il en rendait une autre,
+ * poursuivre perdrait le travail : le défaut doit pencher du côté qui ne perd rien.
+ */
+test('une réponse de garde inattendue arrête au lieu de poursuivre', async () => {
+  const a = atelier({ garde: 'un mot que personne n\'attend' });
+  const { els } = await charge({ ids: IDS, invoke: a.invoke });
+
+  await els.get('btNouveau').declenche('click');
+
+  assert.ok(!a.noms().includes('projet_nouveau'),
+    'une réponse incomprise doit annuler, jamais laisser passer');
+  assert.equal(els.get('secLivre').hidden, true);
+});
+
 test('un récent du menu porte son chemin dans son identifiant', async () => {
   const a = atelier();
   let router;
