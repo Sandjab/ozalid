@@ -74,14 +74,17 @@ pub fn poser<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .item(&MenuItemBuilder::with_id("fichier.fermer", "Fermer le projet").build(app)?)
         .build()?;
 
+    // Les libellés sont écrits ici parce que personne d'autre ne le fera : les
+    // entrées prédéfinies portent des chaînes anglaises fixes, que macOS ne
+    // localise pas. Seul « Services » se passe de traduction, le mot étant le même.
     let edition = SubmenuBuilder::new(app, "Édition")
-        .undo()
-        .redo()
+        .undo_with_text("Annuler")
+        .redo_with_text("Rétablir")
         .separator()
-        .cut()
-        .copy()
-        .paste()
-        .select_all()
+        .cut_with_text("Couper")
+        .copy_with_text("Copier")
+        .paste_with_text("Coller")
+        .select_all_with_text("Tout sélectionner")
         .build()?;
 
     let aller = SubmenuBuilder::new(app, "Aller")
@@ -113,15 +116,15 @@ pub fn poser<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     #[cfg(target_os = "macos")]
     let menu = menu.item(
         &SubmenuBuilder::new(app, "Ozalid Studio")
-            .about(None)
+            .about_with_text("À propos d'Ozalid Studio", None)
             .separator()
             .services()
             .separator()
-            .hide()
-            .hide_others()
-            .show_all()
+            .hide_with_text("Masquer Ozalid Studio")
+            .hide_others_with_text("Masquer les autres")
+            .show_all_with_text("Tout afficher")
             .separator()
-            .quit()
+            .quit_with_text("Quitter Ozalid Studio")
             .build()?,
     );
     let menu = menu.items(&[&fichier, &edition, &aller]).build()?;
