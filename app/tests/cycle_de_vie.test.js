@@ -1,0 +1,279 @@
+'use strict';
+
+// Câblage du cycle de vie : ce que l'interface envoie au Rust selon la réponse de la
+// garde, et ce que le menu déclenche. La boîte de dialogue elle-même est native :
+// elle se vérifie dans l'application, pas ici.
+
+const test = require('node:test');
+const assert = require('node:assert');
+const { charge } = require('./dom_shim');
+
+const IDS = [
+  'btNouveau', 'btOuvrir', 'btImporter', 'btEnregistrer', 'btEnregistrerSous',
+  'cheminProjet', 'etatEnregistrement', 'recents',
+  'secLivre', 'secManuscrit', 'secCouverture', 'secComposer',
+  'inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright', 'inChapitres',
+  'etatManuscrit', 'sourceManuscrit', 'btReimporter', 'btChoisirManuscrit',
+  'etatImages', 'btImageUne', 'btImageQuatre',
+  'maquettes', 'etatCouverture', 'faces', 'apercu', 'etatApercu', 'reglages',
+  'inProvider', 'inPapier', 'noteFormat',
+  'btComposer', 'etat', 'resultat',
+  'secPackages', 'listePrestataires', 'btPackager', 'etatPackages', 'packages',
+  'secInterieur', 'inPoliceInterieur',
+  'secEpreuve', 'inEpreuveCorps', 'btEpreuve', 'etatEpreuve', 'cheminEpreuve',
+];
+
+const LULU = {
+  cle: 'lulu', libelle: 'Lulu — poche 108 × 175',
+  largeur: 108, hauteur: 175, fond_perdu: 3.175, dos_publie: true,
+  papiers: [{ cle: 'standard', libelle: 'Papier standard' }],
+};
+
+function projet(sur = {}) {
+  return {
+    chemin: '/livres/LHC.ozalid',
+    livre: {
+      titre: 'Les Heures creuses', titre_page: null, auteur: 'Ivan Pjig',
+      genre: 'roman', copyright: '', chapitres: null,
+    },
+    manuscrit_source: null,
+    chapitres_trouves: 1,
+    mots: 12,
+    manuscrit_absent: false,
+    modifie: false,
+    couverture: null,
+    couverture_importee: false,
+    images: [],
+    interieur: { police: 'EB Garamond' },
+    ...sur,
+  };
+}
+
+/** Un atelier de test : enregistre les commandes reçues, rend des vues plausibles. */
+function atelier({ garde = 'ignorer', recents = [], sur = {} } = {}) {
+  const appels = [];
+  const invoke = async (cmd, args) => {
+    appels.push([cmd, args]);
+    switch (cmd) {
+      case 'providers_liste': return [LULU];
+      case 'polices_liste': return ['Bodoni Moda'];
+      case 'polices_texte_liste': return ['EB Garamond'];
+      case 'maquettes_liste': return [];
+      case 'recents_liste': return recents;
+      case 'garde_modifications': return garde;
+      case 'projet_fermer': return null;
+      case 'interface_prete': return null;
+      case 'couverture_apercu': throw new Error('pas de maquette');
+      default: return projet(sur);
+    }
+  };
+  return { appels, invoke, noms: () => appels.map(([c]) => c) };
+}
+
+test('sans projet, aucune rubrique n\'est offerte et les récents s\'affichent', async () => {
+  const a = atelier({ recents: ['/livres/A.ozalid', '/livres/B.ozalid'] });
+  const { els } = await charge({ ids: IDS, invoke: a.invoke });
+
+  assert.equal(els.get('secLivre').hidden, true);
+  assert.equal(els.get('btEnregistrer').disabled, true);
+  assert.equal(els.get('cheminProjet').textContent, 'aucun projet ouvert');
+  assert.deepEqual(els.get('recents').textes('BUTTON'),
+    ['/livres/A.ozalid', '/livres/B.ozalid']);
+});
+
+test('cliquer un récent ouvre ce projet-là', async () => {
+  const a = atelier({ recents: ['/livres/A.ozalid'] });
+  const { els } = await charge({ ids: IDS, invoke: a.invoke });
+
+  await els.get('recents').enfants.find((e) => e.tagName === 'BUTTON').declenche('click');
+
+  const ouvre = a.appels.find(([c]) => c === 'projet_ouvrir');
+  assert.deepEqual(ouvre[1], { chemin: '/livres/A.ozalid' });
+  assert.equal(els.get('secLivre').hidden, false);
+});
+
+test('la garde refusée arrête tout : rien n\'est ouvert, rien n\'est perdu', async () => {
+  const a = atelier({ garde: 'annuler' });
+  const { els } = await charge({ ids: IDS, invoke: a.invoke });
+
+  await els.get('btNouveau').declenche('click');
+
+  assert.ok(!a.noms().includes('projet_nouveau'),
+    'un « Annuler » qui crée quand même le projet aurait perdu le travail');
+  assert.equal(els.get('secLivre').hidden, true);
+});
+
+test('la garde acceptée laisse passer', async () => {
+  const a = atelier({ garde: 'ignorer' });
+  const { els } = await charge({ ids: IDS, invoke: a.invoke });
+
+  await els.get('btNouveau').declenche('click');
+
+  assert.ok(a.noms().includes('projet_nouveau'));
+  assert.equal(els.get('secLivre').hidden, false);
+});
+
+test('« Enregistrer » réécrit en place, sans sélecteur de fichiers', async () => {
+  const a = atelier();
+  let demande = 0;
+  const { els } = await charge({
+    ids: IDS,
+    invoke: a.invoke,
+    save: async () => { demande += 1; return '/ailleurs.ozalid'; },
+  });
+  await els.get('btNouveau').declenche('click');   // ouvre un projet qui a un chemin
+  await els.get('btEnregistrer').declenche('click');
+
+  assert.ok(a.noms().includes('projet_enregistrer'));
+  assert.equal(demande, 0, 'un projet déjà posé ne redemande pas où');
+});
+
+test('un projet jamais enregistré n\'offre que « Enregistrer sous… »', async () => {
+  const a = atelier({ sur: { chemin: null, modifie: false } });
+  const { els } = await charge({ ids: IDS, invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  assert.equal(els.get('btEnregistrer').disabled, true);
+  assert.equal(els.get('btEnregistrerSous').disabled, false);
+  assert.equal(els.get('etatEnregistrement').textContent, 'jamais enregistré');
+});
+
+test('l\'état d\'enregistrement suit le drapeau du Rust', async () => {
+  const a = atelier({ sur: { modifie: true } });
+  const { els } = await charge({ ids: IDS, invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  assert.equal(els.get('etatEnregistrement').textContent, 'modifié');
+});
+
+test('un manuscrit absent se dit absent, et non vide de chapitres', async () => {
+  const a = atelier({ sur: { manuscrit_absent: true, chapitres_trouves: 0, mots: 0 } });
+  const { els } = await charge({ ids: IDS, invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  assert.match(els.get('etatManuscrit').textContent, /Aucun manuscrit/);
+  assert.doesNotMatch(els.get('etatManuscrit').textContent, /0 chapitres/);
+});
+
+test('le menu passe par le même code que les boutons', async () => {
+  const a = atelier();
+  let router;
+  const { els } = await charge({
+    ids: IDS,
+    invoke: a.invoke,
+    listen: async (nom, fn) => { if (nom === 'menu') router = fn; return () => {}; },
+  });
+
+  await router({ payload: 'fichier.nouveau' });
+  assert.ok(a.noms().includes('projet_nouveau'));
+  assert.equal(els.get('secLivre').hidden, false);
+
+  await router({ payload: 'fichier.fermer' });
+  assert.ok(a.noms().includes('projet_fermer'));
+  assert.equal(els.get('secLivre').hidden, true);
+});
+
+test('un récent du menu porte son chemin dans son identifiant', async () => {
+  const a = atelier();
+  let router;
+  await charge({
+    ids: IDS,
+    invoke: a.invoke,
+    listen: async (nom, fn) => { if (nom === 'menu') router = fn; return () => {}; },
+  });
+
+  await router({ payload: 'fichier.recent:/livres/Z.ozalid' });
+
+  const ouvre = a.appels.find(([c]) => c === 'projet_ouvrir');
+  assert.deepEqual(ouvre[1], { chemin: '/livres/Z.ozalid' });
+});
+
+/**
+ * Un chemin peut contenir un deux-points, et le préfixe des récents en contient un.
+ * Découper sur « : » au lieu de retirer le préfixe casserait sur ces chemins-là,
+ * rarement et en silence — c'est le pire mode de panne, et ce test l'interdit.
+ */
+test('un chemin qui contient un deux-points survit au préfixe', async () => {
+  const a = atelier();
+  let router;
+  await charge({
+    ids: IDS,
+    invoke: a.invoke,
+    listen: async (nom, fn) => { if (nom === 'menu') router = fn; return () => {}; },
+  });
+
+  await router({ payload: 'fichier.recent:/Users/x/Mon:livre.ozalid' });
+
+  const ouvre = a.appels.find(([c]) => c === 'projet_ouvrir');
+  assert.deepEqual(ouvre[1], { chemin: '/Users/x/Mon:livre.ozalid' });
+});
+
+test('la fenêtre ne se ferme que si la garde le permet', async () => {
+  const refuse = atelier({ garde: 'annuler' });
+  let fermetures = 0;
+  let surFermeture;
+  await charge({
+    ids: IDS,
+    invoke: refuse.invoke,
+    listen: async (nom, fn) => { if (nom === 'fermeture-demandee') surFermeture = fn; return () => {}; },
+    destroy: () => { fermetures += 1; },
+  });
+
+  await surFermeture({});
+  assert.equal(fermetures, 0, 'un « Annuler » qui ferme quand même perdrait tout');
+
+  const accepte = atelier({ garde: 'ignorer' });
+  let fermee = 0;
+  let surFermeture2;
+  await charge({
+    ids: IDS,
+    invoke: accepte.invoke,
+    listen: async (nom, fn) => { if (nom === 'fermeture-demandee') surFermeture2 = fn; return () => {}; },
+    destroy: () => { fermee += 1; },
+  });
+
+  await surFermeture2({});
+  assert.equal(fermee, 1);
+});
+
+/** ⌘Q ne peut pas être une porte de sortie qui traverse la garde sans la voir. */
+test('« Quitter » demande comme le reste, et ferme par destroy', async () => {
+  const a = atelier({ garde: 'ignorer' });
+  let fermee = 0;
+  let router;
+  await charge({
+    ids: IDS,
+    invoke: a.invoke,
+    listen: async (nom, fn) => { if (nom === 'menu') router = fn; return () => {}; },
+    destroy: () => { fermee += 1; },
+  });
+
+  await router({ payload: 'fichier.quitter' });
+
+  assert.ok(a.noms().includes('garde_modifications'));
+  assert.equal(fermee, 1);
+});
+
+/**
+ * Le Rust ne retient la fermeture que s'il sait que quelqu'un écoute. Annoncer qu'on
+ * écoute avant de l'avoir fait rouvrirait la fenêtre de temps que ce témoin ferme.
+ */
+test('l\'interface ne s\'annonce qu\'une fois ses écouteurs posés', async () => {
+  const a = atelier();
+  const poses = [];
+  await charge({
+    ids: IDS,
+    invoke: a.invoke,
+    listen: async (nom) => {
+      // Un tour de boucle avant de résoudre : une annonce prématurée passerait devant.
+      await new Promise((r) => setImmediate(r));
+      poses.push(nom);
+      return () => {};
+    },
+  });
+  await new Promise((r) => setImmediate(r));
+
+  assert.deepEqual(poses.sort(), ['fermeture-demandee', 'menu']);
+  const rang = a.noms().indexOf('interface_prete');
+  assert.ok(rang >= 0, 'l\'interface doit s\'annoncer');
+});

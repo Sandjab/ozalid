@@ -6,7 +6,8 @@ const { charge } = require('./dom_shim');
 const { groupes, lire, ecrire } = require('../src/couverture.js');
 
 const IDS = [
-  'btOuvrir', 'btImporter', 'btEnregistrer', 'cheminProjet',
+  'btNouveau', 'btOuvrir', 'btImporter', 'btEnregistrer', 'btEnregistrerSous',
+  'cheminProjet', 'etatEnregistrement', 'recents',
   'secLivre', 'secManuscrit', 'secCouverture', 'secComposer',
   'inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright', 'inChapitres',
   'etatManuscrit', 'sourceManuscrit', 'btReimporter', 'btChoisirManuscrit',
@@ -98,6 +99,8 @@ function projet(couverture) {
       titre: 'Les Heures creuses', titre_page: null, auteur: 'Ivan Pjig',
       genre: 'roman', copyright: '', chapitres: 64,
     },
+    manuscrit_absent: false,
+    modifie: false,
     manuscrit_source: '/x/WIP7.md',
     chapitres_trouves: 64,
     mots: 49344,
@@ -133,6 +136,11 @@ async function ouvre(couverture, sur = {}, dialogues = []) {
     }
     if (cmd === 'projet_ouvrir') return projet(couverture);
     if (cmd === 'couverture_apercu') return 'data:image/png;base64,QUJD';
+    // Le démarrage et la garde envoient ces trois commandes sans qu'aucun test ne les
+    // demande : sans réponse ici, elles lèveraient avant que rien ne soit vérifié.
+    if (cmd === 'recents_liste') return [];
+    if (cmd === 'garde_modifications') return 'ignorer';
+    if (cmd === 'interface_prete') return null;
     throw new Error(`commande inattendue : ${cmd}`);
   };
   const file = ['/livres/LHC.ozalid', ...dialogues];

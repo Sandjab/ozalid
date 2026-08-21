@@ -146,6 +146,8 @@ async function charge({
   invoke,
   open = async () => null,
   save = async () => null,
+  listen = async () => () => {},
+  destroy = () => {},
 }) {
   const html = fs.readFileSync(
     path.join(__dirname, '..', 'src', 'index.html'),
@@ -170,7 +172,17 @@ async function charge({
         this.value = valeur;
       }
     },
-    window: { __TAURI__: { core: { invoke }, dialog: { open, save } } },
+    // Le menu natif et la fermeture de fenêtre passent par des événements : sans
+    // `event.listen` dans le faux contexte, `app.js` lèverait au chargement et aucun
+    // test ne s'exécuterait.
+    window: {
+      __TAURI__: {
+        core: { invoke },
+        dialog: { open, save },
+        event: { listen },
+        window: { getCurrentWindow: () => ({ destroy }) },
+      },
+    },
     console,
     // L'aperçu est débounce : sans minuteur, rien ne se déclenche.
     setTimeout,

@@ -2,6 +2,8 @@
 
 const { invoke } = window.__TAURI__.core;
 const { open, save } = window.__TAURI__.dialog;
+const { listen } = window.__TAURI__.event;
+const { getCurrentWindow } = window.__TAURI__.window;
 
 const $ = (id) => document.getElementById(id);
 
@@ -727,6 +729,63 @@ async function epreuve() {
     bt.disabled = false;
   }
 }
+
+/* ---------- menu natif ---------- */
+
+/**
+ * Ce que chaque entrée du menu déclenche.
+ *
+ * Les valeurs sont les fonctions des boutons, pas des copies : le menu et la souris
+ * font la même chose, et la garde des modifications n'a qu'un endroit où vivre.
+ */
+const MENU = {
+  'fichier.nouveau': nouveau,
+  'fichier.ouvrir': ouvrir,
+  'fichier.importer': importer,
+  'fichier.enregistrer': enregistrerQuelquePart,
+  'fichier.enregistrer_sous': enregistrerSous,
+  'fichier.fermer': fermer,
+  'fichier.quitter': quitter,
+};
+
+/** Préfixe des entrées « Ouvrir un récent » ; ce qui suit est le chemin du projet. */
+const RECENT = 'fichier.recent:';
+
+/**
+ * Quitter, c'est fermer la fenêtre : l'application n'en a qu'une.
+ *
+ * `destroy` et surtout pas `close` — `close` repasserait par la fermeture que le Rust
+ * retient pour nous poser cette question même, et la fenêtre tournerait en rond.
+ */
+async function quitter() {
+  if (await garde()) getCurrentWindow().destroy();
+}
+
+async function routerMenu(id) {
+  // Retirer le préfixe, jamais découper sur « : » — un chemin peut en contenir un.
+  if (id.startsWith(RECENT)) {
+    if (!await garde()) return;
+    await ouvrirChemin(id.slice(RECENT.length));
+    return;
+  }
+  await MENU[id]?.();
+}
+
+/**
+ * La fenêtre a demandé à se fermer, et le Rust a retenu la fermeture.
+ *
+ * C'est ici qu'elle se conclut : la garde d'abord, la destruction ensuite. Le Rust
+ * ne peut pas s'en charger — répondre « Enregistrer » demande un sélecteur de
+ * fichiers, que seule l'interface possède.
+ *
+ * `await` et non un simple ordre d'écriture : `listen` rend une promesse, et
+ * l'écouteur n'existe côté Rust qu'à sa résolution. Annoncer qu'on écoute avant
+ * d'écouter vraiment rouvrirait la fenêtre de temps que ce témoin existe pour fermer.
+ */
+Promise.all([
+  listen('menu', (ev) => routerMenu(ev.payload)),
+  listen('fermeture-demandee', quitter),
+]).then(() => invoke('interface_prete'));
 
 $('btNouveau').addEventListener('click', nouveau);
 $('btOuvrir').addEventListener('click', ouvrir);

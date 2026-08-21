@@ -5,7 +5,8 @@ const assert = require('node:assert');
 const { charge } = require('./dom_shim');
 
 const IDS = [
-  'btOuvrir', 'btImporter', 'btEnregistrer', 'cheminProjet',
+  'btNouveau', 'btOuvrir', 'btImporter', 'btEnregistrer', 'btEnregistrerSous',
+  'cheminProjet', 'etatEnregistrement', 'recents',
   'secLivre', 'secManuscrit', 'secCouverture', 'secComposer',
   'inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright', 'inChapitres',
   'etatManuscrit', 'sourceManuscrit', 'btReimporter', 'btChoisirManuscrit',
@@ -42,6 +43,8 @@ const PROJET = {
     auteur: 'Ivan Pjig', genre: 'roman', copyright: '© Ivan Pjig, 2026.',
     chapitres: 64,
   },
+  manuscrit_absent: false,
+  modifie: false,
   manuscrit_source: '/dev/ozalid/build/in/texts/WIP7.md',
   chapitres_trouves: 64,
   mots: 49344,
@@ -64,6 +67,11 @@ function faux(providers, sur = {}) {
       const v = sur[cmd];
       return typeof v === 'function' ? v(args) : v;
     }
+    // Le démarrage et la garde envoient ces trois commandes sans qu'aucun test ne les
+    // demande : sans réponse ici, elles lèveraient avant que rien ne soit vérifié.
+    if (cmd === 'recents_liste') return [];
+    if (cmd === 'garde_modifications') return 'ignorer';
+    if (cmd === 'interface_prete') return null;
     throw new Error(`commande inattendue : ${cmd}`);
   };
 }
@@ -181,7 +189,10 @@ test('un projet non enregistré le dit, et reste enregistrable', async () => {
   });
   await els.get('btImporter').declenche('click');
   assert.match(els.get('cheminProjet').textContent, /non enregistré/);
-  assert.strictEqual(els.get('btEnregistrer').disabled, false);
+  // Enregistrable, mais pas en place : sans chemin, il n'y a rien à réécrire, et
+  // c'est « Enregistrer sous… » qui demande où poser le projet.
+  assert.strictEqual(els.get('btEnregistrer').disabled, true);
+  assert.strictEqual(els.get('btEnregistrerSous').disabled, false);
 });
 
 /* ---------- composition ---------- */
@@ -265,7 +276,9 @@ test('un fichier qui n\'est pas un projet est signalé à l\'écran', async () =
     open: async () => '/x/photos.zip',
   });
   await els.get('btOuvrir').declenche('click');
-  assert.match(els.get('etat').textContent, /pas un projet Ozalid/);
-  assert.strictEqual(els.get('etat').className, 'etat erreur');
+  // L'ouverture ayant échoué, l'écran est resté celui de l'accueil, où `#etat` est
+  // masqué avec sa section : le message se lit là où il reste quelque chose à lire.
+  assert.match(els.get('etatEnregistrement').textContent, /pas un projet Ozalid/);
+  assert.strictEqual(els.get('etatEnregistrement').className, 'etat erreur');
   assert.strictEqual(els.get('secLivre').hidden, true, 'sections ouvertes sur un échec');
 });

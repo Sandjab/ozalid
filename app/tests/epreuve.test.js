@@ -9,7 +9,8 @@ const assert = require('node:assert');
 const { charge } = require('./dom_shim');
 
 const IDS = [
-  'btOuvrir', 'btImporter', 'btEnregistrer', 'cheminProjet',
+  'btNouveau', 'btOuvrir', 'btImporter', 'btEnregistrer', 'btEnregistrerSous',
+  'cheminProjet', 'etatEnregistrement', 'recents',
   'secLivre', 'secManuscrit', 'secCouverture', 'secComposer',
   'inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright', 'inChapitres',
   'etatManuscrit', 'sourceManuscrit', 'btReimporter', 'btChoisirManuscrit',
@@ -35,6 +36,8 @@ const PROJET = {
     titre: 'Les Heures creuses', titre_page: null, auteur: 'Ivan Pjig',
     genre: 'roman', copyright: '', chapitres: 64,
   },
+  manuscrit_absent: false,
+  modifie: false,
   manuscrit_source: '/x/WIP7.md',
   chapitres_trouves: 64,
   mots: 49344,
@@ -56,6 +59,11 @@ function faux(providers, sur = {}) {
       const v = sur[cmd];
       return typeof v === 'function' ? v(args) : v;
     }
+    // Le démarrage et la garde envoient ces trois commandes sans qu'aucun test ne les
+    // demande : sans réponse ici, elles lèveraient avant que rien ne soit vérifié.
+    if (cmd === 'recents_liste') return [];
+    if (cmd === 'garde_modifications') return 'ignorer';
+    if (cmd === 'interface_prete') return null;
     throw new Error(`commande inattendue : ${cmd}`);
   };
 }
