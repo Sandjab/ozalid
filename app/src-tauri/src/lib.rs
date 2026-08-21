@@ -39,7 +39,8 @@ pub fn run() {
             commands::image_choisir,
             commands::couverture_apercu,
             commands::composer,
-            commands::packager
+            commands::packager,
+            commands::recents_liste
         ])
         .run(tauri::generate_context!())
         .expect("démarrage de l'application impossible");

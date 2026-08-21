@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
+use tauri::Manager;
 use tauri::State;
 
 use crate::couverture::{self, Couverture, Ressource};
@@ -17,6 +18,7 @@ use crate::manuscrit;
 use crate::maquettes;
 use crate::package;
 use crate::planche;
+use crate::preferences;
 use crate::projet::{Livre, Projet};
 use crate::providers::{self, Provider};
 use crate::typst::Typst;
@@ -157,31 +159,61 @@ pub fn projet_fermer(atelier: State<Atelier>) {
 /// Sans chemin mémorisé, l'interface bascule sur « Enregistrer sous… » : elle seule
 /// possède le sélecteur de fichiers.
 #[tauri::command]
-pub fn projet_enregistrer(atelier: State<Atelier>) -> Result<ProjetVue, String> {
-    let mut garde = atelier.ouvert.lock().unwrap();
-    let o = garde.as_mut().ok_or_else(aucun_projet)?;
-    let chemin = o
-        .chemin
-        .clone()
-        .ok_or_else(|| "projet jamais enregistré : choisir où le poser.".to_string())?;
-    enregistrer_a(o, &chemin)
+pub fn projet_enregistrer(
+    app: tauri::AppHandle,
+    atelier: State<Atelier>,
+) -> Result<ProjetVue, String> {
+    let (vue, chemin) = {
+        let mut garde = atelier.ouvert.lock().unwrap();
+        let o = garde.as_mut().ok_or_else(aucun_projet)?;
+        let chemin = o
+            .chemin
+            .clone()
+            .ok_or_else(|| "projet jamais enregistré : choisir où le poser.".to_string())?;
+        (enregistrer_a(o, &chemin)?, chemin)
+    };
+    memoriser(&app, &chemin);
+    Ok(vue)
 }
 
 #[tauri::command]
-pub fn projet_ouvrir(chemin: String, atelier: State<Atelier>) -> Result<ProjetVue, String> {
+pub fn projet_ouvrir(
+    chemin: String,
+    app: tauri::AppHandle,
+    atelier: State<Atelier>,
+) -> Result<ProjetVue, String> {
     let c = PathBuf::from(&chemin);
     let projet = Projet::ouvrir(&c)?;
-    poser(&atelier, Some(c), projet, false)
+    let vue = poser(&atelier, Some(c.clone()), projet, false)?;
+    memoriser(&app, &c);
+    Ok(vue)
 }
 
 #[tauri::command]
 pub fn projet_enregistrer_sous(
     chemin: String,
+    app: tauri::AppHandle,
     atelier: State<Atelier>,
 ) -> Result<ProjetVue, String> {
-    let mut garde = atelier.ouvert.lock().unwrap();
-    let o = garde.as_mut().ok_or_else(aucun_projet)?;
-    enregistrer_a(o, &PathBuf::from(&chemin))
+    let c = PathBuf::from(&chemin);
+    let vue = {
+        let mut garde = atelier.ouvert.lock().unwrap();
+        let o = garde.as_mut().ok_or_else(aucun_projet)?;
+        enregistrer_a(o, &c)?
+    };
+    memoriser(&app, &c);
+    Ok(vue)
+}
+
+/// Les projets récents dont le fichier existe encore.
+///
+/// L'écran d'accueil et le sous-menu « Ouvrir un récent » lisent cette même liste :
+/// il n'y a pas deux inventaires à tenir d'accord.
+#[tauri::command]
+pub fn recents_liste(app: tauri::AppHandle) -> Vec<String> {
+    config(&app)
+        .map(|d| preferences::charger(&d).recents_existants())
+        .unwrap_or_default()
 }
 
 /// Relit le manuscrit à sa source d'origine et remplace la copie embarquée.
@@ -622,6 +654,28 @@ fn sorties_racine(o: &Ouvert) -> Result<PathBuf, String> {
 /// Sorties d'un prestataire : un répertoire par prestataire, sous la racine.
 fn sorties_dossier(o: &Ouvert, provider: &str) -> Result<PathBuf, String> {
     Ok(sorties_racine(o)?.join(provider))
+}
+
+/// Répertoire de configuration de l'application, s'il est atteignable.
+fn config(app: &tauri::AppHandle) -> Option<PathBuf> {
+    app.path().app_config_dir().ok()
+}
+
+/// Mémorise un projet dans les récents.
+///
+/// **Au mieux** : ne pas pouvoir écrire les préférences se signale sur la sortie
+/// d'erreur et n'interrompt rien. Une liste de raccourcis perdue ne coûte rien ; un
+/// enregistrement refusé parce qu'un confort a échoué coûterait un livre.
+fn memoriser(app: &tauri::AppHandle, chemin: &Path) {
+    let Some(dir) = config(app) else {
+        eprintln!("préférences : répertoire de configuration introuvable, récents non mémorisés.");
+        return;
+    };
+    let mut p = preferences::charger(&dir);
+    p.ajouter_recent(chemin);
+    if let Err(e) = preferences::enregistrer(&dir, &p) {
+        eprintln!("préférences : {e}");
+    }
 }
 
 fn poser(
