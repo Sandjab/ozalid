@@ -805,6 +805,12 @@ mod tests {
         let v = vue(&sans_chapitre).unwrap();
         assert!(!v.manuscrit_absent, "présent, même s'il ne compose pas");
         assert_eq!(v.chapitres_trouves, 0);
+
+        // Des espaces et des sauts de ligne ne sont pas un manuscrit : c'est ce que
+        // `trim` établit, et rien ne le dirait si on le retirait.
+        let mut blancs = ouvert_neuf();
+        blancs.projet.texte = "  \n\n\t \n".into();
+        assert!(vue(&blancs).unwrap().manuscrit_absent);
     }
 
     /// Le genre par défaut ne doit vivre qu'à un endroit : un projet neuf et un
