@@ -77,6 +77,8 @@ résultats. Tout le reste est testable sans fenêtre.
 | `epreuve` | Source Typst de l'épreuve de relecture : A4, numéros de ligne, marge d'annotation |
 | `planche` | Assemblage 4ème \| dos \| 1ère au gabarit, et dos composé élément par élément |
 | `package` | Un prestataire, un intérieur, une planche, dans son répertoire |
+| `preferences` | Le `preferences.toml` : projets récents, et ce qui ne tient pas dans un livre |
+| `menu` | Le menu natif : il demande, il n'agit pas — l'interface exécute |
 | `commands` | Frontière avec l'interface, et projet ouvert |
 
 `providers` fusionne les deux tables historiques du projet — celle d'`index.html`
@@ -108,6 +110,54 @@ Les **sorties ne sont pas dans l'archive** : elles vont à côté, dans
 composer, faute d'endroit où écrire. Seule l'épreuve de relecture reste à la racine,
 en `epreuve.pdf` : elle ne vise aucun prestataire, elle n'a rien à faire dans leurs
 répertoires.
+
+## Le cycle de vie d'un projet
+
+Un `.ozalid` est un document : il se crée vide, se remplit, s'enregistre et se
+ferme. « Nouveau projet » ne demande rien — ni assistant, ni manuscrit d'emblée :
+le texte se choisit quand on veut.
+
+L'atelier retient un drapeau **modifié**, levé par toute commande qui touche au
+projet et abaissé à l'écriture. C'est lui, et lui seul, qui décide si fermer perd
+du travail : Nouveau, Ouvrir, Importer, Fermer, la fermeture de la fenêtre et
+**Quitter** posent alors une boîte à trois boutons — Enregistrer, Ne pas
+enregistrer, Annuler.
+
+Le Rust pose la question ; **l'interface exécute la réponse**. C'est elle qui
+possède le sélecteur de fichiers dont « Enregistrer sous… » a besoin, et c'est la
+raison pour laquelle la fermeture de la fenêtre est retenue côté Rust puis rendue
+à l'interface plutôt que tranchée sur place.
+
+Le menu natif suit la même règle : aucune entrée n'agit, chacune émet un événement
+que l'interface traite avec le code de ses propres boutons. Les boutons de l'écran
+d'accueil sont des raccourcis du menu, pas une seconde vérité.
+
+**« Quitter » n'est pas l'entrée prédéfinie du système**, et c'est délibéré :
+celle-ci envoie `terminate:`, qui ne consulte jamais les fenêtres et traverserait
+donc la garde sans la voir — ⌘Q aurait perdu le travail par le geste le plus
+courant de macOS. C'est une entrée ordinaire, qui demande comme les autres.
+
+Comme l'interface devient dès lors nécessaire pour quitter, un témoin la protège :
+tant qu'elle n'a pas appelé `interface_prete` — ce qu'elle fait une fois ses
+écouteurs posés, et pas avant —, la fermeture n'est pas retenue et « Quitter »
+sort directement. Une interface qui n'a jamais démarré n'a rien à perdre, et une
+application qu'on ne pourrait plus quitter serait pire que la question qu'on
+aurait manqué de poser. Ce filet ne tient que par un invariant : le seul chemin
+vers le drapeau *modifié* passe par une commande de l'interface. Une restauration
+automatique de projet au démarrage le briserait.
+
+**Limite connue**, non comblée : le « Quitter » du menu contextuel du Dock et
+l'extinction de la session macOS envoient `terminate:` directement. Les couvrir
+exigerait un `applicationShouldTerminate:` que ni tao ni Tauri 2.11 n'exposent.
+
+Les **projets récents** vivent dans un `preferences.toml` du répertoire de
+configuration de l'application — jamais dans un `.ozalid`, qui porte le livre et
+non les habitudes de celui qui l'ouvre. La liste est plafonnée à dix, et les
+chemins dont le fichier a disparu sont élagués **à la lecture** : un projet sur un
+volume démonté revient de lui-même au remontage, alors qu'une purge l'aurait
+perdu. Son écriture est au mieux — un échec s'écrit sur la sortie d'erreur,
+visible en développement, invisible pour qui lance le binaire empaqueté, et c'est
+assumé : ce qui se perd est une liste de raccourcis, pas un livre.
 
 ## Vérifications
 
