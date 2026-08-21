@@ -4,6 +4,8 @@
 // projet, et le même code derrière l'onglet et derrière le menu. La mise en page,
 // elle, se vérifie dans l'application — pas ici.
 
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert');
 const { charge } = require('./dom_shim');
@@ -248,6 +250,30 @@ for (const [libelle, entree, commande] of [
 }
 
 /**
+ * L'ardoise ne s'ouvre qu'après la garde, et c'est ce test qui l'y retient.
+ *
+ * Un geste que la garde refuse n'a rien à raconter, donc rien à effacer. Plus haut dans
+ * la fonction, le même `alerter('')` emporterait un message qui dit encore vrai sur un
+ * ⌘S resté sans effet — et l'entête est le seul endroit de l'écran où ce message-là
+ * pouvait se lire.
+ */
+test('un enregistrement sans projet n\'efface pas ce qu\'il ne remplace pas', async () => {
+  const a = atelier();
+  const invoke = async (cmd, args) => {
+    if (cmd === 'providers_liste') throw new Error('aucun gabarit lisible');
+    return a.invoke(cmd, args);
+  };
+  const { els, menu } = await charge({ invoke });
+  assert.match(els.get('alerte').textContent, /démarrage impossible/);
+
+  await menu('fichier.enregistrer');
+  await menu('fichier.enregistrer_sous');
+
+  assert.match(els.get('alerte').textContent, /démarrage impossible/,
+    'un geste inerte a emporté le message qui disait pourquoi');
+});
+
+/**
  * Un démarrage qui échoue n'affiche jamais de projet, donc ne repasse jamais par ce qui
  * remet les onglets d'accord avec la table. Nés dans l'état du balisage, ils resteraient
  * d'apparence active sans mener nulle part, et le `tablist` sans onglet sélectionné :
@@ -268,4 +294,23 @@ test('un démarrage en échec laisse les onglets éteints, jamais indéterminés
     assert.equal(onglet.getAttribute('aria-selected'), 'false',
       `onglet ${cle} sans état annoncé`);
   }
+});
+
+/**
+ * Ce test lit le balisage au lieu de passer par l'application, et ne prouve donc rien
+ * de son comportement. Ce n'est pas un exemple à suivre : c'est le seul filet possible
+ * pour cette propriété-là.
+ *
+ * Le faux DOM ne rapporte du HTML que la balise, `disabled`, `hidden` et `value` —
+ * `aria-live` lui est invisible, et l'étendre pour un attribut ferait payer à soixante-
+ * dix tests le prix d'un seul. Or l'entête est désormais le canal d'erreur unique, et
+ * le refus d'une saisie laisse le focus dans le champ refusé : sans cet attribut, un
+ * lecteur d'écran n'annonce jamais l'erreur. Une réécriture de l'entête l'emporterait
+ * d'un coup, sans que rien ne change à l'écran ni dans la suite.
+ */
+test('l\'entête s\'annonce à qui ne la voit pas', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.html'), 'utf8');
+
+  assert.match(html, /id="alerte"[^>]*aria-live/,
+    'l\'entête ne s\'annonce plus : le focus reste dans le champ refusé');
 });
