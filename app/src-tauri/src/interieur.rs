@@ -258,8 +258,10 @@ fn liminaires(livre: &Livre, envoi: Option<Trace>) -> String {
     // sont les mêmes pour tous les envois du livre.
     if let Some(t) = envoi {
         s.push_str(&format!(
-            r#"#place(bottom + center, dy: -28mm, block(width: 70%,
-  text(font: "{}", size: 14pt)[{}]))
+            r#"#place(bottom + center, dy: -28mm, block(width: 70%)[
+  #set par(justify: false, first-line-indent: 0pt, leading: 0.9em)
+  #text(font: "{}", size: 14pt, hyphenate: false)[{}]
+])
 "#,
             // La main est validée en amont par `Envois::verifie` : pas d'échappement.
             t.police,
@@ -726,6 +728,25 @@ mod tests {
     fn l_envoi_est_compose_dans_la_main_du_livre() {
         let s = liminaires(&livre(), Some(trace()));
         assert!(s.contains(r#"font: "Caveat""#), "main absente : {s}");
+    }
+
+    /// Le document est justifié — c'est bon pour trois cents pages de roman, et faux
+    /// pour un mot écrit à la main : aucune main n'aligne son bord droit. Sans ce
+    /// `justify: false`, l'envoi sort en pavé, ce qui trahit l'écriture manuscrite au
+    /// premier coup d'œil et ne se voit dans aucun compte.
+    #[test]
+    fn un_envoi_n_est_pas_justifie() {
+        let s = liminaires(&livre(), Some(trace()));
+        assert!(s.contains("justify: false"), "envoi justifié : {s}");
+    }
+
+    /// Le document césure — c'est bon pour un roman justifié, et faux pour un mot écrit
+    /// à la main : personne ne coupe « dif-fèrent » en tournant la ligne. Relevé sur un
+    /// envoi réellement composé, pas supposé.
+    #[test]
+    fn un_envoi_ne_cesure_pas() {
+        let s = liminaires(&livre(), Some(trace()));
+        assert!(s.contains("hyphenate: false"), "envoi césuré : {s}");
     }
 
     /// Même piège que le titre de page et que la dédicace : le markup Typst doit être
