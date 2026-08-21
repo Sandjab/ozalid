@@ -59,9 +59,9 @@ subsiste qu'une espace ne doit pas coûter deux pages et un dos.
 voit doté d'une dédicace absente, exactement comme `livraison` l'a fait au lot 3 du
 chantier précédent.
 
-**Prix annoncé** : `Livre` est construit littéralement en seize endroits de
-`src-tauri` — sources, tests et `examples/temoin.rs` — dont une majorité derrière des
-helpers `fn livre()` de modules de test. Tous sont à toucher. C'est mécanique, mais
+**Prix annoncé** : `Livre` est construit littéralement en **dix endroits** de
+`src-tauri` — `Livre::vide()`, trois sites d'`import.rs`, cinq helpers `fn livre()` de
+modules de test, et `examples/temoin.rs`. Tous sont à toucher. C'est mécanique, mais
 ce n'est pas gratuit et le plan doit le compter.
 
 ## 2. La composition
@@ -130,10 +130,17 @@ dédicace en page 5. Le placeholder dit la conséquence de laisser le champ vide
 que de décrire le champ — un champ intitulé « Dédicace » n'a pas besoin qu'on répète
 son nom, mais il a besoin qu'on dise qu'il ne fabrique rien tant qu'il est vide.
 
-La lecture et l'écriture se posent aux deux endroits où `inCopyright` est déjà traité
-— le chargement d'un projet et la collecte. Le drapeau de modification doit se lever
-à la saisie comme pour les autres champs ; si le mécanisme est un écouteur nommé
-plutôt que global, le plan l'y ajoute explicitement.
+La lecture et l'écriture se posent aux trois endroits où `inCopyright` est déjà
+traité : l'affichage du projet, la fonction `livre()` qui collecte les champs, et la
+liste d'identifiants qui pose l'écouteur `change` appelant `majLivre`.
+
+**Le troisième n'est pas un détail de câblage, c'est la condition pour que la dédicace
+survive.** `livre_modifier` remplace le `Livre` entier par ce que le front envoie, et
+le champ est `#[serde(default)]` : une dédicace absente de l'objet JavaScript ne
+provoque aucune erreur, elle se désérialise en `None`. Oublier `dedicace` dans
+`livre()` effacerait donc silencieusement la dédicace à chaque fois que l'utilisateur
+touche à son titre ou à son genre. C'est le piège principal de ce chantier, et il
+réclame son test.
 
 ## 4. Vérification
 
