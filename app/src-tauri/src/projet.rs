@@ -93,6 +93,92 @@ pub struct Couverture {
     pub maquette: Option<crate::couverture::Couverture>,
 }
 
+/// Un destinataire du livre : le prestataire chez qui on livre, son papier, et — pour
+/// ceux qui ne publient ni dos ni fond perdu — ce qui a été relevé sur leur gabarit.
+///
+/// Les relevés naissent absents, jamais préremplis : une valeur inventée qui ressemble
+/// à une mesure est pire qu'un champ vide, et le refus de composer dit quoi faire.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Destinataire {
+    pub provider: String,
+    pub papier: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dos_mm: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fond_perdu_mm: Option<f64>,
+}
+
+impl Destinataire {
+    /// Un destinataire neuf chez ce prestataire : son papier par défaut, aucun relevé.
+    pub fn pour(pr: &crate::providers::Provider) -> Self {
+        Self {
+            provider: pr.cle.into(),
+            papier: pr.papier_defaut().cle.into(),
+            dos_mm: None,
+            fond_perdu_mm: None,
+        }
+    }
+}
+
+/// À qui le livre est destiné, et pour lequel de ces destinataires on regarde.
+///
+/// Une seule liste et un pointeur dessus : l'intérieur se compose pour le courant, la
+/// couverture s'aperçoit à son format, la génération sert toute la liste. Le prestataire
+/// n'est donc désigné qu'une fois, là où il l'a toujours été deux.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Livraison {
+    pub destinataires: Vec<Destinataire>,
+    /// Clé du prestataire visé — toujours l'un des destinataires ci-dessus.
+    pub courant: String,
+}
+
+/// Un livre naît avec un destinataire, le premier de la table : le pointeur ne doit
+/// jamais être vide, ne serait-ce que pour regarder une première de couverture, qui
+/// réclame un format sans réclamer aucune composition.
+impl Default for Livraison {
+    fn default() -> Self {
+        let pr = &crate::providers::PROVIDERS[0];
+        Self {
+            destinataires: vec![Destinataire::pour(pr)],
+            courant: pr.cle.into(),
+        }
+    }
+}
+
+impl Livraison {
+    /// Le destinataire visé, s'il y en a un.
+    pub fn courant(&self) -> Option<&Destinataire> {
+        self.destinataires
+            .iter()
+            .find(|d| d.provider == self.courant)
+    }
+
+    /// Remet la liste d'accord avec la table des gabarits.
+    ///
+    /// Un `.ozalid` peut nommer un prestataire ou un papier que la table ne porte plus,
+    /// ou le même prestataire deux fois. Élaguer vaut mieux que refuser d'ouvrir : le
+    /// reste du projet — le manuscrit, la maquette — est intact, et la liste des
+    /// destinataires se refait en trois clics. C'est le même arbitrage que les projets
+    /// récents dont le fichier a disparu.
+    fn normalise(&mut self) {
+        let mut vus = std::collections::BTreeSet::new();
+        self.destinataires.retain_mut(|d| {
+            let Some(pr) = crate::providers::provider(&d.provider) else {
+                return false;
+            };
+            if pr.papier(&d.papier).is_none() {
+                d.papier = pr.papier_defaut().cle.into();
+            }
+            vus.insert(d.provider.clone())
+        });
+        if self.destinataires.is_empty() {
+            *self = Self::default();
+        } else if self.courant().is_none() {
+            self.courant = self.destinataires[0].provider.clone();
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Entete {
     pub version: u32,
@@ -109,6 +195,11 @@ pub struct Metadonnees {
     pub couverture: Couverture,
     #[serde(default)]
     pub interieur: crate::interieur::Interieur,
+    /// Facultative : un `.ozalid` écrit avant elle s'ouvre sans rien dire et se voit
+    /// doté du premier gabarit de la table — ce que faisait déjà le `select` en se
+    /// posant sur sa première option. `VERSION` ne bouge donc pas.
+    #[serde(default)]
+    pub livraison: Livraison,
 }
 
 /// Un projet ouvert : les métadonnées, le texte du manuscrit, les images.
@@ -129,6 +220,7 @@ impl Projet {
                 manuscrit: Manuscrit::default(),
                 couverture: Couverture::default(),
                 interieur: crate::interieur::Interieur::default(),
+                livraison: Livraison::default(),
             },
             texte,
             images: BTreeMap::new(),
@@ -154,7 +246,7 @@ impl Projet {
         })?;
         let toml_brut = String::from_utf8(toml_brut)
             .map_err(|_| format!("{PROJET_TOML} n'est pas de l'UTF-8."))?;
-        let meta: Metadonnees =
+        let mut meta: Metadonnees =
             toml::from_str(&toml_brut).map_err(|e| format!("{PROJET_TOML} : {e}"))?;
         if meta.ozalid.version > VERSION {
             return Err(format!(
@@ -162,6 +254,7 @@ impl Projet {
                 meta.ozalid.version
             ));
         }
+        meta.livraison.normalise();
 
         let texte = fichier(&mut zip, MANUSCRIT_MD)?
             .ok_or_else(|| format!("archive sans {MANUSCRIT_MD}."))?;
@@ -312,6 +405,97 @@ auteur = "Ivan Pjig"
 "#;
         let m: Metadonnees = toml::from_str(toml).expect("projet sans [interieur] refusé");
         assert_eq!(m.interieur.police, "EB Garamond");
+    }
+
+    /// Le lot 3 ajoute `[livraison]` sans monter `VERSION` : les `.ozalid` déjà écrits
+    /// doivent s'ouvrir et se retrouver visés sur le premier gabarit de la table, comme
+    /// le `select` s'y posait.
+    #[test]
+    fn un_projet_sans_section_livraison_prend_le_premier_gabarit() {
+        let toml = r#"
+[ozalid]
+version = 2
+
+[livre]
+titre = "Les Heures creuses"
+auteur = "Ivan Pjig"
+"#;
+        let mut m: Metadonnees = toml::from_str(toml).expect("projet sans [livraison] refusé");
+        m.livraison.normalise();
+        let attendu = crate::providers::PROVIDERS[0].cle;
+        assert_eq!(m.livraison.courant, attendu);
+        assert_eq!(m.livraison.destinataires.len(), 1);
+        assert_eq!(m.livraison.destinataires[0].provider, attendu);
+    }
+
+    /// La liste des destinataires est du travail de l'utilisateur au même titre que la
+    /// maquette : la reperdre, c'est refaire ses relevés de gabarit à la main.
+    #[test]
+    fn la_liste_des_destinataires_survit_a_l_aller_retour() {
+        let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
+        p.meta.livraison = Livraison {
+            destinataires: vec![
+                Destinataire::pour(crate::providers::provider("lulu").unwrap()),
+                Destinataire {
+                    provider: "coollibri-148x210".into(),
+                    papier: "mesure".into(),
+                    dos_mm: Some(18.4),
+                    fond_perdu_mm: Some(3.0),
+                },
+            ],
+            courant: "coollibri-148x210".into(),
+        };
+
+        let r = aller_retour(&p);
+        assert_eq!(r.meta.livraison.courant, "coollibri-148x210");
+        let d = r.meta.livraison.courant().expect("courant perdu");
+        assert_eq!(d.dos_mm, Some(18.4));
+        assert_eq!(d.fond_perdu_mm, Some(3.0));
+        assert_eq!(r.meta.livraison.destinataires[0].provider, "lulu");
+    }
+
+    /// Un prestataire retiré de la table, un papier renommé, le même prestataire deux
+    /// fois : le projet s'ouvre quand même. Refuser ferait perdre le manuscrit et la
+    /// maquette pour une liste qui se refait en trois clics.
+    #[test]
+    fn une_livraison_incoherente_est_elaguee_plutot_que_refusee() {
+        let mut l = Livraison {
+            destinataires: vec![
+                Destinataire {
+                    provider: "prestataire-disparu".into(),
+                    papier: "standard".into(),
+                    dos_mm: None,
+                    fond_perdu_mm: None,
+                },
+                Destinataire {
+                    provider: "lulu".into(),
+                    papier: "papier-renomme".into(),
+                    dos_mm: None,
+                    fond_perdu_mm: None,
+                },
+                Destinataire::pour(crate::providers::provider("lulu").unwrap()),
+            ],
+            courant: "prestataire-disparu".into(),
+        };
+        l.normalise();
+
+        assert_eq!(l.destinataires.len(), 1, "doublon ou inconnu conservé");
+        assert_eq!(l.destinataires[0].provider, "lulu");
+        assert_eq!(l.destinataires[0].papier, "standard");
+        assert_eq!(l.courant, "lulu", "le pointeur désigne un absent");
+    }
+
+    /// Le pointeur ne peut pas être vide : sans lui, même regarder une première de
+    /// couverture est impossible, faute de format.
+    #[test]
+    fn une_livraison_videe_reprend_le_premier_gabarit() {
+        let mut l = Livraison {
+            destinataires: vec![],
+            courant: String::new(),
+        };
+        l.normalise();
+        assert_eq!(l.destinataires.len(), 1);
+        assert!(l.courant().is_some());
     }
 
     #[test]

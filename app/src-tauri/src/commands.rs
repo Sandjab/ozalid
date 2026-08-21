@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tauri::Manager;
 use tauri::State;
 
@@ -19,7 +19,7 @@ use crate::maquettes;
 use crate::package;
 use crate::planche;
 use crate::preferences;
-use crate::projet::{Livre, Projet};
+use crate::projet::{Destinataire, Livraison, Livre, Projet};
 use crate::providers::{self, Provider};
 use crate::typst::Typst;
 
@@ -100,6 +100,9 @@ pub struct ProjetVue {
     pub couverture_importee: bool,
     pub images: Vec<String>,
     pub interieur: Interieur,
+    /// Les destinataires du livre et celui qu'on vise. Le front les joint à la table des
+    /// gabarits par leur clé : les libellés, les formats et les papiers viennent de là.
+    pub livraison: Livraison,
 }
 
 #[derive(Serialize)]
@@ -367,25 +370,127 @@ pub fn interieur_modifier(
     vue_modifiee(o)
 }
 
-/// Compose l'intérieur du projet ouvert et rend le compte de pages avec le dos qui
-/// en découle.
-#[tauri::command]
-pub fn composer(
-    provider_cle: String,
-    papier_cle: Option<String>,
-    atelier: State<Atelier>,
-) -> Result<Composition, String> {
-    let garde = atelier.ouvert.lock().unwrap();
-    let o = garde.as_ref().ok_or_else(aucun_projet)?;
+/* ---------- destinataires ---------- */
 
+/// Le destinataire visé, avec le gabarit et le papier de la table qui vont avec.
+///
+/// Le point de passage unique de tout ce qui a besoin d'un prestataire : composer,
+/// apercevoir, mesurer un dos. Il n'y a plus de second endroit où le choisir.
+fn vise(
+    o: &Ouvert,
+) -> Result<(&'static Provider, &'static providers::Papier, &Destinataire), String> {
+    let d = o
+        .projet
+        .meta
+        .livraison
+        .courant()
+        .ok_or("aucun destinataire : en déclarer un à l'étape Livraison.")?;
+    let pr = providers::provider(&d.provider)
+        .ok_or_else(|| format!("prestataire inconnu : {}", d.provider))?;
+    Ok((pr, papier(pr, Some(&d.papier))?, d))
+}
+
+/// Ajoute un prestataire à la liste des destinataires, avec son papier par défaut.
+#[tauri::command]
+pub fn destinataire_ajouter(
+    provider_cle: String,
+    atelier: State<Atelier>,
+) -> Result<ProjetVue, String> {
     let pr = providers::provider(&provider_cle)
         .ok_or_else(|| format!("prestataire inconnu : {provider_cle}"))?;
-    let papier = match papier_cle.as_deref() {
-        Some(c) => pr
-            .papier(c)
-            .ok_or_else(|| format!("papier inconnu chez {} : {c}", pr.cle))?,
-        None => pr.papier_defaut(),
-    };
+    let mut garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_mut().ok_or_else(aucun_projet)?;
+    let l = &mut o.projet.meta.livraison;
+    if l.destinataires.iter().any(|d| d.provider == pr.cle) {
+        return Err(format!("{} est déjà destinataire de ce livre.", pr.libelle));
+    }
+    l.destinataires.push(Destinataire::pour(pr));
+    vue_modifiee(o)
+}
+
+/// Retire un destinataire — sauf le dernier : c'est lui qui donne son format à
+/// l'aperçu, et une liste vide rendrait la Couverture inutilisable.
+#[tauri::command]
+pub fn destinataire_retirer(
+    provider_cle: String,
+    atelier: State<Atelier>,
+) -> Result<ProjetVue, String> {
+    let mut garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_mut().ok_or_else(aucun_projet)?;
+    let l = &mut o.projet.meta.livraison;
+    if l.destinataires.len() < 2 {
+        return Err(
+            "un livre garde au moins un destinataire : c'est lui qui donne le format \
+             sous lequel on regarde la couverture."
+                .into(),
+        );
+    }
+    let avant = l.destinataires.len();
+    l.destinataires.retain(|d| d.provider != provider_cle);
+    if l.destinataires.len() == avant {
+        return Err(format!(
+            "{provider_cle} n'est pas destinataire de ce livre."
+        ));
+    }
+    // Retirer celui qu'on visait laisse le pointeur en l'air : il retombe sur le
+    // premier, plutôt que de désigner un absent jusqu'au prochain geste.
+    if l.courant().is_none() {
+        l.courant = l.destinataires[0].provider.clone();
+    }
+    vue_modifiee(o)
+}
+
+/// Le papier d'un destinataire et, chez ceux qui ne publient rien, ses relevés.
+#[tauri::command]
+pub fn destinataire_regler(
+    destinataire: Destinataire,
+    atelier: State<Atelier>,
+) -> Result<ProjetVue, String> {
+    let pr = providers::provider(&destinataire.provider)
+        .ok_or_else(|| format!("prestataire inconnu : {}", destinataire.provider))?;
+    papier(pr, Some(&destinataire.papier))?;
+    let mut garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_mut().ok_or_else(aucun_projet)?;
+    let place = o
+        .projet
+        .meta
+        .livraison
+        .destinataires
+        .iter_mut()
+        .find(|d| d.provider == destinataire.provider)
+        .ok_or_else(|| format!("{} n'est pas destinataire de ce livre.", pr.libelle))?;
+    *place = destinataire;
+    vue_modifiee(o)
+}
+
+/// Déplace le pointeur : pour qui l'on compose, et sous quel format on regarde.
+///
+/// Le geste modifie le projet, parce que le pointeur est enregistré avec lui : rouvrir
+/// un livre le rend tel qu'on l'avait laissé, visé sur le même destinataire.
+#[tauri::command]
+pub fn destinataire_viser(
+    provider_cle: String,
+    atelier: State<Atelier>,
+) -> Result<ProjetVue, String> {
+    let mut garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_mut().ok_or_else(aucun_projet)?;
+    let l = &mut o.projet.meta.livraison;
+    if !l.destinataires.iter().any(|d| d.provider == provider_cle) {
+        return Err(format!(
+            "{provider_cle} n'est pas destinataire de ce livre."
+        ));
+    }
+    l.courant = provider_cle;
+    vue_modifiee(o)
+}
+
+/// Compose l'intérieur du projet ouvert pour le destinataire visé, et rend le compte
+/// de pages avec le dos qui en découle.
+#[tauri::command]
+pub fn composer(atelier: State<Atelier>) -> Result<Composition, String> {
+    let garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_ref().ok_or_else(aucun_projet)?;
+    let (pr, papier, _) = vise(o)?;
 
     let livre = &o.projet.meta.livre;
     let int = &o.projet.meta.interieur;
@@ -570,9 +675,7 @@ fn poser_image(images: &mut BTreeMap<String, Vec<u8>>, nom: String, octets: Vec<
 #[tauri::command]
 pub fn couverture_apercu(
     face: String,
-    provider_cle: String,
     dos_mm: Option<f64>,
-    fond_perdu_mm: Option<f64>,
     atelier: State<Atelier>,
 ) -> Result<String, String> {
     let garde = atelier.ouvert.lock().unwrap();
@@ -584,8 +687,10 @@ pub fn couverture_apercu(
         .maquette
         .as_ref()
         .ok_or("aucune maquette : en choisir une.")?;
-    let pr = providers::provider(&provider_cle)
-        .ok_or_else(|| format!("prestataire inconnu : {provider_cle}"))?;
+    // Le format vient du destinataire visé, et le fond perdu de son relevé quand le
+    // prestataire n'en publie pas : les deux sont dans le projet, plus dans un champ.
+    let (pr, _, d) = vise(o)?;
+    let fond_perdu_mm = d.fond_perdu_mm;
 
     // Répertoire de travail de l'aperçu : temporaire, jamais à côté du projet. Un
     // aperçu n'est pas une sortie, et il est réécrit à chaque réglage.
@@ -623,7 +728,13 @@ pub fn couverture_apercu(
     ecrire(&typ, &src)?;
     typst()?.apercu(&typ, &png, 1, 150)?;
 
-    let octets = std::fs::read(&png).map_err(|e| format!("aperçu illisible : {e}"))?;
+    donnee_png(&png)
+}
+
+/// Un PNG du disque, en donnée `data:` : la fenêtre ne lit pas les fichiers, une image
+/// n'y entre pas autrement.
+fn donnee_png(chemin: &Path) -> Result<String, String> {
+    let octets = std::fs::read(chemin).map_err(|e| format!("aperçu illisible : {e}"))?;
     Ok(format!(
         "data:image/png;base64,{}",
         base64::Engine::encode(&base64::engine::general_purpose::STANDARD, octets)
@@ -632,21 +743,6 @@ pub fn couverture_apercu(
 
 /* ---------- packages ---------- */
 
-/// Un prestataire coché, avec son papier et, s'il ne publie rien, ce que
-/// l'utilisateur a relevé sur son gabarit.
-///
-/// Tauri met les *arguments* de commande en snake_case, jamais les champs d'une
-/// struct : `Choix` voyage dans un tableau, il porte donc les noms que l'interface
-/// écrit, comme tout ce qu'elle envoie.
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Choix {
-    pub provider_cle: String,
-    pub papier_cle: Option<String>,
-    pub dos_mm: Option<f64>,
-    pub fond_perdu_mm: Option<f64>,
-}
-
 /// Ce que rend la génération pour un prestataire : le package, ou l'erreur qui l'a
 /// empêché. Un prestataire en échec n'interrompt pas les autres — mais il est dit.
 #[derive(Serialize)]
@@ -654,43 +750,51 @@ pub struct Resultat {
     pub provider: String,
     pub libelle: String,
     pub package: Option<package::Package>,
+    /// La planche du package, en PNG, prête à poser dans une balise `img`.
+    ///
+    /// Le chemin du fichier ne suffirait pas : la fenêtre ne lit pas le disque, et
+    /// c'est déjà par une donnée en clair que l'aperçu de la Couverture voyage.
+    pub vignette: Option<String>,
     pub erreur: Option<String>,
 }
 
-/// Génère les packages des prestataires cochés, chacun dans son répertoire.
+/// Génère le package de chaque destinataire du livre, chacun dans son répertoire.
 ///
-/// Une seule maquette, N prestataires, aucun réglage retouché entre eux : chaque
-/// prestataire compose son propre intérieur, donc sa propre pagination, donc son
-/// propre dos. C'est la promesse de l'étape « Prestataires ».
+/// Une seule maquette, N destinataires, aucun réglage retouché entre eux : chacun
+/// compose son propre intérieur, donc sa propre pagination, donc son propre dos. C'est
+/// la promesse de l'étape Livraison, et la liste vient du projet — plus de cases à
+/// cocher qui désigneraient les prestataires une seconde fois.
 #[tauri::command]
-pub fn packager(choix: Vec<Choix>, atelier: State<Atelier>) -> Result<Vec<Resultat>, String> {
+pub fn packager(atelier: State<Atelier>) -> Result<Vec<Resultat>, String> {
     let garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_ref().ok_or_else(aucun_projet)?;
-    if choix.is_empty() {
-        return Err("aucun prestataire coché.".into());
+    let destinataires = o.projet.meta.livraison.destinataires.clone();
+    if destinataires.is_empty() {
+        return Err("aucun destinataire : en déclarer un.".into());
     }
     let typst = typst()?;
 
-    let mut sorties = Vec::with_capacity(choix.len());
-    for c in &choix {
-        let Some(pr) = providers::provider(&c.provider_cle) else {
+    let mut sorties = Vec::with_capacity(destinataires.len());
+    for d in &destinataires {
+        let Some(pr) = providers::provider(&d.provider) else {
             sorties.push(Resultat {
-                provider: c.provider_cle.clone(),
-                libelle: c.provider_cle.clone(),
+                provider: d.provider.clone(),
+                libelle: d.provider.clone(),
                 package: None,
-                erreur: Some(format!("prestataire inconnu : {}", c.provider_cle)),
+                vignette: None,
+                erreur: Some(format!("prestataire inconnu : {}", d.provider)),
             });
             continue;
         };
-        let r = papier(pr, c.papier_cle.as_deref()).and_then(|pa| {
+        let r = papier(pr, Some(&d.papier)).and_then(|pa| {
             let dossier = sorties_dossier(o, pr.cle)?;
             package::assembler(
                 &o.projet,
                 pr,
                 pa,
                 planche::Releve {
-                    dos: c.dos_mm,
-                    fond_perdu: c.fond_perdu_mm,
+                    dos: d.dos_mm,
+                    fond_perdu: d.fond_perdu_mm,
                 },
                 &dossier,
                 &typst,
@@ -700,6 +804,9 @@ pub fn packager(choix: Vec<Choix>, atelier: State<Atelier>) -> Result<Vec<Result
             Ok(p) => Resultat {
                 provider: pr.cle.into(),
                 libelle: pr.libelle.into(),
+                // La vignette manquante ne perd pas le package : les PDF sont écrits,
+                // et c'est eux que l'imprimeur reçoit.
+                vignette: donnee_png(Path::new(&p.vignette)).ok(),
                 package: Some(p),
                 erreur: None,
             },
@@ -707,6 +814,7 @@ pub fn packager(choix: Vec<Choix>, atelier: State<Atelier>) -> Result<Vec<Result
                 provider: pr.cle.into(),
                 libelle: pr.libelle.into(),
                 package: None,
+                vignette: None,
                 erreur: Some(e),
             },
         });
@@ -816,6 +924,7 @@ fn vue(o: &Ouvert) -> Result<ProjetVue, String> {
         couverture_importee: o.projet.meta.couverture.maquette.is_some(),
         images: o.projet.images.keys().cloned().collect(),
         interieur: o.projet.meta.interieur.clone(),
+        livraison: o.projet.meta.livraison.clone(),
     })
 }
 
@@ -918,30 +1027,34 @@ mod tests {
         assert_eq!(reponse_garde(R::Custom("autre chose".into())), "annuler");
     }
 
-    /// L'interface envoie les prestataires cochés dans un tableau, et Tauri ne
-    /// renomme que les arguments d'une commande : si `Choix` cessait de lire les
-    /// noms écrits par `choixPrestataires()`, la génération échouerait avant même
-    /// d'atteindre le premier prestataire.
+    /// Tauri ne renomme que les *arguments* d'une commande, jamais les champs d'une
+    /// struct : le destinataire que l'interface renvoie à `destinataire_regler` voyage
+    /// donc en snake_case, comme le `Livre` qu'elle renvoie déjà. Le lire en camelCase
+    /// ferait échouer chaque relevé de gabarit saisi, sans que rien ne dise pourquoi.
     #[test]
-    fn les_choix_de_l_interface_se_lisent() {
-        let json = r#"[{
-            "providerCle": "lulu",
-            "papierCle": "standard",
-            "dosMm": null,
-            "fondPerduMm": null
-        }, {
-            "providerCle": "coollibri-148x210",
-            "papierCle": "mesure",
-            "dosMm": 18.4,
-            "fondPerduMm": 4
-        }]"#;
-        let choix: Vec<Choix> = serde_json::from_str(json).unwrap();
-        assert_eq!(choix[0].provider_cle, "lulu");
-        assert_eq!(choix[0].papier_cle.as_deref(), Some("standard"));
-        assert_eq!(choix[0].dos_mm, None);
-        assert_eq!(choix[1].provider_cle, "coollibri-148x210");
-        assert_eq!(choix[1].dos_mm, Some(18.4));
-        assert_eq!(choix[1].fond_perdu_mm, Some(4.0));
+    fn le_destinataire_de_l_interface_se_lit() {
+        let json = r#"{
+            "provider": "coollibri-148x210",
+            "papier": "mesure",
+            "dos_mm": 18.4,
+            "fond_perdu_mm": 4
+        }"#;
+        let d: Destinataire = serde_json::from_str(json).unwrap();
+        assert_eq!(d.provider, "coollibri-148x210");
+        assert_eq!(d.papier, "mesure");
+        assert_eq!(d.dos_mm, Some(18.4));
+        assert_eq!(d.fond_perdu_mm, Some(4.0));
+    }
+
+    /// Un relevé qu'on n'a pas encore fait est absent, pas nul : le champ vide de
+    /// l'interface doit arriver ici comme une absence, faute de quoi la planche se
+    /// composerait sur un dos de zéro millimètre.
+    #[test]
+    fn un_releve_absent_reste_absent() {
+        let d: Destinataire =
+            serde_json::from_str(r#"{"provider": "lulu", "papier": "standard"}"#).unwrap();
+        assert_eq!(d.dos_mm, None);
+        assert_eq!(d.fond_perdu_mm, None);
     }
 
     /// Choisir l'image d'une face remplace celle qui s'y composait, quel que soit le

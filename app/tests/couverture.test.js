@@ -92,6 +92,10 @@ function projet(couverture) {
     couverture_importee: !!couverture,
     images: ['couverture.jpg'],
     interieur: { police: 'Alegreya' },
+    livraison: {
+      destinataires: [{ provider: 'lulu', papier: 'standard', dos_mm: null, fond_perdu_mm: null }],
+      courant: 'lulu',
+    },
   };
 }
 
@@ -120,6 +124,10 @@ async function ouvre(couverture, sur = {}, dialogues = []) {
     }
     if (cmd === 'projet_ouvrir') return projet(couverture);
     if (cmd === 'couverture_apercu') return 'data:image/png;base64,QUJD';
+    // Viser un autre destinataire est un des gestes qui redemandent un aperçu : le
+    // format de la page vient de lui. Le projet de ce fichier n'en déclare qu'un, et
+    // c'est assez — ce qui est vérifié ici, c'est que l'aperçu reparte.
+    if (cmd === 'destinataire_viser') return projet(couverture);
     // Le démarrage et la garde envoient ces trois commandes sans qu'aucun test ne les
     // demande : sans réponse ici, elles lèveraient avant que rien ne soit vérifié.
     if (cmd === 'recents_liste') return [];
@@ -317,14 +325,14 @@ test('l\'aperçu est demandé et affiché à l\'ouverture du projet', async () =
 });
 
 /**
- * Le format vient du prestataire : changer de prestataire change l'aperçu, même si
- * aucun réglage de maquette n'a bougé.
+ * Le format vient du destinataire visé : en changer change l'aperçu, même si aucun
+ * réglage de maquette n'a bougé.
  */
-test('changer de prestataire redemande un aperçu', async () => {
+test('viser un autre destinataire redemande un aperçu', async () => {
   const { els, appels } = await ouvre(maquette());
   await attendreApercu();
   const avant = appels.filter(([c]) => c === 'couverture_apercu').length;
-  await els.get('inProvider').declenche('change');
+  await els.get('inDestinataire').declenche('change');
   await attendreApercu();
   const apres = appels.filter(([c]) => c === 'couverture_apercu').length;
   assert.ok(apres > avant, 'aperçu non redemandé');
@@ -357,7 +365,7 @@ test('un aperçu qui échoue efface l\'image et affiche la cause', async () => {
   assert.strictEqual(els.get('apercu').hidden, false, 'aperçu réussi mais masqué');
 
   casse = true;
-  await els.get('inProvider').declenche('change');
+  await els.get('inDestinataire').declenche('change');
   await attendreApercu();
   assert.strictEqual(els.get('apercu').src, undefined, 'aperçu périmé laissé à l\'écran');
   assert.strictEqual(els.get('apercu').hidden, true, 'cadre d\'image sans image');

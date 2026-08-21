@@ -16,6 +16,11 @@ const LULU = {
   papiers: [{ cle: 'standard', libelle: 'Papier standard' }],
 };
 
+/** Un destinataire neuf chez un prestataire, comme le Rust en fabrique un. */
+const dest = (p) => ({
+  provider: p.cle, papier: p.papiers[0].cle, dos_mm: null, fond_perdu_mm: null,
+});
+
 function projet(sur = {}) {
   return {
     chemin: '/livres/LHC.ozalid',
@@ -32,16 +37,25 @@ function projet(sur = {}) {
     couverture_importee: false,
     images: [],
     interieur: { police: 'EB Garamond' },
+    livraison: { destinataires: [dest(LULU)], courant: LULU.cle },
     ...sur,
   };
 }
 
-function atelier({ recents = [], sur = {} } = {}) {
+/**
+ * Le Rust de façade. Il tient la liste des destinataires pour de vrai : depuis le lot 3,
+ * le prestataire visé vit dans le projet, et un faux qui rendrait toujours le même
+ * projet ne montrerait jamais les gestes qui le déplacent.
+ */
+function atelier({ recents = [], sur = {}, providers = [LULU], destinataires } = {}) {
   const appels = [];
+  const liste = (destinataires ?? [dest(providers[0])]).map((d) => ({ ...d }));
+  let livraison = { destinataires: liste, courant: liste[0].provider };
+  const vue = () => projet({ livraison, ...sur });
   const invoke = async (cmd, args) => {
     appels.push([cmd, args]);
     switch (cmd) {
-      case 'providers_liste': return [LULU];
+      case 'providers_liste': return providers;
       case 'polices_liste': return ['Bodoni Moda'];
       case 'polices_texte_liste': return ['EB Garamond'];
       case 'maquettes_liste': return [];
@@ -50,7 +64,18 @@ function atelier({ recents = [], sur = {} } = {}) {
       case 'projet_fermer': return null;
       case 'interface_prete': return null;
       case 'couverture_apercu': throw new Error('pas de maquette');
-      default: return projet(sur);
+      case 'destinataire_viser':
+        livraison = { ...livraison, courant: args.providerCle };
+        return vue();
+      case 'destinataire_regler':
+        livraison = {
+          ...livraison,
+          destinataires: livraison.destinataires.map((d) => (
+            d.provider === args.destinataire.provider ? args.destinataire : d
+          )),
+        };
+        return vue();
+      default: return vue();
     }
   };
   return { appels, invoke, noms: () => appels.map(([c]) => c) };
@@ -303,13 +328,17 @@ const COMPOSITION = {
   dos: 16.513, pdf: '/livres/LHC/lulu/interieur-lulu.pdf',
 };
 
+/** Ce que le pied donne à lire : le destinataire choisi, puis l'état de son dos. */
+const pied = (els) => `${els.get('inDestinataire').value} ${els.get('piedDos').textContent}`.trim();
+
 test('le pied nomme le prestataire et dit le dos non composé', async () => {
   const a = atelier();
   const { els } = await charge({ invoke: a.invoke });
   await els.get('btNouveau').declenche('click');
 
-  assert.equal(els.get('piedPrestataire').textContent,
-    'Vu pour : Lulu — poche 108 × 175 · dos non composé');
+  assert.equal(els.get('visee').hidden, false);
+  assert.deepEqual(els.get('inDestinataire').textes('option'), ['Lulu — poche 108 × 175']);
+  assert.equal(pied(els), 'lulu · dos non composé');
 });
 
 /**
@@ -328,15 +357,19 @@ test('une fois l\'intérieur composé, le pied porte le dos mesuré', async () =
 
   await els.get('btComposer').declenche('click');
 
-  assert.equal(els.get('piedPrestataire').textContent,
-    'Vu pour : Lulu — poche 108 × 175 · dos 16,5 mm');
+  assert.equal(pied(els), 'lulu · dos 16,5 mm');
 });
 
+/**
+ * Sans projet, il n'y a personne à viser : le choix disparaît plutôt que d'offrir une
+ * liste vide, qui se lirait comme une table de gabarits illisible.
+ */
 test('sans projet, le pied ne prétend rien', async () => {
   const a = atelier();
   const { els } = await charge({ invoke: a.invoke });
 
-  assert.equal(els.get('piedPrestataire').textContent, '');
+  assert.equal(els.get('visee').hidden, true);
+  assert.equal(els.get('piedDos').textContent, '');
 });
 
 /**
@@ -347,11 +380,13 @@ test('fermer le projet efface le pied', async () => {
   const a = atelier();
   const { els, menu } = await charge({ invoke: a.invoke });
   await els.get('btNouveau').declenche('click');
-  assert.match(els.get('piedPrestataire').textContent, /Lulu/);
+  assert.equal(els.get('visee').hidden, false);
 
   await menu('fichier.fermer');
 
-  assert.equal(els.get('piedPrestataire').textContent, '');
+  assert.equal(els.get('visee').hidden, true);
+  assert.equal(els.get('piedDos').textContent, '');
+  assert.equal(els.get('inDestinataire').children.length, 0);
 });
 
 const KDP = {
@@ -367,45 +402,45 @@ const COOLLIBRI = {
   papiers: [{ cle: 'mesure', libelle: 'Dos relevé sur le gabarit' }],
 };
 
-/** Un atelier qui compose, pour partir d'un pied qui porte un dos. */
+/**
+ * Un atelier qui compose, pour partir d'un pied qui porte un dos. Tous les prestataires
+ * de la liste y sont destinataires : c'est ce qui rend le pointeur déplaçable.
+ */
 function atelierCompose(liste, composition = COMPOSITION) {
-  const a = atelier();
+  const a = atelier({ providers: liste, destinataires: liste.map(dest) });
   return async (cmd, args) => {
-    if (cmd === 'providers_liste') return liste;
     if (cmd === 'composer') return composition;
     return a.invoke(cmd, args);
   };
 }
 
 /**
- * Les deux causes que le pied porte lui-même : le prestataire qu'il nomme, et le papier
+ * Les deux causes que le pied porte lui-même : le destinataire qu'il vise, et le papier
  * qui périme le dos sans rien changer d'autre à l'écran. Un pied qui ne repart pas sur
  * ces gestes-là dit un dos qui vaut pour un autre livre que celui qu'on regarde.
  */
-test('changer de prestataire renomme le pied et lui retire le dos', async () => {
+test('viser un autre destinataire renomme le pied et lui retire le dos', async () => {
   const { els } = await charge({ invoke: atelierCompose([LULU, KDP]) });
   await els.get('btNouveau').declenche('click');
   await els.get('btComposer').declenche('click');
-  assert.match(els.get('piedPrestataire').textContent, /dos 16,5 mm/);
+  assert.equal(pied(els), 'lulu · dos 16,5 mm');
 
-  els.get('inProvider').value = 'kdp-6x9';
-  await els.get('inProvider').declenche('change');
+  els.get('inDestinataire').value = 'kdp-6x9';
+  await els.get('inDestinataire').declenche('change');
 
-  assert.equal(els.get('piedPrestataire').textContent,
-    'Vu pour : Amazon KDP — 6 × 9 po · dos non composé');
+  assert.equal(pied(els), 'kdp-6x9 · dos non composé');
 });
 
 test('changer de papier retire le dos du pied', async () => {
   const { els } = await charge({ invoke: atelierCompose([KDP]) });
   await els.get('btNouveau').declenche('click');
   await els.get('btComposer').declenche('click');
-  assert.match(els.get('piedPrestataire').textContent, /dos 16,5 mm/);
+  assert.equal(pied(els), 'kdp-6x9 · dos 16,5 mm');
 
-  els.get('inPapier').value = 'blanc';
-  await els.get('inPapier').declenche('change');
+  els.get('dest-papier-kdp-6x9').value = 'blanc';
+  await els.get('dest-papier-kdp-6x9').declenche('change');
 
-  assert.equal(els.get('piedPrestataire').textContent,
-    'Vu pour : Amazon KDP — 6 × 9 po · dos non composé');
+  assert.equal(pied(els), 'kdp-6x9 · dos non composé');
 });
 
 /**
@@ -422,8 +457,7 @@ test('chez un prestataire à gabarit, le pied ne réclame pas une composition', 
 
   await els.get('btComposer').declenche('click');
 
-  assert.equal(els.get('piedPrestataire').textContent,
-    'Vu pour : CoolLibri — A5 · dos relevé sur le gabarit');
+  assert.equal(pied(els), 'coollibri-148x210 · dos relevé sur le gabarit');
 });
 
 /**
@@ -445,7 +479,8 @@ test('un démarrage en échec ne fait pas lever le pied au premier projet', asyn
   // Le projet s'ouvre : c'est ce qui rend l'assertion suivante probante — le pied s'est
   // bien dessiné, il n'est pas resté muet faute d'avoir été appelé.
   assert.equal(els.get('titreLivre').textContent, 'Les Heures creuses');
-  assert.equal(els.get('piedPrestataire').textContent, '');
+  assert.equal(els.get('visee').hidden, true);
+  assert.equal(els.get('piedDos').textContent, '');
 });
 
 /**
@@ -563,8 +598,8 @@ test('un dos périmé par un changement de gabarit allume le témoin de l\'Inté
   await els.get('btComposer').declenche('click');
   assert.equal(alerte(els, 'interieur'), false, 'un dos frais ne périme rien');
 
-  els.get('inProvider').value = 'kdp-6x9';
-  await els.get('inProvider').declenche('change');
+  els.get('inDestinataire').value = 'kdp-6x9';
+  await els.get('inDestinataire').declenche('change');
 
   assert.equal(sous(els, 'interieur'), 'dos périmé');
   assert.equal(alerte(els, 'interieur'), true);
@@ -579,8 +614,8 @@ test('recomposer éteint le témoin de l\'Intérieur', async () => {
   const { els } = await charge({ invoke: atelierCompose([LULU, KDP]) });
   await els.get('btNouveau').declenche('click');
   await els.get('btComposer').declenche('click');
-  els.get('inProvider').value = 'kdp-6x9';
-  await els.get('inProvider').declenche('change');
+  els.get('inDestinataire').value = 'kdp-6x9';
+  await els.get('inDestinataire').declenche('change');
   assert.equal(alerte(els, 'interieur'), true, 'le dos devait être périmé avant');
 
   await els.get('btComposer').declenche('click');
@@ -590,12 +625,14 @@ test('recomposer éteint le témoin de l\'Intérieur', async () => {
 });
 
 /**
- * Une police refusée ne périme rien : le Rust n'a rien changé, et le panneau revient à
- * ce que le projet porte. Le témoin se lit pourtant dans les contrôles autant que dans
- * le projet — c'est `dosCourant()` qui compare le dos mesuré au gabarit, au papier et à
- * la police *choisis à l'écran*. Remis d'accord trop tôt, il compare le dos à une police
- * que le refus vient d'annuler, et envoie recomposer un livre dont le dos est juste :
- * une erreur dans l'entête, un témoin rouge, et rien à réparer.
+ * Une police refusée ne périme rien : le Rust n'a rien changé, et le dos vaut toujours
+ * pour le livre tel qu'il est.
+ *
+ * Le lot 2 avait payé ce défaut, parce que `dosCourant()` lisait alors la police
+ * *choisie à l'écran* : remis d'accord avant que le panneau ne soit reposé, le témoin
+ * comparait le dos à une police que le refus venait d'annuler et envoyait recomposer un
+ * livre déjà juste. Le lot 3 l'a fermé en faisant lire le projet plutôt que les
+ * contrôles ; ce test dit ce qui doit se voir, et resterait vrai d'une autre solution.
  */
 test('une police refusée n\'allume pas le témoin de l\'Intérieur', async () => {
   const base = atelierCompose([LULU]);
@@ -625,8 +662,8 @@ test('un dos jamais composé n\'allume pas le témoin de l\'Intérieur', async (
   const { els } = await charge({ invoke: atelierCompose([LULU, KDP]) });
   await els.get('btNouveau').declenche('click');
 
-  els.get('inProvider').value = 'kdp-6x9';
-  await els.get('inProvider').declenche('change');
+  els.get('inDestinataire').value = 'kdp-6x9';
+  await els.get('inDestinataire').declenche('change');
 
   assert.equal(sous(els, 'interieur'), 'EB Garamond');
   assert.equal(alerte(els, 'interieur'), false);
@@ -642,8 +679,8 @@ test('changer de papier allume aussi le témoin de l\'Intérieur', async () => {
   await els.get('btComposer').declenche('click');
   assert.equal(alerte(els, 'interieur'), false);
 
-  els.get('inPapier').value = 'blanc';
-  await els.get('inPapier').declenche('change');
+  els.get('dest-papier-kdp-6x9').value = 'blanc';
+  await els.get('dest-papier-kdp-6x9').declenche('change');
 
   assert.equal(sous(els, 'interieur'), 'dos périmé');
   assert.equal(alerte(els, 'interieur'), true);

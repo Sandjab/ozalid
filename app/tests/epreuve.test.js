@@ -29,6 +29,10 @@ const PROJET = {
   couverture_importee: false,
   images: ['couverture.jpg'],
   interieur: { police: 'Alegreya' },
+  livraison: {
+    destinataires: [{ provider: 'lulu', papier: 'standard', dos_mm: null, fond_perdu_mm: null }],
+    courant: 'lulu',
+  },
 };
 
 /** Fausse implémentation des commandes Rust. `sur` surcharge une commande. */

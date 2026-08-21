@@ -35,6 +35,10 @@ pub struct Package {
     /// Dimensions de la planche, en mm.
     pub planche: (f64, f64),
     pub chemins: Vec<String>,
+    /// La planche en PNG, à côté du PDF. Elle ne part pas chez l'imprimeur — d'où sa
+    /// place hors de `chemins` : c'est de quoi vérifier d'un coup d'œil que la planche
+    /// tient, pour ce prestataire-là, avec le dos qu'il a réellement mesuré.
+    pub vignette: String,
 }
 
 /// Nom de fichier des sorties d'un prestataire. Le nom porte la clé du prestataire :
@@ -110,6 +114,12 @@ pub fn assembler(
     let pdf_pl = dossier.join(nom(pr, "couverture", "pdf"));
     typst.compile(&src_pl, &pdf_pl)?;
 
+    // 4. La même planche en vignette, depuis la même source : ce qu'on regarde est ce
+    // qui part à l'impression, et non une approximation qu'on espère fidèle. 72 ppp
+    // suffisent à juger un débord ; c'est le PDF qui fait foi pour le reste.
+    let png_pl = dossier.join(nom(pr, "couverture", "png"));
+    typst.apercu(&src_pl, &png_pl, 1, 72)?;
+
     Ok(Package {
         provider: pr.cle.into(),
         libelle: pr.libelle.into(),
@@ -121,6 +131,7 @@ pub fn assembler(
         fond_perdu: g.fond_perdu,
         planche: (g.largeur(), g.hauteur()),
         chemins: vec![affiche(&pdf_int), affiche(&pdf_pl)],
+        vignette: affiche(&png_pl),
     })
 }
 

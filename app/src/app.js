@@ -106,11 +106,10 @@ function allerA(cle) {
  * affiché, et qui s'allume à l'Intérieur parce que c'est là qu'on le répare. Un
  * manuscrit absent n'en est pas un : c'est l'état d'un projet neuf, pas une anomalie.
  *
- * La signature ment à moitié : l'état de l'Intérieur ne se déduit pas de `p` seul. Le
- * dos mesuré se compare au gabarit, au papier et à la police tels que les contrôles les
- * portent — `dosCourant()` les y lit. D'où deux contraintes sur les appelants : reposer
- * le panneau avant d'appeler, et rappeler après tout geste qui déplace un de ces trois
- * contrôles sans repasser par `afficherProjet`.
+ * Tout se déduit de `p` : `dosCourant()` compare le dos mesuré au gabarit, au papier et
+ * à la police que le *projet* porte, jamais à ce que les contrôles affichent. L'ordre
+ * des appels est donc sans conséquence, et une saisie refusée ne peut plus allumer un
+ * témoin sur un dos intact.
  */
 function etatEtapes(p) {
   const attendu = p.livre.chapitres;
@@ -187,9 +186,13 @@ function alerter(message) {
 /**
  * Le pied : pour qui l'on regarde, et ce que vaut le dos.
  *
- * Le prestataire y est nommé une fois pour toute la fenêtre. Le dos n'y paraît que s'il
- * vaut pour ce qui est montré — c'est `dosCourant()` qui en répond — parce qu'un dos
- * périmé écrit en bas de l'écran est exactement ce qu'on ne relirait pas.
+ * Le destinataire visé s'y choisit, une fois pour toute la fenêtre — c'est le pointeur
+ * de la spec, et il est ici plutôt qu'à l'étape Livraison parce qu'on en change en
+ * réglant la couverture, sans avoir à quitter ce qu'on regarde.
+ *
+ * Le dos n'y paraît que s'il vaut pour ce qui est montré — c'est `dosCourant()` qui en
+ * répond — parce qu'un dos périmé écrit en bas de l'écran est exactement ce qu'on ne
+ * relirait pas.
  *
  * Trois états, pas deux : chez un prestataire qui ne publie pas de formule de dos, il
  * n'y a jamais rien à composer, et « non composé » ferait recomposer en boucle un livre
@@ -201,23 +204,30 @@ function majPied() {
   // gabarits laisse la liste vide, et le premier projet ouvert ferait lever le pied
   // au lieu de dire ce qu'il sait — c'est-à-dire rien.
   const p = projet ? providerCourant() : null;
+  const sel = $('inDestinataire');
+  $('visee').hidden = !p;
   if (!p) {
-    $('piedPrestataire').textContent = '';
+    sel.replaceChildren();
+    $('piedDos').textContent = '';
     return;
   }
+  sel.replaceChildren();
+  for (const d of projet.livraison.destinataires) {
+    sel.append(new Option(libelleProvider(d.provider), d.provider));
+  }
+  sel.value = projet.livraison.courant;
+
   const dos = dosCourant();
   const etat = !p.dos_publie ? 'dos relevé sur le gabarit'
     : dos === null ? 'dos non composé'
       : `dos ${nb(dos, 1)} mm`;
-  $('piedPrestataire').textContent = `Vu pour : ${p.libelle} · ${etat}`;
+  $('piedDos').textContent = `· ${etat}`;
 }
 
 /* ---------- prestataires ---------- */
 
 async function chargerProviders() {
   providers = await invoke('providers_liste');
-  for (const p of providers) $('inProvider').append(new Option(p.libelle, p.cle));
-  majPapiers();
   polices = await invoke('polices_liste');
   for (const p of await invoke('polices_texte_liste')) {
     $('inPoliceInterieur').append(new Option(p, p));
@@ -230,24 +240,27 @@ async function chargerProviders() {
     $('maquettes').append(b);
   }
   construireReglages();
-  construirePrestataires();
 }
 
+/**
+ * Le gabarit du destinataire visé, tel que la table le décrit.
+ *
+ * Le projet ne porte que des clés ; le format, le fond perdu et les papiers viennent
+ * de la table, jamais du document — c'est ce qui permet à un `.ozalid` de suivre un
+ * prestataire qui change son guide.
+ */
 function providerCourant() {
-  return providers.find((p) => p.cle === $('inProvider').value);
+  return providers.find((p) => p.cle === projet?.livraison.courant);
 }
 
-function majPapiers() {
-  const p = providerCourant();
-  const sel = $('inPapier');
-  sel.replaceChildren();
-  for (const pa of p.papiers) sel.append(new Option(pa.libelle, pa.cle));
-  sel.disabled = p.papiers.length < 2;
+/** Le destinataire visé : son papier et ses relevés. */
+function destinataireCourant() {
+  return projet?.livraison.destinataires.find((d) => d.provider === projet.livraison.courant);
+}
 
-  const fp = p.fond_perdu === null
-    ? 'fond perdu à relever sur le gabarit'
-    : `fond perdu ${nb(p.fond_perdu, 3)} mm`;
-  $('noteFormat').textContent = `${nb(p.largeur, 1)} × ${nb(p.hauteur, 1)} mm — ${fp}`;
+/** Le libellé d'un gabarit, ou sa clé si la table ne le connaît plus. */
+function libelleProvider(cle) {
+  return providers.find((p) => p.cle === cle)?.libelle ?? cle;
 }
 
 /* ---------- projet ---------- */
@@ -296,11 +309,9 @@ function afficherProjet(p) {
     : 'Aucune maquette : en choisir une pour composer la couverture.';
   $('reglages').hidden = !p.couverture;
   if (p.couverture) afficherCouverture(p.couverture);
+  afficherDestinataires();
   demanderApercu();
   majPied();
-  // Après les contrôles, jamais avant : le témoin de l'Intérieur compare le dos mesuré
-  // à la police *choisie à l'écran*, et un panneau pas encore reposé porte encore la
-  // saisie qu'un refus vient d'annuler.
   majEtapes();
 }
 
@@ -344,6 +355,9 @@ function oublierLesSorties() {
     $(id).replaceChildren();
     $(id).hidden = true;
   }
+  // La liste des destinataires appartient au projet, pas à l'écran : sans projet, elle
+  // n'a personne à nommer, et `afficherProjet` la refait entièrement pour le suivant.
+  $('destinataires').replaceChildren();
   $('cheminEpreuve').textContent = '';
   // Les quatre canaux de compte rendu, et pas seulement celui de la composition : un
   // message rouge appartient au livre qui l'a provoqué autant que le chiffre qu'il
@@ -683,11 +697,17 @@ function demanderApercu() {
  * format ; la police, qui repagine ; le papier, qui change l'épaisseur d'une page sans
  * même toucher à la pagination. La quatrième cause, le texte lui-même, n'a rien à
  * comparer ici : elle périme `dosCompose` au moment du remplacement.
+ *
+ * Les trois se lisent dans le projet, plus dans les contrôles : le projet est ce que le
+ * Rust a accepté, là où un panneau pas encore reposé porte encore une saisie refusée.
+ * C'est ce qui rend l'ordre des appels indifférent — le lot 2 avait payé l'inverse.
  */
 function dosCourant() {
-  return dosCompose?.provider === $('inProvider').value
-    && dosCompose?.papier === $('inPapier').value
-    && dosCompose?.police === $('inPoliceInterieur').value
+  const d = destinataireCourant();
+  return d
+    && dosCompose?.provider === d.provider
+    && dosCompose?.papier === d.papier
+    && dosCompose?.police === projet.interieur.police
     ? dosCompose.mm
     : null;
 }
@@ -717,12 +737,9 @@ async function rendreApercu() {
   }
   $('etatApercu').textContent = 'composition de l\'aperçu…';
   try {
-    poserApercu(await invoke('couverture_apercu', {
-      face,
-      providerCle: $('inProvider').value,
-      dosMm: dosCourant(),
-      fondPerduMm: null,
-    }));
+    // Ni gabarit ni fond perdu à passer : ils viennent du destinataire visé, que le
+    // Rust lit dans le projet.
+    poserApercu(await invoke('couverture_apercu', { face, dosMm: dosCourant() }));
     $('etatApercu').textContent = '';
     $('etatApercu').className = 'note';
   } catch (e) {
@@ -795,17 +812,16 @@ async function composer() {
   $('etat').className = 'etat';
   $('resultat').hidden = true;
   try {
-    const c = await invoke('composer', {
-      providerCle: $('inProvider').value,
-      papierCle: $('inPapier').value,
-    });
+    const c = await invoke('composer');
     afficher(c);
     // Le dos sort de la pagination qu'on vient de mesurer : l'aperçu de planche s'en
-    // sert tel quel, sans que personne ne le retape.
+    // sert tel quel, sans que personne ne le retape. Il est estampillé de ce pour quoi
+    // il vaut, tel que le projet le porte — c'est ce que `dosCourant()` relit.
+    const d = destinataireCourant();
     dosCompose = c.dos === null ? null : {
-      provider: $('inProvider').value,
-      papier: $('inPapier').value,
-      police: $('inPoliceInterieur').value,
+      provider: d.provider,
+      papier: d.papier,
+      police: projet.interieur.police,
       mm: c.dos,
     };
     if (face === 'planche') demanderApercu();
@@ -820,63 +836,109 @@ async function composer() {
   }
 }
 
-/* ---------- packages prestataires ---------- */
+/* ---------- destinataires ---------- */
 
-/** Une ligne par prestataire : la case à cocher, le papier, et les relevés que les
- * prestataires à gabarit exigent — dos et fond perdu, qu'eux seuls ne publient pas. */
-function construirePrestataires() {
-  const box = $('listePrestataires');
+/**
+ * La liste des destinataires du livre, et de quoi en ajouter un.
+ *
+ * Une ligne par destinataire : son papier, le format de son gabarit, et les relevés que
+ * les prestataires à gabarit exigent — dos et fond perdu, qu'eux seuls ne publient pas.
+ * Plus de cases à cocher : être dans la liste *est* le fait d'être destinataire, et le
+ * prestataire n'est plus désigné deux fois.
+ */
+function afficherDestinataires() {
+  const box = $('destinataires');
   box.replaceChildren();
-  for (const p of providers) {
-    const ligne = h('div', undefined, 'prestataire');
-    const case_ = h('input');
-    case_.type = 'checkbox';
-    case_.id = `pkg-${p.cle}`;
-    const nom = h('label', p.libelle);
-    nom.htmlFor = case_.id;
-    ligne.append(case_, nom);
+  const declares = projet.livraison.destinataires;
+  for (const d of declares) {
+    const p = providers.find((pr) => pr.cle === d.provider);
+    const ligne = h('div', undefined, 'destinataire');
+    ligne.append(h('span', libelleProvider(d.provider), 'nom'));
 
-    const papier = h('select');
-    papier.id = `pkg-papier-${p.cle}`;
-    for (const pa of p.papiers) papier.append(new Option(pa.libelle, pa.cle));
-    papier.disabled = p.papiers.length < 2;
-    ligne.append(papier);
+    if (p) {
+      const papier = h('select');
+      papier.id = `dest-papier-${d.provider}`;
+      for (const pa of p.papiers) papier.append(new Option(pa.libelle, pa.cle));
+      papier.value = d.papier;
+      papier.disabled = p.papiers.length < 2;
+      papier.addEventListener('change', () => reglerDestinataire(d.provider));
+      ligne.append(papier);
 
-    if (!p.dos_publie || p.fond_perdu === null) {
-      const releve = h('span', undefined, 'releve');
-      if (!p.dos_publie) releve.append(champReleve(`pkg-dos-${p.cle}`, 'Dos relevé (mm)', 12));
-      if (p.fond_perdu === null) {
-        releve.append(champReleve(`pkg-fp-${p.cle}`, 'Fond perdu (mm)', 3));
+      if (!p.dos_publie || p.fond_perdu === null) {
+        const releve = h('span', undefined, 'releve');
+        const champ = (quoi, libelle, valeur) =>
+          releve.append(champReleve(`dest-${quoi}-${d.provider}`, libelle, valeur, d.provider));
+        if (!p.dos_publie) champ('dos', 'Dos relevé (mm)', d.dos_mm);
+        if (p.fond_perdu === null) champ('fp', 'Fond perdu (mm)', d.fond_perdu_mm);
+        ligne.append(releve);
       }
-      ligne.append(releve);
+      ligne.append(h('span', noteFormat(p), 'note'));
     }
+
+    const retirer = h('button', 'Retirer');
+    retirer.type = 'button';
+    retirer.id = `dest-retirer-${d.provider}`;
+    // Le dernier ne se retire pas : le Rust refuse, mais un bouton qui ne peut
+    // qu'échouer vaut mieux éteint que refusé.
+    retirer.disabled = declares.length < 2;
+    retirer.addEventListener('click', () => tente(async () =>
+      afficherProjet(await invoke('destinataire_retirer', { providerCle: d.provider }))));
+    ligne.append(retirer);
     box.append(ligne);
   }
+
+  // Ne s'ajoute que ce qui n'est pas déjà là : la même clé deux fois n'aurait aucun
+  // sens, et le Rust le refuserait.
+  const sel = $('inAjoutDestinataire');
+  const restants = providers.filter((p) => !declares.some((d) => d.provider === p.cle));
+  sel.replaceChildren();
+  for (const p of restants) sel.append(new Option(p.libelle, p.cle));
+  sel.disabled = restants.length === 0;
+  $('btAjouterDestinataire').disabled = restants.length === 0;
 }
 
-function champReleve(id, libelle, defaut) {
+function noteFormat(p) {
+  const fp = p.fond_perdu === null
+    ? 'fond perdu à relever sur le gabarit'
+    : `fond perdu ${nb(p.fond_perdu, 3)} mm`;
+  return `${nb(p.largeur, 1)} × ${nb(p.hauteur, 1)} mm — ${fp}`;
+}
+
+/**
+ * Un relevé fait sur le gabarit du prestataire.
+ *
+ * Vide au départ, jamais prérempli : un chiffre par défaut se lirait comme une mesure,
+ * et une planche composée sur un dos inventé ne se voit qu'au massicot.
+ */
+function champReleve(id, libelle, valeur, providerCle) {
   const l = h('label', undefined, 'petit');
   const i = h('input');
   i.type = 'number';
   i.id = id;
   i.min = 0;
   i.step = 0.1;
-  i.value = String(defaut);
+  i.value = valeur === null || valeur === undefined ? '' : String(valeur);
+  i.addEventListener('change', () => reglerDestinataire(providerCle));
   l.append(h('span', libelle), i);
   return l;
 }
 
-/** Ce que l'utilisateur a coché, prêt pour la commande. */
-function choixPrestataires() {
-  const lu = (id) => ($(id) ? Number($(id).value) : null);
-  return providers
-    .filter((p) => $(`pkg-${p.cle}`)?.checked)
-    .map((p) => ({
-      providerCle: p.cle,
-      papierCle: $(`pkg-papier-${p.cle}`).value,
-      dosMm: lu(`pkg-dos-${p.cle}`),
-      fondPerduMm: lu(`pkg-fp-${p.cle}`),
-    }));
+/** Relit la ligne d'un destinataire et la renvoie au projet. */
+async function reglerDestinataire(cle) {
+  // Un champ vide est une absence de relevé, pas un zéro : composer sur un dos nul
+  // produirait une planche fausse au lieu d'un refus.
+  const lu = (id) => {
+    const v = $(id)?.value.trim();
+    return v ? Number(v) : null;
+  };
+  await tente(async () => afficherProjet(await invoke('destinataire_regler', {
+    destinataire: {
+      provider: cle,
+      papier: $(`dest-papier-${cle}`).value,
+      dos_mm: lu(`dest-dos-${cle}`),
+      fond_perdu_mm: lu(`dest-fp-${cle}`),
+    },
+  })));
 }
 
 function afficherPackages(resultats) {
@@ -900,6 +962,15 @@ function afficherPackages(resultats) {
       ]) dl.append(h('dt', k), h('dd', v));
       bloc.append(dl);
       for (const c of p.chemins) bloc.append(h('p', c, 'chemin'));
+      // La planche telle qu'elle part à l'impression, avec le dos mesuré de ce
+      // prestataire-là : c'est ici que « est-ce que ça tient » se vérifie, sur du vrai
+      // et non sur une approximation qu'on espère fidèle.
+      if (r.vignette) {
+        const img = h('img', undefined, 'vignette');
+        img.src = r.vignette;
+        img.alt = `Planche composée pour ${r.libelle}`;
+        bloc.append(img);
+      }
     }
     box.append(bloc);
   }
@@ -907,19 +978,14 @@ function afficherPackages(resultats) {
 }
 
 async function packager() {
-  const choix = choixPrestataires();
-  if (!choix.length) {
-    $('etatPackages').textContent = 'Cocher au moins un prestataire.';
-    $('etatPackages').className = 'etat erreur';
-    return;
-  }
+  const combien = projet.livraison.destinataires.length;
   const bt = $('btPackager');
   bt.disabled = true;
   $('packages').hidden = true;
   $('etatPackages').className = 'etat';
-  $('etatPackages').textContent = `composition de ${choix.length} package(s)…`;
+  $('etatPackages').textContent = `composition de ${combien} package(s)…`;
   try {
-    afficherPackages(await invoke('packager', { choix }));
+    afficherPackages(await invoke('packager'));
     $('etatPackages').textContent = '';
   } catch (e) {
     $('etatPackages').textContent = String(e);
@@ -1037,23 +1103,16 @@ $('btComposer').addEventListener('click', composer);
 $('btPackager').addEventListener('click', packager);
 $('btEpreuve').addEventListener('click', epreuve);
 $('inPoliceInterieur').addEventListener('change', majInterieur);
-$('inProvider').addEventListener('change', () => {
-  majPapiers();
-  majPied();
-  // Le témoin du dos ne se déduit pas du projet : il tient au gabarit choisi, que ce
-  // geste déplace sans repasser par `afficherProjet`.
-  majEtapes();
-  // Le format vient du prestataire : l'aperçu change avec lui, même si aucun réglage
-  // de maquette n'a bougé.
-  demanderApercu();
-});
-// Le papier ne change ni le format ni la maquette : il ne touche que le dos, et c'est
-// pour cela seul que l'aperçu, le pied et le témoin de l'Intérieur doivent repartir.
-$('inPapier').addEventListener('change', () => {
-  majPied();
-  majEtapes();
-  demanderApercu();
-});
+// Changer de destinataire déplace le format de l'aperçu et l'épaisseur du dos : c'est
+// le projet qui les porte, donc `afficherProjet` suffit à tout remettre d'accord.
+$('inDestinataire').addEventListener('change', () => tente(async () =>
+  afficherProjet(await invoke('destinataire_viser', {
+    providerCle: $('inDestinataire').value,
+  }))));
+$('btAjouterDestinataire').addEventListener('click', () => tente(async () =>
+  afficherProjet(await invoke('destinataire_ajouter', {
+    providerCle: $('inAjoutDestinataire').value,
+  }))));
 construireEtapes();
 construireFaces();
 for (const id of ['inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright', 'inChapitres']) {

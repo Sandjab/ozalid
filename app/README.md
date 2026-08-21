@@ -65,11 +65,11 @@ n'a pas été pris tant que la diffusion reste confidentielle.
 Quatre bandes, et la fenêtre elle-même ne défile plus : une **entête** qui nomme le
 livre ouvert, son chemin et son état d'enregistrement ; une rangée de quatre
 **onglets** — Livre, Intérieur, Couverture, Livraison — dans l'ordre où le livre se
-fait ; l'**étape** courante, seule ; un **pied** qui dit pour qui l'on regarde et ce
-que vaut le dos. Ce qui ne tient pas se règle par la mise en page ; le panneau de
-réglages de la couverture garde son propre ascenseur — sa longueur est irréductible
-— et l'étape Livraison le sien, le temps que la liste des prestataires soit réduite
-aux seuls destinataires du livre.
+fait ; l'**étape** courante, seule ; un **pied** où l'on choisit pour qui l'on
+regarde, et qui dit ce que vaut le dos. Ce qui ne tient pas se règle par la mise en
+page ; le panneau de réglages de la couverture garde son propre ascenseur — sa
+longueur est irréductible — et l'étape Livraison le sien, le temps que le compte
+rendu de génération soit compacté.
 
 Chaque onglet porte un sous-libellé qui énonce où en est son étape — le nombre de
 chapitres, la police, la maquette — et un témoin rouge quand elle réclame :
@@ -96,6 +96,30 @@ quitté l'écran, comme dans tout éditeur de document macOS. Le sous-menu **« 
 navigue entre les quatre étapes (⌘1 à ⌘4) ; sans projet ouvert, il ne mène nulle
 part sans rien casser — la garde est du côté que les onglets et le menu ont en
 commun.
+
+## Le prestataire, choisi une seule fois
+
+Un livre a des **destinataires** : les prestataires chez qui on le livre. Ils se
+déclarent à l'étape Livraison — leur papier, et pour ceux qui ne publient ni dos ni
+fond perdu, ce qu'on a relevé sur leur gabarit — et **nulle part ailleurs**. Le pied
+de fenêtre porte le **pointeur** dessus : le destinataire visé, celui pour qui
+l'étape 2 compose et à quel format l'étape 3 rend ses aperçus. L'étape 4, elle,
+génère pour toute la liste.
+
+Un prestataire courant est nécessaire même pour regarder une première de couverture,
+qui ne réclame aucune composition mais réclame un format : un projet neuf naît donc
+avec un destinataire, le premier de la table, et le dernier ne se retire pas.
+
+Les relevés naissent **vides**, jamais préremplis. Un chiffre par défaut se lirait
+comme une mesure ; à sa place, la génération refuse en disant quoi faire — « CoolLibri
+ne publie pas de formule de dos : relever l'épaisseur sur son gabarit à 184 pages et
+la saisir », le compte de pages compris, puisqu'il vient d'être mesuré.
+
+Chaque package généré affiche sa **planche en vignette**, à côté de ses chiffres et de
+ses chemins de fichiers. C'est là que « est-ce que ça tient » se vérifie : sur du vrai,
+pour chaque prestataire, avec son dos mesuré — et non sur une approximation qu'on
+espère fidèle. Le PNG est écrit à côté du PDF, depuis la même source Typst ; c'est le
+PDF qui part à l'impression.
 
 ## Modules
 
@@ -131,13 +155,20 @@ Une archive, un document :
 
 ```
 projet.toml     identité du livre, police de l'intérieur, réglages de couverture,
-                chemin source du manuscrit
+                destinataires, chemin source du manuscrit
 manuscrit.md
 images/         photos source de la 1ère et de la 4ème
 ```
 
 La police de l'intérieur est une section à part, `[interieur]`, qui vaut `EB Garamond`
 quand elle manque — un projet écrit avant qu'elle existe s'ouvre donc sans rien dire.
+Les destinataires en sont une autre, `[livraison]`, avec le même principe : un projet
+qui ne la porte pas se voit doté du premier gabarit de la table. La version du format
+ne bouge pas pour autant — ajouter une section facultative ne rend illisible aucun
+fichier existant, et la monter interdirait aux binaires déjà distribués d'ouvrir les
+projets écrits ensuite. Un prestataire ou un papier que la table ne porte plus est
+**élagué à l'ouverture** plutôt que de faire refuser le projet : le manuscrit et la
+maquette sont intacts, et la liste se refait en trois clics.
 
 Le manuscrit y est **copié**, ce qui rend le projet complet sur une autre machine.
 Corriger le fichier d'origine ne met donc pas la copie à jour : « Réimporter le

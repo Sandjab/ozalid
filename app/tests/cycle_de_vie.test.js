@@ -32,6 +32,10 @@ function projet(sur = {}) {
     couverture_importee: false,
     images: [],
     interieur: { police: 'EB Garamond' },
+    livraison: {
+      destinataires: [{ provider: 'lulu', papier: 'standard', dos_mm: null, fond_perdu_mm: null }],
+      courant: 'lulu',
+    },
     ...sur,
   };
 }

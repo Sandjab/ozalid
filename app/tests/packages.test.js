@@ -1,6 +1,6 @@
 'use strict';
 
-// Câblage de l'étape « Packages » : ce que l'interface envoie au Rust, et ce qu'elle
+// Câblage de l'étape « Livraison » : ce que l'interface envoie au Rust, et ce qu'elle
 // en montre. Le rendu des planches se vérifie dans l'application, pas ici.
 
 const test = require('node:test');
@@ -22,6 +22,11 @@ const COOLLIBRI = {
   largeur: 148, hauteur: 210, fond_perdu: null, dos_publie: false,
   papiers: [{ cle: 'mesure', libelle: 'Dos relevé sur le gabarit' }],
 };
+
+/** Un destinataire neuf chez un prestataire, comme le Rust en fabrique un. */
+const chez = (p) => ({
+  provider: p.cle, papier: p.papiers[0].cle, dos_mm: null, fond_perdu_mm: null,
+});
 
 const PROJET = {
   chemin: '/livres/LHC.ozalid',
@@ -57,13 +62,31 @@ function paquet(sur = {}) {
     fond_perdu: 3.175,
     planche: [238.863, 181.35],
     chemins: ['/livres/LHC/lulu/interieur-lulu.pdf', '/livres/LHC/lulu/couverture-lulu.pdf'],
+    vignette: '/livres/LHC/lulu/couverture-lulu.png',
     ...sur,
   };
 }
 
-/** Un projet ouvert, prêt pour l'étape packages. */
-async function ouvre(providers, sur = {}) {
+/**
+ * Un projet ouvert, avec un Rust de façade qui **tient réellement** la liste des
+ * destinataires.
+ *
+ * Depuis le lot 3, le prestataire vit dans le projet et non dans un contrôle : le front
+ * relit la liste à chaque retour de commande. Un faux qui rendrait toujours le même
+ * projet ne prouverait donc plus rien — il masquerait justement le câblage qu'on vérifie.
+ */
+async function ouvre(providers, sur = {}, { couverture = null, destinataires } = {}) {
   const appels = [];
+  const liste = (destinataires ?? [chez(providers[0])]).map((d) => ({ ...d }));
+  let projet = {
+    ...PROJET,
+    couverture,
+    livraison: { destinataires: liste, courant: liste[0].provider },
+  };
+  const maj = (livraison) => {
+    projet = { ...projet, livraison: { ...projet.livraison, ...livraison } };
+    return projet;
+  };
   const invoke = async (cmd, args) => {
     appels.push([cmd, args]);
     if (cmd in sur) {
@@ -74,8 +97,36 @@ async function ouvre(providers, sur = {}) {
     if (cmd === 'polices_liste') return ['Archivo', 'Spectral'];
     if (cmd === 'polices_texte_liste') return ['EB Garamond', 'Alegreya', 'Cardo'];
     if (cmd === 'maquettes_liste') return [{ cle: 'folio', libelle: 'Folio' }];
-    if (cmd === 'projet_ouvrir') return PROJET;
+    if (cmd === 'projet_ouvrir') return projet;
     if (cmd === 'couverture_apercu') return 'data:image/png;base64,QUJD';
+    if (cmd === 'destinataire_viser') return maj({ courant: args.providerCle });
+    if (cmd === 'destinataire_regler') {
+      return maj({
+        destinataires: projet.livraison.destinataires.map((d) => (
+          d.provider === args.destinataire.provider ? args.destinataire : d
+        )),
+      });
+    }
+    if (cmd === 'destinataire_ajouter') {
+      return maj({
+        destinataires: [
+          ...projet.livraison.destinataires,
+          chez(providers.find((p) => p.cle === args.providerCle)),
+        ],
+      });
+    }
+    if (cmd === 'destinataire_retirer') {
+      return maj({
+        destinataires: projet.livraison.destinataires.filter(
+          (d) => d.provider !== args.providerCle
+        ),
+      });
+    }
+    if (cmd === 'interieur_modifier') {
+      projet = { ...projet, interieur: args.interieur };
+      return projet;
+    }
+    if (cmd === 'manuscrit_reimporter' || cmd === 'manuscrit_choisir') return projet;
     // Le démarrage et la garde envoient ces trois commandes sans qu'aucun test ne les
     // demande : sans réponse ici, elles lèveraient avant que rien ne soit vérifié.
     if (cmd === 'recents_liste') return [];
@@ -89,55 +140,125 @@ async function ouvre(providers, sur = {}) {
 }
 
 const attendreApercu = () => new Promise((r) => setTimeout(r, 300));
+const dernier = (appels, cmd) => appels.filter(([c]) => c === cmd).pop();
 
-/* ---------- relevés ---------- */
+/* ---------- la liste des destinataires ---------- */
 
 /**
  * Un prestataire qui publie sa formule n'a rien à faire saisir : offrir un champ de
  * dos donnerait à croire qu'il compte, alors que la formule prime toujours.
  */
 test('seul un prestataire à gabarit demande un relevé', async () => {
-  const { els } = await ouvre([LULU, COOLLIBRI]);
-  assert.ok(!els.get('pkg-dos-lulu'), 'dos saisissable chez Lulu');
-  assert.ok(!els.get('pkg-fp-lulu'), 'fond perdu saisissable chez Lulu');
-  assert.ok(els.get('pkg-dos-coollibri-148x210'), 'dos non demandé chez CoolLibri');
-  assert.ok(els.get('pkg-fp-coollibri-148x210'), 'fond perdu non demandé chez CoolLibri');
+  const { els } = await ouvre([LULU, COOLLIBRI], {}, {
+    destinataires: [chez(LULU), chez(COOLLIBRI)],
+  });
+  assert.ok(!els.get('dest-dos-lulu'), 'dos saisissable chez Lulu');
+  assert.ok(!els.get('dest-fp-lulu'), 'fond perdu saisissable chez Lulu');
+  assert.ok(els.get('dest-dos-coollibri-148x210'), 'dos non demandé chez CoolLibri');
+  assert.ok(els.get('dest-fp-coollibri-148x210'), 'fond perdu non demandé chez CoolLibri');
+});
+
+/**
+ * La liste ne montre que les destinataires du livre — c'est tout l'objet du lot : un
+ * prestataire n'est plus désigné deux fois, et la table entière n'a plus à s'afficher.
+ */
+test('la liste ne porte que les destinataires déclarés', async () => {
+  const { els } = await ouvre([LULU, KDP, COOLLIBRI], {}, { destinataires: [chez(LULU)] });
+  assert.deepStrictEqual(els.get('destinataires').textes('span').filter((t) => t.includes('—')), [
+    'Lulu — poche 108 × 175',
+    '108,0 × 175,0 mm — fond perdu 3,175 mm',
+  ]);
+  assert.ok(!els.get('dest-papier-kdp-6x9'), 'un prestataire non destinataire est offert');
+});
+
+test('on ne peut ajouter que ce qui n\'est pas déjà destinataire', async () => {
+  const { els } = await ouvre([LULU, KDP, COOLLIBRI], {}, {
+    destinataires: [chez(LULU), chez(KDP)],
+  });
+  assert.deepStrictEqual(
+    els.get('inAjoutDestinataire').textes('option'),
+    ['CoolLibri — A5']
+  );
+
+  els.get('inAjoutDestinataire').value = 'coollibri-148x210';
+  await els.get('btAjouterDestinataire').declenche('click');
+  assert.ok(els.get('dest-papier-coollibri-148x210'), 'ajout sans effet à l\'écran');
+  assert.strictEqual(
+    els.get('btAjouterDestinataire').disabled,
+    true,
+    'ajouter reste offert alors que la table est épuisée'
+  );
+});
+
+/**
+ * Le dernier destinataire ne se retire pas : c'est lui qui donne son format à l'aperçu,
+ * et une liste vide rendrait la Couverture inutilisable. Le Rust refuse ; le bouton
+ * s'éteint plutôt que de mener à ce refus.
+ */
+test('le dernier destinataire ne peut pas être retiré', async () => {
+  const { els, appels } = await ouvre([LULU, KDP], {}, {
+    destinataires: [chez(LULU), chez(KDP)],
+  });
+  assert.strictEqual(els.get('dest-retirer-lulu').disabled, false);
+
+  await els.get('dest-retirer-kdp-6x9').declenche('click');
+  assert.strictEqual(dernier(appels, 'destinataire_retirer')[1].providerCle, 'kdp-6x9');
+  assert.strictEqual(
+    els.get('dest-retirer-lulu').disabled,
+    true,
+    'le dernier destinataire reste retirable'
+  );
+});
+
+/* ---------- les relevés ---------- */
+
+test('un relevé saisi part au projet, avec le papier de la ligne', async () => {
+  const { els, appels } = await ouvre([COOLLIBRI], {}, { destinataires: [chez(COOLLIBRI)] });
+
+  els.get('dest-dos-coollibri-148x210').value = '18.4';
+  els.get('dest-fp-coollibri-148x210').value = '4';
+  await els.get('dest-dos-coollibri-148x210').declenche('change');
+
+  // Étalé : l'objet vient du contexte `vm`, et `deepStrictEqual` compare les prototypes.
+  assert.deepStrictEqual({ ...dernier(appels, 'destinataire_regler')[1].destinataire }, {
+    provider: 'coollibri-148x210',
+    papier: 'mesure',
+    dos_mm: 18.4,
+    fond_perdu_mm: 4,
+  });
+});
+
+/**
+ * Un champ vidé est une absence de relevé, pas un zéro. La différence n'est pas
+ * cosmétique : un dos de zéro millimètre compose une planche que rien ne refuse, et
+ * qui ne se voit qu'au massicot. Un relevé absent, lui, fait refuser la composition.
+ */
+test('un relevé effacé redevient une absence, jamais un zéro', async () => {
+  const { els, appels } = await ouvre([COOLLIBRI], {}, {
+    destinataires: [{ ...chez(COOLLIBRI), dos_mm: 18.4, fond_perdu_mm: 4 }],
+  });
+  assert.strictEqual(els.get('dest-dos-coollibri-148x210').value, '18.4');
+
+  els.get('dest-dos-coollibri-148x210').value = '';
+  await els.get('dest-dos-coollibri-148x210').declenche('change');
+
+  assert.strictEqual(dernier(appels, 'destinataire_regler')[1].destinataire.dos_mm, null);
 });
 
 /* ---------- génération ---------- */
 
-test('les prestataires cochés sont envoyés avec leur papier et leurs relevés', async () => {
-  let recu = null;
-  const { els } = await ouvre([LULU, KDP, COOLLIBRI], {
-    packager: ({ choix }) => {
-      recu = choix;
-      return choix.map((c) => ({
-        provider: c.providerCle, libelle: c.providerCle, package: paquet(), erreur: null,
-      }));
-    },
-  });
+/**
+ * La génération n'envoie plus rien : la liste est dans le projet. Lui repasser des
+ * cases cochées rétablirait la double désignation que ce lot supprime.
+ */
+test('générer ne transmet aucune liste : elle est dans le projet', async () => {
+  const { els, appels } = await ouvre([LULU, KDP], {
+    packager: () => [{ provider: 'lulu', libelle: 'Lulu', package: paquet(), erreur: null }],
+  }, { destinataires: [chez(LULU), chez(KDP)] });
 
-  els.get('pkg-lulu').checked = true;
-  els.get('pkg-coollibri-148x210').checked = true;
-  els.get('pkg-dos-coollibri-148x210').value = '18.4';
-  els.get('pkg-fp-coollibri-148x210').value = '4';
   await els.get('btPackager').declenche('click');
-
-  assert.strictEqual(recu.length, 2, 'KDP non coché a été envoyé');
-  assert.deepStrictEqual({ ...recu[0] }, {
-    providerCle: 'lulu', papierCle: 'standard', dosMm: null, fondPerduMm: null,
-  });
-  assert.deepStrictEqual({ ...recu[1] }, {
-    providerCle: 'coollibri-148x210', papierCle: 'mesure', dosMm: 18.4, fondPerduMm: 4,
-  });
-});
-
-test('sans prestataire coché, rien n\'est envoyé et l\'interface le dit', async () => {
-  const { els, appels } = await ouvre([LULU]);
-  await els.get('btPackager').declenche('click');
-  assert.ok(!appels.some(([c]) => c === 'packager'), 'commande lancée à vide');
-  assert.match(els.get('etatPackages').textContent, /au moins un prestataire/);
-  assert.strictEqual(els.get('etatPackages').className, 'etat erreur');
+  assert.deepStrictEqual(dernier(appels, 'packager')[1], undefined);
+  assert.match(els.get('packages').textContent, /16,51 mm/);
 });
 
 /**
@@ -147,17 +268,16 @@ test('sans prestataire coché, rien n\'est envoyé et l\'interface le dit', asyn
 test('un prestataire en échec est signalé sans masquer ceux qui ont abouti', async () => {
   const { els } = await ouvre([LULU, KDP], {
     packager: () => [
-      { provider: 'lulu', libelle: 'Lulu', package: paquet(), erreur: null },
+      { provider: 'lulu', libelle: 'Lulu', package: paquet(), vignette: null, erreur: null },
       {
         provider: 'kdp-6x9',
         libelle: 'Amazon KDP',
         package: null,
+        vignette: null,
         erreur: '1200 pages : tranche de gouttière absente du gabarit kdp-6x9',
       },
     ],
-  });
-  els.get('pkg-lulu').checked = true;
-  els.get('pkg-kdp-6x9').checked = true;
+  }, { destinataires: [chez(LULU), chez(KDP)] });
   await els.get('btPackager').declenche('click');
 
   const box = els.get('packages');
@@ -169,9 +289,10 @@ test('un prestataire en échec est signalé sans masquer ceux qui ont abouti', a
 
 test('un package affiche le dos, la planche et les fichiers produits', async () => {
   const { els } = await ouvre([LULU], {
-    packager: () => [{ provider: 'lulu', libelle: 'Lulu', package: paquet(), erreur: null }],
+    packager: () => [{
+      provider: 'lulu', libelle: 'Lulu', package: paquet(), vignette: null, erreur: null,
+    }],
   });
-  els.get('pkg-lulu').checked = true;
   await els.get('btPackager').declenche('click');
 
   const dd = els.get('packages').textes('dd');
@@ -185,6 +306,38 @@ test('un package affiche le dos, la planche et les fichiers produits', async () 
   assert.match(els.get('packages').textContent, /couverture-lulu\.pdf/);
 });
 
+/**
+ * La vignette est le seul endroit où « est-ce que ça tient » se vérifie sur du vrai,
+ * pour chaque prestataire, avec son dos mesuré. Le package qui a échoué n'en a pas —
+ * et l'absence ne doit pas poser une image vide, qui se lirait comme une planche.
+ */
+test('chaque package abouti montre sa planche en vignette', async () => {
+  const { els } = await ouvre([LULU, KDP], {
+    packager: () => [
+      {
+        provider: 'lulu',
+        libelle: 'Lulu',
+        package: paquet(),
+        vignette: 'data:image/png;base64,QUJD',
+        erreur: null,
+      },
+      {
+        provider: 'kdp-6x9', libelle: 'KDP', package: null, vignette: null, erreur: 'raté',
+      },
+    ],
+  }, { destinataires: [chez(LULU), chez(KDP)] });
+  await els.get('btPackager').declenche('click');
+
+  const images = [];
+  const visite = (e) => {
+    if (e.tagName === 'IMG') images.push(e);
+    e.enfants.forEach(visite);
+  };
+  els.get('packages').enfants.forEach(visite);
+  assert.strictEqual(images.length, 1, 'une vignette pour un package en échec');
+  assert.strictEqual(images[0].src, 'data:image/png;base64,QUJD');
+});
+
 /* ---------- aperçu de la planche ---------- */
 
 /**
@@ -193,49 +346,66 @@ test('un package affiche le dos, la planche et les fichiers produits', async () 
  * à passer — et la planche refusera de s'afficher plutôt que d'en inventer un.
  */
 test('l\'aperçu de planche n\'a pas de dos tant que l\'intérieur n\'est pas composé', async () => {
-  const { els, appels } = await ouvre([LULU], { projet_ouvrir: { ...PROJET, couverture: {} } });
+  const { els, appels } = await ouvre([LULU], {}, { couverture: {} });
   await els.get('faces').children[2].declenche('click');
   await attendreApercu();
 
-  const dernier = appels.filter(([c]) => c === 'couverture_apercu').pop();
-  assert.strictEqual(dernier[1].face, 'planche');
-  assert.strictEqual(dernier[1].dosMm, null, 'un dos est passé sans composition');
+  const [, args] = dernier(appels, 'couverture_apercu');
+  assert.strictEqual(args.face, 'planche');
+  assert.strictEqual(args.dosMm, null, 'un dos est passé sans composition');
+});
+
+/**
+ * Le gabarit ne voyage plus avec l'aperçu : le Rust le lit dans le projet. Le repasser
+ * ici rouvrirait la porte à deux vérités sur le prestataire courant.
+ */
+test('l\'aperçu ne transporte plus de gabarit', async () => {
+  const { els, appels } = await ouvre([LULU], {}, { couverture: {} });
+  await els.get('faces').children[0].declenche('click');
+  await attendreApercu();
+
+  assert.deepStrictEqual(
+    Object.keys(dernier(appels, 'couverture_apercu')[1]).sort(),
+    ['dosMm', 'face']
+  );
 });
 
 test('une fois l\'intérieur composé, l\'aperçu de planche reçoit ce dos-là', async () => {
-  const { els, appels } = await ouvre([LULU], {
-    projet_ouvrir: { ...PROJET, couverture: {} },
-    composer: COMPOSITION,
-  });
+  const { els, appels } = await ouvre([LULU], { composer: COMPOSITION }, { couverture: {} });
   await els.get('btComposer').declenche('click');
   await els.get('faces').children[2].declenche('click');
   await attendreApercu();
 
-  const dernier = appels.filter(([c]) => c === 'couverture_apercu').pop();
-  assert.strictEqual(dernier[1].dosMm, 16.513);
+  assert.strictEqual(dernier(appels, 'couverture_apercu')[1].dosMm, 16.513);
+});
+
+/** Composer, c'est composer pour le destinataire visé : plus rien à lui désigner. */
+test('composer ne transmet plus de prestataire', async () => {
+  const { els, appels } = await ouvre([LULU], { composer: COMPOSITION });
+  await els.get('btComposer').declenche('click');
+  assert.deepStrictEqual(dernier(appels, 'composer')[1], undefined);
 });
 
 /**
  * Le dos vaut pour un gabarit et un seul : le même manuscrit ne fait pas le même
- * nombre de pages en poche et en grand format. Le traîner d'un prestataire à l'autre
+ * nombre de pages en poche et en grand format. Le traîner d'un destinataire à l'autre
  * donnerait à voir une planche fausse, et c'est exactement le défaut que l'atelier
  * HTML avait.
  */
-test('changer de prestataire périme le dos de l\'aperçu', async () => {
-  const { els, appels } = await ouvre([LULU, KDP], {
-    projet_ouvrir: { ...PROJET, couverture: {} },
-    composer: COMPOSITION,
+test('viser un autre destinataire périme le dos de l\'aperçu', async () => {
+  const { els, appels } = await ouvre([LULU, KDP], { composer: COMPOSITION }, {
+    couverture: {}, destinataires: [chez(LULU), chez(KDP)],
   });
   await els.get('btComposer').declenche('click');
   await els.get('faces').children[2].declenche('click');
   await attendreApercu();
-  assert.strictEqual(appels.filter(([c]) => c === 'couverture_apercu').pop()[1].dosMm, 16.513);
+  assert.strictEqual(dernier(appels, 'couverture_apercu')[1].dosMm, 16.513);
 
-  els.get('inProvider').value = 'kdp-6x9';
-  await els.get('inProvider').declenche('change');
+  els.get('inDestinataire').value = 'kdp-6x9';
+  await els.get('inDestinataire').declenche('change');
   await attendreApercu();
   assert.strictEqual(
-    appels.filter(([c]) => c === 'couverture_apercu').pop()[1].dosMm,
+    dernier(appels, 'couverture_apercu')[1].dosMm,
     null,
     'dos de Lulu réutilisé pour KDP'
   );
@@ -247,20 +417,17 @@ test('changer de prestataire périme le dos de l\'aperçu', async () => {
  * blanc, soit 1,65 mm d'écart sur 262 pages — l'épaisseur d'une couverture entière.
  */
 test('un dos calculé sur un autre papier ne vaut plus rien', async () => {
-  const { els, appels } = await ouvre([KDP], {
-    projet_ouvrir: { ...PROJET, couverture: {} },
-    composer: COMPOSITION,
-  });
+  const { els, appels } = await ouvre([KDP], { composer: COMPOSITION }, { couverture: {} });
   await els.get('btComposer').declenche('click');
   await els.get('faces').children[2].declenche('click');
   await attendreApercu();
-  assert.strictEqual(appels.filter(([c]) => c === 'couverture_apercu').pop()[1].dosMm, 16.513);
+  assert.strictEqual(dernier(appels, 'couverture_apercu')[1].dosMm, 16.513);
 
-  els.get('inPapier').value = 'blanc';
-  await els.get('inPapier').declenche('change');
+  els.get('dest-papier-kdp-6x9').value = 'blanc';
+  await els.get('dest-papier-kdp-6x9').declenche('change');
   await attendreApercu();
   assert.strictEqual(
-    appels.filter(([c]) => c === 'couverture_apercu').pop()[1].dosMm,
+    dernier(appels, 'couverture_apercu')[1].dosMm,
     null,
     'dos du papier crème réutilisé pour le blanc'
   );
@@ -272,42 +439,31 @@ test('un dos calculé sur un autre papier ne vaut plus rien', async () => {
  * planche donnerait un chiffre faux — ce qui vaut moins que pas de chiffre.
  */
 test('un dos calculé pour une autre police ne vaut plus rien', async () => {
-  const { els, appels } = await ouvre([LULU], {
-    projet_ouvrir: { ...PROJET, couverture: {} },
-    composer: COMPOSITION,
-    interieur_modifier: (args) => ({ ...PROJET, couverture: {}, interieur: args.interieur }),
-  });
+  const { els, appels } = await ouvre([LULU], { composer: COMPOSITION }, { couverture: {} });
   await els.get('btComposer').declenche('click');
   await els.get('faces').children[2].declenche('click');
   await attendreApercu();
-  assert.strictEqual(appels.filter(([c]) => c === 'couverture_apercu').pop()[1].dosMm, 16.513);
+  assert.strictEqual(dernier(appels, 'couverture_apercu')[1].dosMm, 16.513);
 
   els.get('inPoliceInterieur').value = 'Cardo';
   await els.get('inPoliceInterieur').declenche('change');
   await attendreApercu();
   assert.strictEqual(
-    appels.filter(([c]) => c === 'couverture_apercu').pop()[1].dosMm,
+    dernier(appels, 'couverture_apercu')[1].dosMm,
     null,
     'dos d\'Alegreya réutilisé pour Cardo'
   );
 });
 
 /**
- * La dernière cause, et la seule qui ne se lise dans aucun contrôle : le texte fait la
+ * La dernière cause, et la seule qui ne se lise nulle part : le texte fait la
  * pagination. Un dos calculé sur le manuscrit d'avant ne vaut rien même si le gabarit,
  * le papier et la police n'ont pas bougé — c'est précisément ce qui la rend facile à
  * oublier. Les deux portes par lesquelles le texte est remplacé sont exercées ici.
  */
 test('un dos calculé sur un autre manuscrit ne vaut plus rien', async () => {
-  const projetCouvert = { ...PROJET, couverture: {} };
-  const { els, appels } = await ouvre([LULU], {
-    projet_ouvrir: projetCouvert,
-    composer: COMPOSITION,
-    manuscrit_reimporter: projetCouvert,
-    manuscrit_choisir: projetCouvert,
-  });
-  const dernierDos = () =>
-    appels.filter(([c]) => c === 'couverture_apercu').pop()[1].dosMm;
+  const { els, appels } = await ouvre([LULU], { composer: COMPOSITION }, { couverture: {} });
+  const dernierDos = () => dernier(appels, 'couverture_apercu')[1].dosMm;
 
   await els.get('btComposer').declenche('click');
   await els.get('faces').children[2].declenche('click');

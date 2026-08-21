@@ -84,6 +84,9 @@ body {
 #etapes button.alerte .sous::before { content: "● "; }
 
 #pied {
+  display: flex;
+  align-items: baseline;
+  gap: .6rem;
   padding: .5rem 2rem;
   border-top: 1px solid var(--trait);
   color: #7a7368;
@@ -91,6 +94,18 @@ body {
 }
 
 #pied p { margin: 0; }
+
+/* Le pointeur du pied : un libellé et son choix côte à côte, et non la grille à deux
+   colonnes que `label` impose partout ailleurs — le pied est une bande, pas un
+   formulaire. */
+#visee {
+  display: flex;
+  align-items: baseline;
+  gap: .5rem;
+  margin: 0;
+}
+
+#visee select { width: auto; padding: .1rem .3rem; font-size: .85rem; }
 
 h1 {
   margin: 0;
@@ -173,11 +188,17 @@ main {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-/* Dette à date de péremption connue : la table compte quatorze gabarits, et la liste
-   ne tient pas dans la fenêtre à sa taille minimale. Le lot 3 la réduit aux seuls
-   destinataires du livre — une poignée — et cet ascenseur disparaîtra avec lui.
-   Pas de `max-width` ici, à la différence des autres étapes : une ligne de prestataire
-   porte une case, un libellé, un papier et parfois un relevé de dos. La brider à la
+/* L'ascenseur reste, mais plus pour la raison qu'on croyait. Le lot 3 a bien réduit la
+   liste aux seuls destinataires du livre — deux ou trois lignes au lieu de quatorze —
+   et elle tient désormais sans peine. Ce qui déborde maintenant, ce sont les comptes
+   rendus de génération : par destinataire, cinq chiffres, deux chemins de fichiers et
+   la vignette de sa planche. Mesuré : un seul package remplit déjà la bande de contenu
+   à 1040 × 780.
+   Cela ne fait pas deux ascenseurs dans le même écran — celui du panneau de couverture
+   vit dans une autre étape, et les deux ne paraissent jamais ensemble. Compacter le
+   compte rendu reste la vraie réponse ; elle appartient au lot 4.
+   Pas de `max-width` ici, à la différence des autres étapes : une ligne de destinataire
+   porte un libellé, un papier, un format et parfois un relevé de dos. La brider à la
    largeur d'une colonne de lecture ne la raccourcissait pas, elle la faisait déborder
    de côté — et un ascenseur horizontal cache des réglages au lieu de les ranger. */
 #etapeLivraison { overflow-y: auto; }
@@ -344,14 +365,19 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
 .groupe input[type="color"] { padding: 0; height: 1.8rem; }
 .groupe input[type="checkbox"] { width: auto; justify-self: start; }
 
-/* ---------- packages prestataires ---------- */
+/* ---------- destinataires et packages ---------- */
 
-.prestataires { margin-top: .8rem; }
+.destinataires { margin-top: .8rem; }
+
+/* Le choix de ce qu'on ajoute est aussi large que son libellé, pas que la fenêtre :
+   étiré sur toute la ligne, il se lisait comme le sujet de l'étape au lieu du geste
+   d'ajout qu'il est. */
+#inAjoutDestinataire { width: auto; max-width: 24rem; }
 
 /* Les relevés passent sous la ligne plutôt que de la pousser hors de l'écran : chez
    un prestataire à gabarit, la ligne réclame plus de mille pixels, et un ascenseur
    horizontal cacherait justement les champs qu'il faut remplir. */
-.prestataire {
+.destinataire {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -359,19 +385,33 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
   padding: .4rem 0;
   border-bottom: 1px solid var(--trait);
 }
-.prestataire:last-child { border-bottom: 0; }
-.prestataire input[type="checkbox"] { width: auto; margin: 0; }
-.prestataire label { margin: 0; flex: 1; }
-.prestataire select { width: auto; }
+.destinataire:last-child { border-bottom: 0; }
+.destinataire .nom { flex: 1; min-width: 14rem; }
+.destinataire label { margin: 0; }
+.destinataire select { width: auto; }
+.destinataire .note { margin: 0; }
 
 /* Relevés d'un prestataire à gabarit : côte à côte, à droite de sa ligne. */
 .releve { display: flex; gap: .6rem; }
-.releve .petit { display: grid; gap: .1rem; margin: 0; }
+/* Une seule colonne, contre les deux que `label` impose partout ailleurs : le libellé
+   se met au-dessus de son champ, et la paire tient dans la ligne du destinataire au
+   lieu de réclamer les 13 rem d'une colonne de formulaire. */
+.releve .petit { display: grid; grid-template-columns: 1fr; gap: .1rem; margin: 0; }
 .releve .petit span { font-size: .75rem; color: #7a7368; }
 .releve .petit input { width: 6rem; }
 
 .package + .package { margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--trait); }
 .package h3 { margin: 0 0 .6rem; font-size: .95rem; }
+
+/* La planche du package. Une vignette, pas un aperçu : de quoi voir qu'elle tient,
+   avec le dos mesuré de ce prestataire-là. C'est le PDF à côté qui fait foi. */
+.vignette {
+  display: block;
+  margin-top: .6rem;
+  max-width: 100%;
+  width: 22rem;
+  border: 1px solid var(--trait);
+}
 
 /* ---------- projets récents ---------- */
 
@@ -399,8 +439,8 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
    de bon — `#etapeCouverture { display: grid }`, un identifiant qui l'emportait sur
    `[hidden]` et servait la Couverture sous l'onglet Livraison. Une fois en germe —
    `.releve .petit { display: grid }`, à 0-2-0, inoffensif tant que rien ne masque un
-   relevé, et armé le jour où la liste des prestataires se réduira aux destinataires du
-   livre. La règle cesse ainsi de dépendre de sa position dans le fichier et de la
-   spécificité de tous les autres sélecteurs : c'est le rappel des deux fois qui doit
-   empêcher la troisième. */
+   relevé — et le lot 3, qui a réduit la liste aux destinataires du livre, l'aurait armé
+   sans cet `!important`. La règle cesse ainsi de dépendre de sa position dans le fichier
+   et de la spécificité de tous les autres sélecteurs, `#visee` compris : c'est le rappel
+   des deux fois qui doit empêcher la troisième. */
 [hidden] { display: none !important; }

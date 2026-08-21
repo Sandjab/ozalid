@@ -71,21 +71,14 @@
   </section>
 
   <section id="etapeInterieur" class="etape" role="tabpanel" hidden>
+    <!-- Aucun sélecteur de prestataire ici : il est dans le pied, et il vaut pour toute
+         la fenêtre. « Composer » compose pour le destinataire visé. -->
     <div class="bloc">
       <h2>Intérieur</h2>
       <label><span>Police</span><select id="inPoliceInterieur"></select></label>
       <p class="note">La police fixe la pagination, donc l'épaisseur du dos : en changer
         périme le dos de la dernière composition. La planche reste sans dos tant que
         l'intérieur n'a pas été recomposé.</p>
-    </div>
-
-    <!-- Le choix du prestataire vit encore ici. Le lot 3 le remonte au pied, où il
-         devient global et cesse d'exister en double avec les cases de la Livraison. -->
-    <div class="bloc">
-      <h2>Prestataire</h2>
-      <label><span>Gabarit</span><select id="inProvider"></select></label>
-      <label><span>Papier</span><select id="inPapier"></select></label>
-      <p class="note" id="noteFormat"></p>
       <div class="ligne">
         <button id="btComposer" type="button">Composer l'intérieur</button>
         <span id="etat" class="etat"></span>
@@ -137,11 +130,15 @@
 
   <section id="etapeLivraison" class="etape" role="tabpanel" hidden>
     <div class="bloc">
-      <h2>Packages</h2>
-      <p class="note">Chaque prestataire coché compose son propre intérieur, donc sa propre
+      <h2>Destinataires</h2>
+      <p class="note">Chaque destinataire compose son propre intérieur, donc sa propre
         pagination, donc son propre dos et sa propre planche. Les fichiers sont écrits à côté
         du <code>.ozalid</code>, dans un répertoire par prestataire.</p>
-      <div id="listePrestataires" class="prestataires"></div>
+      <div class="ligne">
+        <select id="inAjoutDestinataire"></select>
+        <button id="btAjouterDestinataire" type="button">Ajouter</button>
+      </div>
+      <div id="destinataires" class="destinataires"></div>
       <div class="ligne">
         <button id="btPackager" type="button">Générer les packages</button>
         <span id="etatPackages" class="etat"></span>
@@ -152,8 +149,12 @@
 
 </main>
 
+<!-- Le pointeur : pour qui l'on compose, et sous quel format on regarde. Il est ici
+     parce que c'est vrai partout — on change de destinataire sans quitter la Couverture
+     qu'on est en train de régler. -->
 <footer id="pied">
-  <p id="piedPrestataire"></p>
+  <label id="visee"><span>Vu pour</span><select id="inDestinataire"></select></label>
+  <p id="piedDos"></p>
 </footer>
 
 <script src="couverture.js"></script>

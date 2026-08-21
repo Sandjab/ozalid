@@ -20,6 +20,14 @@ const COOLLIBRI = {
   papiers: [{ cle: 'mesure', libelle: 'Dos relevé sur le gabarit' }],
 };
 
+/** La livraison d'un livre qui n'a qu'un destinataire, comme un projet neuf en a un. */
+const livraison = (p) => ({
+  destinataires: [{
+    provider: p.cle, papier: p.papiers[0].cle, dos_mm: null, fond_perdu_mm: null,
+  }],
+  courant: p.cle,
+});
+
 const PROJET = {
   chemin: '/livres/LHC.ozalid',
   livre: {
@@ -35,6 +43,7 @@ const PROJET = {
   couverture_importee: true,
   images: ['couverture.jpg'],
   interieur: { police: 'Alegreya' },
+  livraison: livraison(LULU),
 };
 
 /** Fausse implémentation des commandes Rust. `sur` surcharge une commande. */
@@ -65,28 +74,58 @@ const COMPOSITION = {
   dos: 16.513, pdf: '/livres/LHC/lulu/interieur-lulu.pdf',
 };
 
-/* ---------- prestataires ---------- */
+/* ---------- destinataires ---------- */
+
+/** Un projet ouvert, visé sur le prestataire donné. */
+async function ouvre(p, sur = {}) {
+  const projet = { ...PROJET, livraison: livraison(p) };
+  const ctx = await charge({
+    invoke: faux([p], { projet_ouvrir: projet, ...sur }),
+    open: async () => '/livres/LHC.ozalid',
+  });
+  await ctx.els.get('btOuvrir').declenche('click');
+  return ctx;
+}
 
 test('le choix du papier n\'est offert que quand il y en a plusieurs', async () => {
-  const { els } = await charge({ invoke: faux([LULU, KDP]) });
-  assert.strictEqual(els.get('inPapier').disabled, true);
-  assert.strictEqual(els.get('inPapier').children.length, 1);
+  const { els } = await ouvre(LULU);
+  assert.strictEqual(els.get('dest-papier-lulu').disabled, true);
+  assert.strictEqual(els.get('dest-papier-lulu').children.length, 1);
 
-  els.get('inProvider').value = 'kdp-6x9';
-  await els.get('inProvider').declenche('change');
-  assert.strictEqual(els.get('inPapier').disabled, false);
+  const { els: chezKdp } = await ouvre(KDP);
+  assert.strictEqual(chezKdp.get('dest-papier-kdp-6x9').disabled, false);
   assert.deepStrictEqual(
-    [...els.get('inPapier').children].map((o) => o.value),
+    [...chezKdp.get('dest-papier-kdp-6x9').children].map((o) => o.value),
     ['creme', 'blanc']
   );
 });
 
 test('un prestataire à gabarit annonce que le fond perdu se relève', async () => {
-  const { els } = await charge({ invoke: faux([COOLLIBRI]) });
-  const note = els.get('noteFormat').textContent;
+  const { els } = await ouvre(COOLLIBRI);
+  const note = els.get('destinataires').textContent;
   assert.match(note, /148,0 × 210,0 mm/);
   assert.match(note, /relever sur le gabarit/);
   assert.doesNotMatch(note, /fond perdu \d/, 'aucun chiffre de fond perdu inventé');
+});
+
+/**
+ * Le pied dit pour qui l'on regarde, et le dos n'y paraît qu'une fois composé : le pas
+ * encore mesuré ne doit jamais s'y lire comme un chiffre.
+ */
+test('le pied nomme le destinataire visé et l\'état de son dos', async () => {
+  const { els } = await ouvre(LULU);
+  assert.strictEqual(els.get('inDestinataire').value, 'lulu');
+  assert.deepStrictEqual(els.get('inDestinataire').textes('option'), ['Lulu — poche 108 × 175']);
+  assert.match(els.get('piedDos').textContent, /dos non composé/);
+});
+
+/**
+ * Chez un prestataire sans formule, il n'y a jamais rien à composer : « non composé »
+ * ferait recomposer en boucle un livre dont la pagination est déjà juste.
+ */
+test('un prestataire à gabarit ne réclame pas une composition mais un relevé', async () => {
+  const { els } = await ouvre(COOLLIBRI);
+  assert.match(els.get('piedDos').textContent, /relevé sur le gabarit/);
 });
 
 /* ---------- projet ---------- */
