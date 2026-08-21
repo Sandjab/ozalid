@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod couverture;
+pub mod envoi;
 pub mod epreuve;
 pub mod image;
 pub mod import;

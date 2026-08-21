@@ -217,6 +217,11 @@ pub struct Metadonnees {
     /// posant sur sa première option. `VERSION` ne bouge donc pas.
     #[serde(default)]
     pub livraison: Livraison,
+    /// Facultative, comme `livraison` et la dédicace avant elle : un `.ozalid` écrit
+    /// avant les envois s'ouvre sans un mot, avec une liste vide. `VERSION` ne bouge
+    /// donc pas.
+    #[serde(default)]
+    pub envois: crate::envoi::Envois,
 }
 
 /// Un projet ouvert : les métadonnées, le texte du manuscrit, les images.
@@ -238,6 +243,7 @@ impl Projet {
                 couverture: Couverture::default(),
                 interieur: crate::interieur::Interieur::default(),
                 livraison: Livraison::default(),
+                envois: crate::envoi::Envois::default(),
             },
             texte,
             images: BTreeMap::new(),
@@ -593,6 +599,45 @@ auteur = "Ivan Pjig"
 "#;
         let m: Metadonnees = toml::from_str(toml).expect("projet sans dédicace refusé");
         assert_eq!(m.livre.dedicace, None);
+    }
+
+    /// Un `.ozalid` écrit avant les envois s'ouvre sans un mot : troisième section
+    /// facultative après `[interieur]` et `[livraison]`, et `VERSION` n'a pas bougé.
+    #[test]
+    fn un_projet_sans_section_envois_se_relit() {
+        let toml = r#"
+[ozalid]
+version = 2
+
+[livre]
+titre = "Les Heures creuses"
+auteur = "Ivan Pjig"
+"#;
+        let m: Metadonnees = toml::from_str(toml).expect("projet sans [envois] refusé");
+        assert!(m.envois.liste.is_empty());
+        assert!(
+            m.envois.verifie().is_ok(),
+            "la main par défaut doit être valide"
+        );
+    }
+
+    /// Les envois sont du travail de l'utilisateur au même titre que la maquette : les
+    /// reperdre, c'est réécrire tous les mots à la main.
+    #[test]
+    fn les_envois_survivent_a_l_aller_retour() {
+        let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
+        p.meta.envois.liste = vec![crate::envoi::Envoi {
+            dedicataire: "Léa".into(),
+            contenu: "À Léa, qui a lu la première version.".into(),
+        }];
+
+        let r = aller_retour(&p);
+        assert_eq!(r.meta.envois.liste.len(), 1);
+        assert_eq!(r.meta.envois.liste[0].dedicataire, "Léa");
+        assert_eq!(
+            r.meta.envois.liste[0].contenu,
+            "À Léa, qui a lu la première version."
+        );
     }
 
     /// Une dédicace faite d'espaces ne doit pas coûter deux pages et du dos : c'est
