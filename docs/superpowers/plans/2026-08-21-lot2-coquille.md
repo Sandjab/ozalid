@@ -207,6 +207,36 @@ reprennent `height: auto`.
 pas parce qu'il y avait de la place. Une ligne de plus au bloc de résultat le rouvre. Le seul
 remède durable est de raccourcir ce bloc — lot 4.
 
+**Trouvé par la revue du lot entier, corrigé à la clôture.**
+
+*Le lot avait écrit un principe et ne l'appliquait qu'à moitié.* `oublierLesSorties` effaçait
+`#resultat`, `#packages`, `#cheminEpreuve`, `#etat` et `#alerte` — mais ni `#etatEpreuve` ni
+`#etatPackages`, les deux autres canaux que son propre commentaire nomme. Le chemin du PDF
+d'épreuve était effacé, le message rouge qui le commentait restait, sous le titre du livre
+suivant. Le test censé le garder vérifiait exactement ce que le code effaçait : il décrivait
+l'implémentation, pas l'intention. Réécrit pour **dériver du balisage** tout ce qui porte
+`class="etat"` ou `class="resultat"` — un canal ajouté sans être effacé le fait désormais
+tomber. L'aperçu est effacé aussi : une couverture laissée en place ne se remarque qu'une fois
+la planche partie chez l'imprimeur.
+
+*Une entrée de menu inconnue ne menait nulle part en silence.* `MENU[id]?.()` avalait une clé
+renommée dans `ETAPES` ou mal écrite dans `menu.rs`, dans les deux langages, sans message ni
+test rouge. Le geste se nomme maintenant. Le contrat lui-même reste non vérifié statiquement :
+un test confrontant les onze identifiants de `menu.rs` à ceux de `MENU` serait un couplage neuf
+entre les tests du front et le Rust — même genre que le test qui lirait `tauri.conf.json` pour
+refaire l'addition des 848 px. Les deux sont versés au lot 3, à décider ensemble.
+
+*Trois commentaires promettaient plus qu'ils ne tenaient*, et le vrai compte est maintenant
+écrit : ajouter une étape coûte **six fichiers**, pas trois — la table `ETAPES` est source
+unique à l'intérieur d'`app.js`, pas à l'échelle du dépôt. Le mode de panne est écrit avec :
+oublier les deux sélecteurs de `styles.css` ne casse rien de visible, l'étape hérite d'un
+`height: 100%` et la mise en page paraît de travers sans qu'on sache pourquoi.
+
+*Le rail vertical demande deux valeurs, pas trois.* Vérifié dans un navigateur, mesures au
+`getBoundingClientRect` : avec `grid-auto-flow: row`, les items créent des lignes implicites et
+`grid-auto-columns: 1fr` est précisément ce qui donne au rail sa pleine largeur — le passer en
+`grid-auto-rows` répartirait les quatre onglets sur toute la hauteur, ce qu'un rail ne veut pas.
+
 **Versé à la suite du chantier, non fait ici.**
 
 - *Le pattern d'onglets est incomplet* : pas d'`aria-controls` sur les onglets, pas
@@ -224,6 +254,23 @@ remède durable est de raccourcir ce bloc — lot 4.
   `row` produirait le rail vertical. Le nom décrit le mécanisme, pas le résultat.
 - *`libelleMode()` reconstruit tout le schéma à chaque clic d'onglet* (`groupes()` remappe
   `SCHEMA` en entier pour un libellé qui ne change jamais). Coût négligeable, chemin chaud.
+- *Deux gardes de contrat à décider ensemble, lot 3* : un test confrontant les identifiants
+  `aller.*` de `menu.rs` à ceux de `MENU`, et un test relisant `tauri.conf.json` pour refaire
+  l'addition des 848 px. Tous deux transformeraient un commentaire en garde, tous deux
+  introduiraient un couplage neuf entre les tests du front et un autre monde.
+- *Les trois clauses de `dosCourant()` sont testées deux fois*, par l'aperçu et par le témoin
+  d'onglet. Défendable — deux consommateurs, et c'est là qu'était le bug d'ordre — mais la
+  version aperçu coûte **3,4 des 3,8 secondes** de la suite, à cause du délai de grâce.
+- *`app.js` fait 1069 lignes* (849 avant le lot), dans la bande de vigilance 1000-1100 posée
+  après ce lot. **Ne pas découper maintenant** : le seul bloc cohérent est la coquille, et il
+  n'est pas détachable sans déplacer l'état — `etatEtapes`, `majPied` et `dosCourant` lisent
+  `projet`, `dosCompose`, `providers` et trois `select` du panneau. Le lot 3 remonte le
+  prestataire au pied, donc touche ces trois-là : c'est là que la coupe sera naturelle ou ne le
+  sera jamais. Refaire le compte à son ouverture.
+- *« Onglets » désigne deux mécanismes* : les étapes (`role="tab"`, `aria-selected`, retrouvées
+  par identifiant) et les faces de couverture (`aria-pressed`, retrouvées **par rang**). Une
+  note le dit au-dessus de `FACES` : les unifier serait un travail, pas un nettoyage ; les
+  croire déjà unifiés coûterait plus cher.
 
 **Deux leçons de méthode, payées trois fois chacune.**
 
