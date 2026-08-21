@@ -63,6 +63,11 @@ function construireEtapes() {
     b.addEventListener('click', () => allerA(cle));
     $('etapes').append(b);
   }
+  // Éteints dès leur naissance, sans attendre le premier projet : un démarrage qui
+  // échoue n'affiche jamais rien et ne repasserait donc jamais par ici. Les onglets
+  // resteraient d'apparence active sans mener nulle part, et le rang sans onglet
+  // sélectionné — l'état que le HTML décrit n'est celui de personne.
+  majEtapes();
 }
 
 /**

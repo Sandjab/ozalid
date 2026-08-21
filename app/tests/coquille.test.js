@@ -195,3 +195,26 @@ test('un geste réussi efface l\'erreur du précédent', async () => {
   assert.equal(els.get('alerte').textContent, '');
   assert.equal(els.get('alerte').className, 'etat');
 });
+
+/**
+ * Un démarrage qui échoue n'affiche jamais de projet, donc ne repasse jamais par ce qui
+ * remet les onglets d'accord avec la table. Nés dans l'état du balisage, ils resteraient
+ * d'apparence active sans mener nulle part, et le `tablist` sans onglet sélectionné :
+ * une commande sans effet ressemble à une panne, grisée elle annonce un chantier.
+ */
+test('un démarrage en échec laisse les onglets éteints, jamais indéterminés', async () => {
+  const a = atelier();
+  const invoke = async (cmd, args) => {
+    if (cmd === 'providers_liste') throw new Error('aucun gabarit lisible');
+    return a.invoke(cmd, args);
+  };
+  const { els } = await charge({ invoke });
+
+  assert.match(els.get('alerte').textContent, /démarrage impossible/);
+  for (const cle of ETAPES) {
+    const onglet = els.get(`onglet-${cle}`);
+    assert.equal(onglet.disabled, true, `onglet ${cle} actif après un démarrage en échec`);
+    assert.equal(onglet.getAttribute('aria-selected'), 'false',
+      `onglet ${cle} sans état annoncé`);
+  }
+});
