@@ -74,7 +74,7 @@ pub fn assembler(
     let r = interieur::converge(pr, |reglage| {
         ecrire(
             &src_int,
-            &interieur::source(livre, int, pr, reglage, &chapitres),
+            &interieur::source(livre, int, pr, reglage, &chapitres, None),
         )?;
         typst.pages(&src_int)
     })?;
@@ -90,7 +90,7 @@ pub fn assembler(
     };
     ecrire(
         &src_int,
-        &interieur::source(livre, int, pr, &reglage, &chapitres),
+        &interieur::source(livre, int, pr, &reglage, &chapitres, None),
     )?;
     let pdf_int = dossier.join(nom(pr, "interieur", "pdf"));
     typst.compile(&src_int, &pdf_int)?;

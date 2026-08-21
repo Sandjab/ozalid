@@ -52,8 +52,11 @@ fn main() -> Result<(), String> {
     let mut passes = 0;
     let r = interieur::converge(pr, |reglage| {
         passes += 1;
-        std::fs::write(&src, interieur::source(livre, int, pr, reglage, &chapitres))
-            .map_err(|e| e.to_string())?;
+        std::fs::write(
+            &src,
+            interieur::source(livre, int, pr, reglage, &chapitres, None),
+        )
+        .map_err(|e| e.to_string())?;
         typst.pages(&src)
     })?;
 
@@ -63,7 +66,7 @@ fn main() -> Result<(), String> {
     };
     std::fs::write(
         &src,
-        interieur::source(livre, int, pr, &reglage, &chapitres),
+        interieur::source(livre, int, pr, &reglage, &chapitres, None),
     )
     .map_err(|e| e.to_string())?;
     let pdf = dossier.join(format!("interieur-{}.pdf", pr.cle));

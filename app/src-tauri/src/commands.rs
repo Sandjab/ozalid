@@ -514,7 +514,7 @@ pub fn composer(atelier: State<Atelier>) -> Result<Composition, String> {
     let r = interieur::converge(pr, |reglage| {
         ecrire(
             &src,
-            &interieur::source(livre, int, pr, reglage, &chapitres),
+            &interieur::source(livre, int, pr, reglage, &chapitres, None),
         )?;
         typst.pages(&src)
     })?;
@@ -525,7 +525,7 @@ pub fn composer(atelier: State<Atelier>) -> Result<Composition, String> {
     };
     ecrire(
         &src,
-        &interieur::source(livre, int, pr, &reglage, &chapitres),
+        &interieur::source(livre, int, pr, &reglage, &chapitres, None),
     )?;
     let pdf = dossier.join(format!("interieur-{}.pdf", pr.cle));
     typst.compile(&src, &pdf)?;

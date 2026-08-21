@@ -126,6 +126,17 @@ pub fn converge(
     Err("la composition ne converge pas (gouttière ou parité oscillantes).".into())
 }
 
+/// Ce qu'un envoi dépose sur la page de titre.
+///
+/// `interieur` ne connaît pas la main du livre : il reçoit ce qu'elle a décidé. Les
+/// lots suivants y ajouteront l'image ; la structure deviendra alors une énumération,
+/// et ce module n'aura toujours pas à savoir d'où l'image vient.
+#[derive(Debug, Clone, Copy)]
+pub struct Trace<'a> {
+    pub police: &'a str,
+    pub texte: &'a str,
+}
+
 /// Source Typst complète de l'intérieur.
 pub fn source(
     livre: &Livre,
@@ -133,6 +144,7 @@ pub fn source(
     pr: &Provider,
     r: &Reglage,
     chapitres: &[Chapitre],
+    envoi: Option<Trace>,
 ) -> String {
     let (fw, fh) = pr.format;
     // `leading` Typst = espace entre lignes ; `line-height` CSS = distance entre lignes
@@ -172,7 +184,7 @@ pub fn source(
         pr.corps_pt,
     ));
 
-    s.push_str(&liminaires(livre));
+    s.push_str(&liminaires(livre, envoi));
 
     // — Corps, folio rétabli. La numérotation court depuis le faux-titre, seul son
     //   affichage était supprimé : le premier chapitre s'ouvre donc en page 5, ou en 7
@@ -219,7 +231,7 @@ pub fn source(
 ///
 /// Toutes sans folio, et sans avoir à le dire : `footer: none`, posé par l'entête que
 /// `source` écrit, court jusqu'au `#set page(footer: …)` qui ouvre le corps.
-fn liminaires(livre: &Livre) -> String {
+fn liminaires(livre: &Livre, envoi: Option<Trace>) -> String {
     let mut s = String::new();
     s.push_str(&format!(
         r#"#v(42mm)
@@ -233,14 +245,28 @@ fn liminaires(livre: &Livre) -> String {
 #align(center, text(size: 15pt, tracking: 0.06em)[{}])
 #v(10mm)
 #align(center, emph(text(size: 10pt)[{}]))
-#pagebreak()
-
 "#,
         majuscules(&livre.titre),
         majuscules(&livre.auteur),
         majuscules(&livre.titre_page().replace('\n', "\u{1}")).replace('\u{1}', r" \ "),
         echappe(&livre.genre),
     ));
+
+    // L'envoi se pose sur la page de titre, dans le blanc que son contenu laisse au
+    // bas. `#place` ne consomme pas le flux : il lui est impossible de créer une page,
+    // et c'est là-dessus que repose la promesse — la pagination, le dos et la planche
+    // sont les mêmes pour tous les envois du livre.
+    if let Some(t) = envoi {
+        s.push_str(&format!(
+            r#"#place(bottom + center, dy: -28mm, block(width: 70%,
+  text(font: "{}", size: 14pt)[{}]))
+"#,
+            // La main est validée en amont par `Envois::verifie` : pas d'échappement.
+            t.police,
+            echappe(t.texte).replace('\n', r" \ ")
+        ));
+    }
+    s.push_str("#pagebreak()\n\n");
 
     // Le pavé de copyright est calé en bas de la justification. La chaîne Python le
     // posait à 143 mm du haut du corps — une valeur juste pour le poche Lulu et
@@ -388,7 +414,7 @@ mod tests {
             gouttiere: 20.0,
             blanche: false,
         };
-        let s = source(&livre(), &Interieur::default(), pr, &r, &[]);
+        let s = source(&livre(), &Interieur::default(), pr, &r, &[], None);
         assert!(s.contains("width: 135mm, height: 215mm"));
         assert!(s.contains("inside: 20mm"), "gouttière absente");
         assert!(s.contains("outside: 15mm"));
@@ -410,6 +436,7 @@ mod tests {
                 blanche: false,
             },
             &[],
+            None,
         );
         let avec = source(
             &livre(),
@@ -420,6 +447,7 @@ mod tests {
                 blanche: true,
             },
             &[],
+            None,
         );
         assert!(!sans.contains("#page(footer: none)[]"));
         assert!(avec.contains("#page(footer: none)[]"));
@@ -442,6 +470,7 @@ mod tests {
                 blanche: false,
             },
             &[],
+            None,
         );
         assert!(s.contains(r"Les Heures \ creuses"), "saut de ligne perdu");
         assert!(s.contains(r"Ivan \#Pjig"), "auteur non échappé");
@@ -492,7 +521,7 @@ mod tests {
         let int = Interieur {
             police: "Cardo".into(),
         };
-        let s = source(&livre(), &int, pr, &r, &chapitres());
+        let s = source(&livre(), &int, pr, &r, &chapitres(), None);
         assert_eq!(s.matches("font:").count(), 1);
         assert!(s.contains(r#"font: "Cardo""#), "police du projet ignorée");
     }
@@ -526,8 +555,8 @@ mod tests {
             ],
         }];
         assert_eq!(
-            source(&livre(), &int, pr, &r, &sans),
-            source(&livre(), &int, pr, &r, &avec),
+            source(&livre(), &int, pr, &r, &sans, None),
+            source(&livre(), &int, pr, &r, &avec, None),
             "la rupture de scène a changé l'intérieur"
         );
     }
@@ -558,6 +587,7 @@ mod tests {
                 blanche: false,
             },
             &chs,
+            None,
         );
         let corps = s.split("#set page(footer: context").nth(1).unwrap();
         assert_eq!(
@@ -573,10 +603,10 @@ mod tests {
     /// faux, et il ne se découvre qu'après tirage.
     #[test]
     fn une_dedicace_ajoute_une_belle_page_et_sa_blanche() {
-        let sans = liminaires(&livre());
+        let sans = liminaires(&livre(), None);
         let mut l = livre();
         l.dedicace = Some("À M., qui a tenu la lampe.".into());
-        let avec = liminaires(&l);
+        let avec = liminaires(&l, None);
 
         assert_eq!(
             avec.matches("#pagebreak()").count(),
@@ -594,12 +624,12 @@ mod tests {
     /// du seul fait que le champ existe désormais.
     #[test]
     fn une_dedicace_vide_ou_blanche_ne_compose_rien() {
-        let sans = liminaires(&livre());
+        let sans = liminaires(&livre(), None);
         for creux in ["", "   ", "\n \n"] {
             let mut l = livre();
             l.dedicace = Some(creux.into());
             assert_eq!(
-                liminaires(&l),
+                liminaires(&l, None),
                 sans,
                 "« {creux:?} » a été pris pour une dédicace"
             );
@@ -613,11 +643,104 @@ mod tests {
     fn une_dedicace_est_echappee_et_garde_ses_sauts_de_ligne() {
         let mut l = livre();
         l.dedicace = Some("À #M.,\nqui a tenu la lampe.".into());
-        let s = liminaires(&l);
+        let s = liminaires(&l, None);
 
         assert!(s.contains(r"À \#M.,"), "dédicace non échappée : {s}");
         assert!(
             s.contains(r"\ qui a tenu la lampe."),
+            "saut de ligne perdu : {s}"
+        );
+    }
+
+    fn trace() -> Trace<'static> {
+        Trace {
+            police: "Caveat",
+            texte: "À Léa, qui a lu la première version.",
+        }
+    }
+
+    /// L'envoi se pose par `#place`, qui ne consomme pas le flux : il lui est
+    /// impossible de créer une page. Ce n'est pas une précaution, c'est la propriété
+    /// sur laquelle repose toute la promesse — même pagination, même dos, même planche
+    /// pour tous les envois. Si ce test tombe, tous les packages d'envoi sont faux.
+    #[test]
+    fn un_envoi_ne_cree_aucune_page() {
+        let sans = liminaires(&livre(), None);
+        let avec = liminaires(&livre(), Some(trace()));
+
+        assert_eq!(
+            avec.matches("#pagebreak()").count(),
+            sans.matches("#pagebreak()").count(),
+            "l'envoi a déplacé une page"
+        );
+        // Compter les `#place(` plutôt que d'en chercher un : le pavé de copyright en
+        // pose déjà un, si bien qu'un `contains` serait vrai même sans envoi — un test
+        // qui ne peut pas échouer.
+        assert_eq!(
+            avec.matches("#place(").count(),
+            sans.matches("#place(").count() + 1,
+            "l'envoi ne se pose pas par #place : {avec}"
+        );
+        // Et surtout : rien qui consomme le flux. Un `#v` de plus pousserait le
+        // contenu vers le bas, ce que le compte de sauts de page ne verrait pas.
+        assert_eq!(
+            avec.matches("#v(").count(),
+            sans.matches("#v(").count(),
+            "l'envoi pousse le flux au lieu de se poser dessus : {avec}"
+        );
+    }
+
+    /// Hors de la page de titre, la source ne bouge pas d'un octet. Un envoi qui
+    /// modifierait le corps changerait la pagination sans qu'aucun compte ne le
+    /// signale.
+    #[test]
+    fn un_envoi_ne_touche_que_la_page_de_titre() {
+        let pr = provider("lulu").unwrap();
+        let r = Reglage {
+            gouttiere: 25.0,
+            blanche: false,
+        };
+        let sans = source(&livre(), &Interieur::default(), pr, &r, &chapitres(), None);
+        let avec = source(
+            &livre(),
+            &Interieur::default(),
+            pr,
+            &r,
+            &chapitres(),
+            Some(trace()),
+        );
+
+        let corps = |s: &str| {
+            s.split("#set page(footer: context")
+                .nth(1)
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(corps(&sans), corps(&avec), "le corps a changé");
+    }
+
+    /// La main choisie doit être celle qui compose : sans le `font:`, Typst écrirait
+    /// l'envoi dans la police de labeur du livre, et le mot ne ressemblerait plus à un
+    /// mot écrit à la main.
+    #[test]
+    fn l_envoi_est_compose_dans_la_main_du_livre() {
+        let s = liminaires(&livre(), Some(trace()));
+        assert!(s.contains(r#"font: "Caveat""#), "main absente : {s}");
+    }
+
+    /// Même piège que le titre de page et que la dédicace : le markup Typst doit être
+    /// échappé, les sauts de ligne voulus doivent survivre.
+    #[test]
+    fn un_envoi_est_echappe_et_garde_ses_sauts_de_ligne() {
+        let t = Trace {
+            police: "Caveat",
+            texte: "À #Léa,\navec mon amitié.",
+        };
+        let s = liminaires(&livre(), Some(t));
+
+        assert!(s.contains(r"À \#Léa,"), "envoi non échappé : {s}");
+        assert!(
+            s.contains(r"\ avec mon amitié."),
             "saut de ligne perdu : {s}"
         );
     }
