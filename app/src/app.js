@@ -124,6 +124,11 @@ function alerter(message) {
  * Le prestataire y est nommé une fois pour toute la fenêtre. Le dos n'y paraît que s'il
  * vaut pour ce qui est montré — c'est `dosCourant()` qui en répond — parce qu'un dos
  * périmé écrit en bas de l'écran est exactement ce qu'on ne relirait pas.
+ *
+ * Trois états, pas deux : chez un prestataire qui ne publie pas de formule de dos, il
+ * n'y a jamais rien à composer, et « non composé » ferait recomposer en boucle un livre
+ * dont la pagination est déjà juste. Ce qui manque alors est un relevé sur le gabarit,
+ * pas un calcul — c'est le vocabulaire que `noteFormat` emploie déjà pour le fond perdu.
  */
 function majPied() {
   // Le prestataire, pas seulement le projet : un démarrage qui n'a pas pu lire les
@@ -135,8 +140,10 @@ function majPied() {
     return;
   }
   const dos = dosCourant();
-  $('piedPrestataire').textContent = `Vu pour : ${p.libelle} · `
-    + (dos === null ? 'dos non composé' : `dos ${nb(dos, 1)} mm`);
+  const etat = !p.dos_publie ? 'dos relevé sur le gabarit'
+    : dos === null ? 'dos non composé'
+      : `dos ${nb(dos, 1)} mm`;
+  $('piedPrestataire').textContent = `Vu pour : ${p.libelle} · ${etat}`;
 }
 
 /* ---------- prestataires ---------- */

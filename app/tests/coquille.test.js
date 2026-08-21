@@ -354,29 +354,36 @@ test('fermer le projet efface le pied', async () => {
   assert.equal(els.get('piedPrestataire').textContent, '');
 });
 
-/**
- * Les deux causes que le pied porte lui-même : le prestataire qu'il nomme, et le papier
- * qui périme le dos sans rien changer d'autre à l'écran. Un pied qui ne repart pas sur
- * ces gestes-là dit un dos qui vaut pour un autre livre que celui qu'on regarde.
- */
-const AUTRE = {
+const KDP = {
   cle: 'kdp-6x9', libelle: 'Amazon KDP — 6 × 9 po',
   largeur: 152.4, hauteur: 228.6, fond_perdu: 3.175, dos_publie: true,
   papiers: [{ cle: 'creme', libelle: 'Crème' }, { cle: 'blanc', libelle: 'Blanc' }],
 };
 
+/** Un prestataire à gabarit : le dos ne s'y calcule pas, il se relève. */
+const COOLLIBRI = {
+  cle: 'coollibri-148x210', libelle: 'CoolLibri — A5',
+  largeur: 148, hauteur: 210, fond_perdu: null, dos_publie: false,
+  papiers: [{ cle: 'mesure', libelle: 'Dos relevé sur le gabarit' }],
+};
+
 /** Un atelier qui compose, pour partir d'un pied qui porte un dos. */
-function atelierCompose(liste) {
+function atelierCompose(liste, composition = COMPOSITION) {
   const a = atelier();
   return async (cmd, args) => {
     if (cmd === 'providers_liste') return liste;
-    if (cmd === 'composer') return COMPOSITION;
+    if (cmd === 'composer') return composition;
     return a.invoke(cmd, args);
   };
 }
 
+/**
+ * Les deux causes que le pied porte lui-même : le prestataire qu'il nomme, et le papier
+ * qui périme le dos sans rien changer d'autre à l'écran. Un pied qui ne repart pas sur
+ * ces gestes-là dit un dos qui vaut pour un autre livre que celui qu'on regarde.
+ */
 test('changer de prestataire renomme le pied et lui retire le dos', async () => {
-  const { els } = await charge({ invoke: atelierCompose([LULU, AUTRE]) });
+  const { els } = await charge({ invoke: atelierCompose([LULU, KDP]) });
   await els.get('btNouveau').declenche('click');
   await els.get('btComposer').declenche('click');
   assert.match(els.get('piedPrestataire').textContent, /dos 16,5 mm/);
@@ -389,7 +396,7 @@ test('changer de prestataire renomme le pied et lui retire le dos', async () => 
 });
 
 test('changer de papier retire le dos du pied', async () => {
-  const { els } = await charge({ invoke: atelierCompose([AUTRE]) });
+  const { els } = await charge({ invoke: atelierCompose([KDP]) });
   await els.get('btNouveau').declenche('click');
   await els.get('btComposer').declenche('click');
   assert.match(els.get('piedPrestataire').textContent, /dos 16,5 mm/);
@@ -399,6 +406,24 @@ test('changer de papier retire le dos du pied', async () => {
 
   assert.equal(els.get('piedPrestataire').textContent,
     'Vu pour : Amazon KDP — 6 × 9 po · dos non composé');
+});
+
+/**
+ * Chez un prestataire à gabarit, le dos ne se calcule pas : il se relève. La composition
+ * a beau aboutir — 262 pages s'affichent au-dessus — elle ne rend aucun dos, et rien de
+ * ce qu'on ferait ensuite n'en produirait un. « Non composé » enverrait recomposer en
+ * boucle un livre dont la pagination est déjà juste.
+ */
+test('chez un prestataire à gabarit, le pied ne réclame pas une composition', async () => {
+  const { els } = await charge({
+    invoke: atelierCompose([COOLLIBRI], { ...COMPOSITION, dos: null }),
+  });
+  await els.get('btNouveau').declenche('click');
+
+  await els.get('btComposer').declenche('click');
+
+  assert.equal(els.get('piedPrestataire').textContent,
+    'Vu pour : CoolLibri — A5 · dos relevé sur le gabarit');
 });
 
 /**
