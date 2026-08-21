@@ -104,7 +104,16 @@ h1 {
 main {
   padding: 0 2rem;
   min-height: 0;
-  overflow: hidden;
+  /* Le filet est ici, sur la bande, et non sur les étapes — pour une raison mesurée :
+     un flux en colonnes ne peut pas être à la fois ce qui coule et ce qui défile.
+     Contraint en hauteur, il n'ouvre pas d'ascenseur vertical, il ouvre des colonnes
+     de débordement vers la droite : l'étape Épreuve passait hors écran derrière une
+     barre horizontale. La bande défile donc, et le flux reste libre de sa hauteur.
+     L'`auto` n'est pas un ascenseur offert, c'est un filet : un contrôle qu'on ne peut
+     plus atteindre est un piège, et une barre qui apparaît est un défaut de mise en
+     page qui se voit. Si elle apparaît, c'est la mise en page qu'on corrige, pas le
+     filet qu'on garde. */
+  overflow-y: auto;
 }
 
 /* Une seule étape est montrée à la fois : elle prend toute la bande. `min-height: 0`
@@ -112,41 +121,52 @@ main {
    le pied hors de l'écran. */
 .etape, #accueil { height: 100%; min-height: 0; }
 
-/* Ces trois-là tiennent dans la fenêtre, et doivent continuer à y tenir : l'`auto`
-   n'est pas un ascenseur offert, c'est un filet. Un contrôle qu'on ne peut plus
-   atteindre est un piège ; une barre qui apparaît est un défaut de mise en page qui
-   se voit. Si elle apparaît, c'est la mise en page qu'on corrige, pas le filet qu'on
-   garde. */
-#accueil, #etapeLivre, #etapeInterieur { overflow-y: auto; }
-
 /* L'accueil n'offre que trois boutons et une liste : il garde la largeur d'une
    colonne de lecture. */
 #accueil { max-width: 46rem; }
 
-/* Les blocs se rangent côte à côte plutôt que de s'empiler : c'est la hauteur qui
-   manque à la fenêtre, jamais la largeur, et une colonne unique de 46rem laissait la
-   moitié de l'écran vide en réclamant un ascenseur pour le reste. Chaque colonne garde
-   la largeur d'une ligne lisible ; c'est leur nombre qui suit la fenêtre.
-   Deux colonnes réclament 848 px de fenêtre — 2 × 23rem, plus les 3rem de gouttière,
-   plus les 2 × 2rem de `main` — et `minWidth` en donne 900 dans `tauri.conf.json` :
-   il reste 52 px. Qui touche au `gap`, au `minmax` ou au `padding` de `main` dépense
-   sur ces 52 px-là, et retomber à une colonne à la taille minimale, c'est l'ascenseur
-   qui revient. */
+/* Les blocs coulent en colonnes au lieu de se ranger en grille. C'est la hauteur qui
+   manque à la fenêtre, jamais la largeur : une colonne unique de 46rem laissait la
+   moitié de l'écran vide en réclamant un ascenseur pour le reste. Mais la grille
+   alignait ses rangées, et Intérieur partageait la sienne avec Prestataire, alourdi de
+   son bloc de résultat : trois cents pixels de vide à gauche pendant que la droite
+   débordait, et Épreuve renvoyée à la rangée suivante au lieu de remonter dans ce
+   vide. Un flux, lui, remplit une colonne avant d'ouvrir la suivante — il rend
+   exactement la place que la grille gaspillait.
+   Deux colonnes réclament 848 px de fenêtre : 2 × `column-width`, plus le
+   `column-gap`, plus les 2 × 2rem de `main`. `minWidth` en donne 900 dans
+   `tauri.conf.json` — il reste 52 px, et qui touche à l'un de ces trois-là dépense
+   dessus. Retomber à une colonne à la taille minimale, c'est l'ascenseur qui revient.
+   Le rembourrage est compté aussi serré, et pour la même raison : l'étape Intérieur
+   composée demande 589 px, la fenêtre par défaut (1040 × 780) en offre 563, et c'est
+   en resserrant ici qu'elle tient — avec moins de dix pixels de marge. Une ligne de
+   plus au bloc de résultat, ou un chemin de PDF qui se replie une fois de plus, la
+   rouvre.
+   Ce qu'elle ne rattrape pas, et qui est assumé : à 900 × 640, l'étape Intérieur
+   composée déborde encore, et c'est le filet de `main` qui la reprend. La compaction
+   du bloc de résultat part au lot 4 ; cet ascenseur-là s'en ira avec elle. */
 #etapeLivre, #etapeInterieur {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(23rem, 1fr));
-  align-content: start;
-  gap: 1.8rem 3rem;
-  padding: 1.2rem 0 .4rem;
+  columns: 23rem;
+  column-gap: 3rem;
+  /* Seule des quatre étapes à ne pas prendre la hauteur de la bande : un flux doit
+     rester libre de la sienne pour équilibrer ses colonnes. C'est `main` qui rattrape
+     ce qui dépasse. */
+  height: auto;
+  padding: .5rem 0 0;
   max-width: 74rem;
 }
 
-/* Le filet qui séparait deux blocs empilés ne veut plus rien dire une fois les blocs
-   rangés en colonnes : il ne courrait que sous la première, au hasard de l'ordre du
-   balisage. C'est le blanc entre les colonnes qui sépare désormais — et le rembourrage
-   que les blocs portaient pour dégager ce filet se paie en double dans une colonne,
-   les huit pixels qui manquaient encore à l'étape Intérieur pour tenir. */
-#etapeLivre > .bloc, #etapeInterieur > .bloc { padding: 0; border-bottom: none; }
+/* Un bloc coupé en deux par une fin de colonne est pire que l'ascenseur qu'on
+   supprime : on relirait la moitié d'un formulaire à côté de l'autre.
+   Le filet qui les séparait quand ils s'empilaient ne veut plus rien dire une fois
+   qu'ils coulent en colonnes — il ne courrait que sous la première, au hasard de
+   l'ordre du balisage. C'est le blanc qui sépare désormais. */
+#etapeLivre > .bloc, #etapeInterieur > .bloc {
+  break-inside: avoid;
+  padding: 0;
+  margin-bottom: 1rem;
+  border-bottom: none;
+}
 
 /* L'étape Couverture donne sa hauteur au panneau : un bloc de réglages en haut, la
    couverture et son panneau dessous. */
