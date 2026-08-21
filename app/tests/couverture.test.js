@@ -10,7 +10,8 @@ const IDS = [
   'secLivre', 'secManuscrit', 'secCouverture', 'secComposer',
   'inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright', 'inChapitres',
   'etatManuscrit', 'sourceManuscrit', 'btReimporter', 'btChoisirManuscrit',
-  'etatImages', 'maquettes', 'etatCouverture', 'faces', 'apercu', 'etatApercu',
+  'etatImages', 'btImageUne', 'btImageQuatre',
+  'maquettes', 'etatCouverture', 'faces', 'apercu', 'etatApercu',
   'reglages',
   'inProvider', 'inPapier', 'noteFormat',
   'btComposer', 'etat', 'resultat',
@@ -107,8 +108,13 @@ function projet(couverture) {
   };
 }
 
-/** Contexte prêt : un projet ouvert, avec la maquette donnée. */
-async function ouvre(couverture, sur = {}) {
+/**
+ * Contexte prêt : un projet ouvert, avec la maquette donnée.
+ *
+ * `dialogues` fournit ce que rendront les sélecteurs de fichier ouverts ensuite, dans
+ * l'ordre ; une fois la liste épuisée, le sélecteur est réputé annulé.
+ */
+async function ouvre(couverture, sur = {}, dialogues = []) {
   const appels = [];
   const invoke = async (cmd, args) => {
     appels.push([cmd, args]);
@@ -129,7 +135,8 @@ async function ouvre(couverture, sur = {}) {
     if (cmd === 'couverture_apercu') return 'data:image/png;base64,QUJD';
     throw new Error(`commande inattendue : ${cmd}`);
   };
-  const ctx = await charge({ ids: IDS, invoke, open: async () => '/livres/LHC.ozalid' });
+  const file = ['/livres/LHC.ozalid', ...dialogues];
+  const ctx = await charge({ ids: IDS, invoke, open: async () => file.shift() ?? null });
   await ctx.els.get('btOuvrir').declenche('click');
   return { ...ctx, appels };
 }
@@ -279,6 +286,31 @@ test('un nombre tapé hors des bornes du schéma y est ramené', async () => {
   marge.value = '-8';
   await marge.declenche('change');
   assert.strictEqual(recue.pad_x, 0, 'minimum du schéma franchi');
+});
+
+/* ---------- photos ---------- */
+
+/**
+ * La photo entre dans le projet par la face qu'elle sert, et non par le nom du fichier
+ * choisi : c'est ce rôle que la composition relira, et lui seul.
+ */
+test('choisir une photo la pose sur la face demandée', async () => {
+  let recu = null;
+  const { els } = await ouvre(maquette(), {
+    image_choisir: (args) => {
+      recu = args;
+      return projet(maquette());
+    },
+  }, ['/photos/fumee.jpg']);
+
+  await els.get('btImageQuatre').declenche('click');
+  assert.deepStrictEqual({ ...recu }, { face: 'quatre', chemin: '/photos/fumee.jpg' });
+});
+
+test('un sélecteur de photo annulé ne touche pas au projet', async () => {
+  const { els, appels } = await ouvre(maquette());
+  await els.get('btImageUne').declenche('click');
+  assert.ok(!appels.some(([c]) => c === 'image_choisir'), 'photo posée sans fichier');
 });
 
 /* ---------- aperçu ---------- */

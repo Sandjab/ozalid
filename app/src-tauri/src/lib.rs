@@ -32,6 +32,7 @@ pub fn run() {
             commands::epreuve_tirer,
             commands::maquette_choisir,
             commands::couverture_modifier,
+            commands::image_choisir,
             commands::couverture_apercu,
             commands::composer,
             commands::packager

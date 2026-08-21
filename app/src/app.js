@@ -223,6 +223,23 @@ async function majInterieur() {
 
 /* ---------- couverture ---------- */
 
+/**
+ * Remplace la photo d'une face.
+ *
+ * Une seule par face, et c'est le projet qui la porte : la photo est copiée dans le
+ * `.ozalid` comme le manuscrit, et le chemin d'où elle vient n'a plus à exister pour
+ * que la couverture se compose.
+ */
+async function choisirImage(face) {
+  const chemin = await open({
+    multiple: false,
+    filters: [{ name: 'Photo de couverture', extensions: ['jpg', 'jpeg', 'png'] }],
+  });
+  if (!chemin) return;
+  await tente(async () =>
+    afficherProjet(await invoke('image_choisir', { face, chemin })));
+}
+
 /** Un contrôle du schéma. Son id porte le chemin, ce qui suffit à le relire. */
 function controle(c) {
   let el;
@@ -586,6 +603,8 @@ $('btImporter').addEventListener('click', importer);
 $('btEnregistrer').addEventListener('click', enregistrer);
 $('btReimporter').addEventListener('click', reimporter);
 $('btChoisirManuscrit').addEventListener('click', choisirManuscrit);
+$('btImageUne').addEventListener('click', () => choisirImage('une'));
+$('btImageQuatre').addEventListener('click', () => choisirImage('quatre'));
 $('btComposer').addEventListener('click', composer);
 $('btPackager').addEventListener('click', packager);
 $('btEpreuve').addEventListener('click', epreuve);

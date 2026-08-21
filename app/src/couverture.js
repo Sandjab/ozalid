@@ -15,6 +15,24 @@
 
 const CASSES = [['telle', 'Telle quelle'], ['capitales', 'Capitales']];
 
+/** Les voiles de lisibilité, offerts partout où une image passe sous du texte. */
+const VOILES = [
+  ['aucun', 'Aucun'], ['haut', 'Haut'], ['bas', 'Bas'], ['deux', 'Haut et bas'],
+  ['uni', 'Uni sombre'], ['clair', 'Uni clair'],
+];
+
+/** Les cinq réglages d'un cadrage d'image, sous un préfixe de chemin donné. */
+function cadrage(prefixe) {
+  const c = (suffixe, l, reste) => ({ chemin: `${prefixe}.${suffixe}`, libelle: l, ...reste });
+  return [
+    c('proportions', 'Proportions conservées', { type: 'case' }),
+    c('x', 'Ancrage horizontal', { type: 'nombre', min: 0, max: 1, pas: 0.01 }),
+    c('y', 'Ancrage vertical', { type: 'nombre', min: 0, max: 1, pas: 0.01 }),
+    c('zoom', 'Zoom', { type: 'nombre', min: 0.2, max: 4, pas: 0.01 }),
+    c('etirement', 'Déformation', { type: 'nombre', min: 0.5, max: 2, pas: 0.01 }),
+  ];
+}
+
 /** Les six contrôles d'un style de texte, sous un préfixe de chemin donné. */
 function style(prefixe, libelle, opts = {}) {
   const c = (suffixe, l, reste) => ({ chemin: `${prefixe}.${suffixe}`, libelle: l, ...reste });
@@ -133,17 +151,8 @@ const SCHEMA = [
     titre: 'Image',
     modes: ['bandeau', 'surimpression'],
     champs: [
-      { chemin: 'cadrage.proportions', libelle: 'Proportions conservées', type: 'case' },
-      { chemin: 'cadrage.x', libelle: 'Ancrage horizontal', type: 'nombre', min: 0, max: 1, pas: 0.01 },
-      { chemin: 'cadrage.y', libelle: 'Ancrage vertical', type: 'nombre', min: 0, max: 1, pas: 0.01 },
-      { chemin: 'cadrage.zoom', libelle: 'Zoom', type: 'nombre', min: 0.2, max: 4, pas: 0.01 },
-      { chemin: 'cadrage.etirement', libelle: 'Déformation', type: 'nombre', min: 0.5, max: 2, pas: 0.01 },
-      {
-        chemin: 'voile', libelle: 'Voile de lisibilité', type: 'liste', options: [
-          ['aucun', 'Aucun'], ['haut', 'Haut'], ['bas', 'Bas'], ['deux', 'Haut et bas'],
-          ['uni', 'Uni sombre'], ['clair', 'Uni clair'],
-        ],
-      },
+      ...cadrage('cadrage'),
+      { chemin: 'voile', libelle: 'Voile de lisibilité', type: 'liste', options: VOILES },
       { chemin: 'voile_opacite', libelle: 'Opacité du voile', type: 'nombre', min: 0, max: 1, pas: 0.01 },
     ],
   },
@@ -170,6 +179,19 @@ const SCHEMA = [
     ],
   },
   { ...style('quatrieme.style', '4ème — style du texte', { casse: false }), face: 'quatre' },
+  {
+    // La 4ème a son image, son cadrage et son voile, distincts de ceux de la 1ère :
+    // les deux faces ne montrent pas la même chose et ne se recadrent pas ensemble.
+    // Offerts sans condition, comme la zone ISBN : le fond qui les emploie se change
+    // juste au-dessus, et un panneau qui apparaît et disparaît se cherche.
+    titre: '4ème — image et voile',
+    face: 'quatre',
+    champs: [
+      ...cadrage('quatrieme.cadrage'),
+      { chemin: 'quatrieme.voile', libelle: 'Voile de lisibilité', type: 'liste', options: VOILES },
+      { chemin: 'quatrieme.voile_opacite', libelle: 'Opacité du voile', type: 'nombre', min: 0, max: 1, pas: 0.01 },
+    ],
+  },
   {
     // Le dos n'a pas de contrôle de largeur : elle vient de la pagination. C'est le
     // seul réglage de la maquette que l'utilisateur ne peut pas toucher, et c'est
@@ -202,6 +224,7 @@ const SCHEMA = [
       { chemin: 'quatrieme.isbn_dy', libelle: 'Décalage vertical', type: 'nombre', min: 0, max: 30, pas: 0.5, unite: '% larg.' },
     ],
   },
+  { ...style('quatrieme.style_pied', '4ème — style du pied', { casse: false }), face: 'quatre' },
 ];
 
 /** Groupes du schéma, chaque `avant`/`apres` replié dans la liste des champs. */

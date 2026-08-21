@@ -124,6 +124,16 @@ pub fn assembler(
     })
 }
 
+/// Quelle face une image sert : c'est son nom qui le dit, et rien d'autre.
+///
+/// Le projet embarque ses images à plat, sans champ qui leur donnerait un rôle : la
+/// convention de nom est donc la seule règle, et elle vaut aussi bien pour l'image
+/// importée d'un ancien répertoire de travail que pour celle qu'on choisit dans
+/// l'application.
+pub fn sert_la_quatrieme(nom: &str) -> bool {
+    nom.starts_with("quatrieme")
+}
+
 /// Écrit les images du projet à côté des sources, et rend leurs descriptions.
 /// Typst lit ses images par chemin relatif, comme n'importe quel document.
 pub fn ecrire_images(
@@ -135,7 +145,7 @@ pub fn ecrire_images(
         std::fs::write(dossier.join(nom), octets).map_err(|e| format!("{nom} : {e}"))?;
         let r = Ressource::depuis(nom, octets)
             .ok_or_else(|| format!("{nom} : dimensions illisibles (ni PNG ni JPEG)."))?;
-        if nom.starts_with("quatrieme") {
+        if sert_la_quatrieme(nom) {
             quatre = Some(r);
         } else {
             une = Some(r);

@@ -2,6 +2,7 @@
 //! les modules, tiennent le projet ouvert et traduisent les erreurs en messages
 //! affichables.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -326,6 +327,57 @@ pub fn couverture_modifier(
     vue(o)
 }
 
+/// Nom sous lequel une image entre dans le projet, selon la face qu'elle sert.
+///
+/// Le nom porte le rôle — c'est ainsi que la composition le lit — et l'extension
+/// vient du fichier choisi, parce que Typst distingue le PNG du JPEG.
+fn nom_image(face: &str, ext: &str) -> Result<String, String> {
+    match face {
+        "une" => Ok(format!("couverture.{ext}")),
+        "quatre" => Ok(format!("quatrieme.{ext}")),
+        autre => Err(format!("face inconnue : {autre}")),
+    }
+}
+
+/// Remplace l'image d'une face par un fichier choisi.
+///
+/// Le projet est auto-portant : l'image y est copiée, comme le manuscrit. Elle est
+/// refusée ici plutôt qu'à la composition — une image dont Typst ne saura rien faire
+/// n'a pas à entrer dans un `.ozalid` qui l'emporterait partout ensuite.
+#[tauri::command]
+pub fn image_choisir(
+    face: String,
+    chemin: String,
+    atelier: State<Atelier>,
+) -> Result<ProjetVue, String> {
+    let source = Path::new(&chemin);
+    let ext = source
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .filter(|e| matches!(e.as_str(), "jpg" | "jpeg" | "png"))
+        .ok_or("image refusée : seuls le JPEG et le PNG se composent.")?;
+    let nom = nom_image(&face, &ext)?;
+    let octets = std::fs::read(source).map_err(|e| format!("image illisible : {e}"))?;
+    Ressource::depuis(&nom, &octets)
+        .ok_or_else(|| format!("{nom} : dimensions illisibles (ni PNG ni JPEG)."))?;
+
+    let mut garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_mut().ok_or_else(aucun_projet)?;
+    poser_image(&mut o.projet.images, nom, octets);
+    vue(o)
+}
+
+/// Pose l'image d'une face et retire celle qui tenait déjà ce rôle.
+///
+/// Le remplacement se fait par rôle, pas par nom : une image importée s'appelle comme
+/// elle veut, et deux images qui servent la même face laisseraient l'ordre alphabétique
+/// décider laquelle se compose.
+fn poser_image(images: &mut BTreeMap<String, Vec<u8>>, nom: String, octets: Vec<u8>) {
+    let quatre = package::sert_la_quatrieme(&nom);
+    images.retain(|n, _| package::sert_la_quatrieme(n) != quatre);
+    images.insert(nom, octets);
+}
+
 /// Aperçu d'une face de couverture ou de la planche entière, en PNG encodé dans une
 /// URL `data:`.
 ///
@@ -633,5 +685,40 @@ mod tests {
         assert_eq!(choix[1].provider_cle, "coollibri-148x210");
         assert_eq!(choix[1].dos_mm, Some(18.4));
         assert_eq!(choix[1].fond_perdu_mm, Some(4.0));
+    }
+
+    /// Choisir l'image d'une face remplace celle qui s'y composait, quel que soit le
+    /// nom qu'elle portait — un projet importé nomme ses photos comme il l'entend — et
+    /// laisse l'autre face intacte.
+    #[test]
+    fn une_face_ne_garde_qu_une_image() {
+        let mut images = BTreeMap::from([
+            ("photo.jpg".to_string(), vec![1]),
+            ("quatrieme.jpg".to_string(), vec![2]),
+        ]);
+
+        poser_image(&mut images, "couverture.png".into(), vec![3]);
+        assert_eq!(
+            images.keys().collect::<Vec<_>>(),
+            ["couverture.png", "quatrieme.jpg"],
+            "l'image de 1ère n'a pas été remplacée, ou la 4ème a été emportée"
+        );
+
+        poser_image(&mut images, "quatrieme.png".into(), vec![4]);
+        assert_eq!(
+            images.keys().collect::<Vec<_>>(),
+            ["couverture.png", "quatrieme.png"]
+        );
+    }
+
+    /// Le nom porte le rôle : c'est tout ce que la composition lit pour savoir quelle
+    /// face une image sert.
+    #[test]
+    fn le_nom_d_une_image_dit_la_face_qu_elle_sert() {
+        assert_eq!(nom_image("une", "jpg").unwrap(), "couverture.jpg");
+        assert_eq!(nom_image("quatre", "png").unwrap(), "quatrieme.png");
+        assert!(package::sert_la_quatrieme(&nom_image("quatre", "png").unwrap()));
+        assert!(!package::sert_la_quatrieme(&nom_image("une", "png").unwrap()));
+        assert!(nom_image("planche", "png").is_err());
     }
 }
