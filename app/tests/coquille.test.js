@@ -141,10 +141,19 @@ test('ouvrir un autre projet ramène à la première étape', async () => {
   assert.deepEqual(montree(els), ['livre']);
 });
 
-test('fermer le projet rend l\'accueil et éteint les onglets', async () => {
+test('fermer le projet rend l\'accueil, éteint les onglets et efface l\'alerte', async () => {
   const a = atelier();
-  const { els, menu } = await charge({ invoke: a.invoke });
+  const invoke = async (cmd, args) => {
+    if (cmd === 'livre_modifier') throw new Error('titre vide');
+    return a.invoke(cmd, args);
+  };
+  const { els, menu } = await charge({ invoke });
   await els.get('btNouveau').declenche('click');
+  // Une erreur laissée en attente : « Fermer » ne passe pas par `tente()`, et c'est
+  // `oublierLesSorties` qui doit la ramasser. Le message appartenait au livre qu'on
+  // vient de fermer ; l'accueil le donnerait à lire comme le sien.
+  await els.get('inTitre').declenche('change');
+  assert.match(els.get('alerte').textContent, /titre vide/);
 
   await menu('fichier.fermer');
 
@@ -152,6 +161,7 @@ test('fermer le projet rend l\'accueil et éteint les onglets', async () => {
   assert.deepEqual(montree(els), []);
   assert.equal(els.get('onglet-livre').disabled, true);
   assert.equal(els.get('titreLivre').textContent, 'Ozalid Studio');
+  assert.equal(els.get('alerte').textContent, '');
 });
 
 /**
@@ -195,6 +205,43 @@ test('un geste réussi efface l\'erreur du précédent', async () => {
   assert.equal(els.get('alerte').textContent, '');
   assert.equal(els.get('alerte').className, 'etat');
 });
+
+/**
+ * Les deux gestes d'enregistrement écrivent dans l'entête sans passer par `tente()` :
+ * à eux d'effacer ce qu'ils y ont mis. Un « disque plein » laissé en place après le
+ * ⌘S qui a fini par aboutir dit le contraire de ce qui vient de se passer.
+ *
+ * Les deux, et non le seul premier : « Enregistrer sous… » a son entrée de menu propre
+ * et ne passe pas toujours par « Enregistrer ». Une ardoise qu'un seul des deux nettoie
+ * est une ardoise sale un jour sur deux.
+ */
+for (const [libelle, entree, commande] of [
+  ['Enregistrer', 'fichier.enregistrer', 'projet_enregistrer'],
+  ['Enregistrer sous…', 'fichier.enregistrer_sous', 'projet_enregistrer_sous'],
+]) {
+  test(`« ${libelle} » qui aboutit efface l'échec du précédent`, async () => {
+    const a = atelier();
+    let refuse = true;
+    const invoke = async (cmd, args) => {
+      if (cmd === commande && refuse) throw new Error('disque plein');
+      return a.invoke(cmd, args);
+    };
+    const { els, menu } = await charge({
+      invoke,
+      save: async () => '/livres/LHC.ozalid',
+    });
+    await els.get('btNouveau').declenche('click');   // un projet qui a déjà un chemin
+
+    await menu(entree);
+    assert.match(els.get('alerte').textContent, /disque plein/);
+
+    refuse = false;
+    await menu(entree);
+
+    assert.equal(els.get('alerte').textContent, '');
+    assert.equal(els.get('alerte').className, 'etat');
+  });
+}
 
 /**
  * Un démarrage qui échoue n'affiche jamais de projet, donc ne repasse jamais par ce qui

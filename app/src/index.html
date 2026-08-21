@@ -14,7 +14,9 @@
   </div>
   <div class="etats">
     <p class="etat" id="etatEnregistrement"></p>
-    <p class="etat" id="alerte"></p>
+    <!-- Le refus d'une saisie laisse le focus dans le champ refusé : sans `aria-live`,
+         l'erreur s'écrirait à l'autre bout de l'écran sans que rien ne l'annonce. -->
+    <p class="etat" id="alerte" aria-live="polite"></p>
   </div>
 </header>
 

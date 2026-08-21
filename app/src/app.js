@@ -104,6 +104,14 @@ function majEtapes() {
  *
  * Une erreur de la Livraison doit se lire depuis le Livre : elle ne peut donc pas vivre
  * dans une section que le changement d'étape emporte.
+ *
+ * Tout ne monte pas ici, et c'est voulu : ce qui refuse une saisie monte, parce que le
+ * geste est fini avant qu'on ait bougé et que le message doit survivre au changement
+ * d'étape. Ce qui rend compte d'un travail long — composer, tirer une épreuve, générer
+ * les packages — reste dans `#etat`, `#etatEpreuve`, `#etatPackages`, à côté du bouton
+ * qui l'a lancé : on attend là où l'on a cliqué, et un compte rendu qui migre en haut
+ * de l'écran se lit comme une panne. Faire remonter le reste ici par symétrie ferait
+ * perdre cette différence.
  */
 function alerter(message) {
   $('alerte').textContent = message;
@@ -295,9 +303,12 @@ async function garde() {
 
 /** Enregistre en place si le projet a un chemin, sinon demande où. Rend vrai si écrit. */
 async function enregistrerQuelquePart() {
-  // Les boutons sont grisés sans projet ; le menu, lui, ne l'est pas. C'est ici
-  // que la protection doit vivre, puisque les deux chemins s'y rejoignent.
+  // Enregistrer n'est plus qu'un geste de menu, et le menu offre toujours ses entrées
+  // sans savoir si un projet est ouvert : c'est ici que la protection doit vivre.
   if (!projet) return false;
+  // Ce geste-là n'entre pas dans `tente()` : à lui d'ouvrir sur une ardoise propre,
+  // faute de quoi l'échec d'un premier ⌘S survivrait au second, qui a abouti.
+  alerter('');
   if (projet.chemin) {
     try {
       afficherProjet(await invoke('projet_enregistrer'));
@@ -361,8 +372,10 @@ async function importer() {
 
 /** « Enregistrer sous… » : demande où poser le projet. Rend vrai si écrit. */
 async function enregistrerSous() {
-  // Le menu y mène directement, sans passer par « Enregistrer » : la garde s'y répète.
+  // Le menu y mène directement, sans passer par « Enregistrer » : la garde s'y répète,
+  // et l'ardoise propre avec elle.
   if (!projet) return false;
+  alerter('');
   const choix = await save({
     defaultPath: `${projet.livre.titre || 'projet'}.ozalid`,
     filters: [{ name: 'Projet Ozalid', extensions: ['ozalid'] }],
