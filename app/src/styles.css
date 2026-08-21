@@ -127,9 +127,12 @@ main {
    manque à la fenêtre, jamais la largeur, et une colonne unique de 46rem laissait la
    moitié de l'écran vide en réclamant un ascenseur pour le reste. Chaque colonne garde
    la largeur d'une ligne lisible ; c'est leur nombre qui suit la fenêtre.
-   Le `display` est conditionné à `:not([hidden])` pour la même raison que l'étape
-   Couverture : un identifiant l'emporterait sur la dernière règle du fichier. */
-#etapeLivre:not([hidden]), #etapeInterieur:not([hidden]) {
+   Deux colonnes réclament 848 px de fenêtre — 2 × 23rem, plus les 3rem de gouttière,
+   plus les 2 × 2rem de `main` — et `minWidth` en donne 900 dans `tauri.conf.json` :
+   il reste 52 px. Qui touche au `gap`, au `minmax` ou au `padding` de `main` dépense
+   sur ces 52 px-là, et retomber à une colonne à la taille minimale, c'est l'ascenseur
+   qui revient. */
+#etapeLivre, #etapeInterieur {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(23rem, 1fr));
   align-content: start;
@@ -146,13 +149,8 @@ main {
 #etapeLivre > .bloc, #etapeInterieur > .bloc { padding: 0; border-bottom: none; }
 
 /* L'étape Couverture donne sa hauteur au panneau : un bloc de réglages en haut, la
-   couverture et son panneau dessous.
-   Le `display` est conditionné à `:not([hidden])` et non posé sec : un sélecteur
-   d'identifiant l'emporterait sur la dernière règle du fichier, et l'étape resterait
-   affichée en permanence — c'est précisément le piège que cette dernière règle
-   documente, vu à l'écran sous la forme de la Couverture servie sous l'onglet
-   Livraison. */
-#etapeCouverture:not([hidden]) {
+   couverture et son panneau dessous. */
+#etapeCouverture {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
 }
@@ -375,9 +373,16 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
 
 /* ---------- masquage ---------- */
 
-/* Dernière règle du fichier, et il faut qu'elle le reste : `hidden` est le seul
-   moyen par lequel le code fait disparaître quelque chose, et tout `display` posé
-   ici — `label`, `.ligne`, `.releve` — l'emporterait sinon sur la feuille du
-   navigateur. Un réglage sans objet resterait alors offert, ce qui est le piège que
-   le masquage existe pour éviter. */
-[hidden] { display: none; }
+/* `hidden` est le seul moyen par lequel le code fait disparaître quelque chose : un
+   réglage sans objet qui resterait offert est le piège que ce masquage existe pour
+   éviter.
+   L'`!important` n'est pas une facilité, c'est le seul endroit du fichier où il se
+   justifie : la feuille a déjà battu cette règle deux fois par accident. Une fois pour
+   de bon — `#etapeCouverture { display: grid }`, un identifiant qui l'emportait sur
+   `[hidden]` et servait la Couverture sous l'onglet Livraison. Une fois en germe —
+   `.releve .petit { display: grid }`, à 0-2-0, inoffensif tant que rien ne masque un
+   relevé, et armé le jour où la liste des prestataires se réduira aux destinataires du
+   livre. La règle cesse ainsi de dépendre de sa position dans le fichier et de la
+   spécificité de tous les autres sélecteurs : c'est le rappel des deux fois qui doit
+   empêcher la troisième. */
+[hidden] { display: none !important; }
