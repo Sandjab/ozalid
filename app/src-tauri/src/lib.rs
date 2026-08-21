@@ -9,6 +9,7 @@ pub mod maquettes;
 pub mod package;
 pub mod planche;
 pub mod png;
+pub mod preferences;
 pub mod projet;
 pub mod providers;
 pub mod typst;
