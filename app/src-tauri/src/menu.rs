@@ -10,7 +10,7 @@
 //! saisie. Il en va de même du menu applicatif de macOS.
 
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Manager};
 
 use crate::preferences;
 
@@ -21,6 +21,9 @@ pub const EVENEMENT: &str = "menu";
 /// Préfixe des entrées « Ouvrir un récent ». Ce qui suit est le chemin du projet :
 /// l'identifiant transporte la donnée, ce qui évite de tenir un index en parallèle
 /// du menu.
+///
+/// Le consommateur doit **retirer le préfixe** (`strip_prefix`), jamais découper sur
+/// `:` — un chemin peut en contenir un, et la casse serait rare et silencieuse.
 pub const RECENT: &str = "fichier.recent:";
 
 /// Construit le menu et le pose sur l'application.
@@ -28,7 +31,7 @@ pub const RECENT: &str = "fichier.recent:";
 /// Appelée au démarrage, puis à chaque fois que la liste des récents change : le
 /// menu entier est reconstruit plutôt que retouché, parce que reconstruire est sûr
 /// et que ce menu est petit.
-pub fn poser<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+pub fn poser(app: &AppHandle) -> tauri::Result<()> {
     let mut recents = SubmenuBuilder::new(app, "Ouvrir un récent");
     let liste = liste_recents(app);
     if liste.is_empty() {
@@ -134,7 +137,7 @@ pub fn poser<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 
 /// Les récents à porter au sous-menu. Même source que l'écran d'accueil, et même
 /// élagage : un projet effacé n'y figure pas.
-fn liste_recents<R: Runtime>(app: &AppHandle<R>) -> Vec<String> {
+fn liste_recents(app: &AppHandle) -> Vec<String> {
     app.path()
         .app_config_dir()
         .ok()
