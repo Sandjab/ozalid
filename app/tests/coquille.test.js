@@ -172,3 +172,26 @@ test('une erreur s\'affiche dans l\'entête, visible depuis n\'importe quelle é
   assert.match(els.get('alerte').textContent, /titre vide/);
   assert.equal(els.get('alerte').className, 'etat erreur');
 });
+
+/**
+ * L'entête ne disparaît jamais : une erreur qu'on n'y efface pas y reste pour toute la
+ * session, et se lirait comme le compte rendu du geste suivant, qui a réussi.
+ */
+test('un geste réussi efface l\'erreur du précédent', async () => {
+  const a = atelier();
+  let refuse = true;
+  const invoke = async (cmd, args) => {
+    if (cmd === 'livre_modifier' && refuse) throw new Error('titre vide');
+    return a.invoke(cmd, args);
+  };
+  const { els } = await charge({ invoke });
+  await els.get('btNouveau').declenche('click');
+  await els.get('inTitre').declenche('change');
+  assert.match(els.get('alerte').textContent, /titre vide/);
+
+  refuse = false;
+  await els.get('inTitre').declenche('change');
+
+  assert.equal(els.get('alerte').textContent, '');
+  assert.equal(els.get('alerte').className, 'etat');
+});
