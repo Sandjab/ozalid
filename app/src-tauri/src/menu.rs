@@ -127,7 +127,15 @@ pub fn poser(app: &AppHandle) -> tauri::Result<()> {
             .hide_others_with_text("Masquer les autres")
             .show_all_with_text("Tout afficher")
             .separator()
-            .quit_with_text("Quitter Ozalid Studio")
+            // Pas l'item prédéfini `quit` : celui-là envoie `terminate:` directement
+            // au système, qui ne passe jamais par `CloseRequested` — la garde des
+            // modifications ne le verrait pas passer. Une entrée ordinaire, comme
+            // toutes les autres, demande au lieu d'agir.
+            .item(
+                &MenuItemBuilder::with_id("fichier.quitter", "Quitter Ozalid Studio")
+                    .accelerator("CmdOrCtrl+Q")
+                    .build(app)?,
+            )
             .build()?,
     );
     let menu = menu.items(&[&fichier, &edition, &aller]).build()?;

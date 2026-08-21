@@ -251,9 +251,7 @@ pub async fn garde_modifications(
         return Ok("ignorer".into());
     }
 
-    use tauri_plugin_dialog::{
-        DialogExt, MessageDialogButtons, MessageDialogKind, MessageDialogResult,
-    };
+    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
     let reponse = app
         .dialog()
         .message("Ce projet porte des modifications qui ne sont pas enregistrées.")
@@ -266,7 +264,16 @@ pub async fn garde_modifications(
         ))
         .blocking_show_with_result();
 
-    Ok(match reponse {
+    Ok(reponse_garde(reponse).to_string())
+}
+
+/// Ce que le clic de l'utilisateur veut dire.
+///
+/// Séparé de la boîte parce que la boîte ne se simule pas, alors que cette
+/// traduction, elle, se teste — et qu'une erreur ici perdrait du travail.
+fn reponse_garde(r: tauri_plugin_dialog::MessageDialogResult) -> &'static str {
+    use tauri_plugin_dialog::MessageDialogResult;
+    match r {
         MessageDialogResult::Custom(s) if s == ENREGISTRER => "enregistrer",
         MessageDialogResult::Custom(s) if s == IGNORER => "ignorer",
         // Filet : si une plateforme rendait les valeurs canoniques plutôt que les
@@ -276,7 +283,24 @@ pub async fn garde_modifications(
         MessageDialogResult::No => "ignorer",
         _ => "annuler",
     }
-    .to_string())
+}
+
+/// L'interface a-t-elle posé ses écouteurs ?
+///
+/// Tant qu'elle ne l'a pas fait, retenir la fermeture rendrait l'application
+/// inquittable : personne n'écouterait la demande. Un front qui n'a jamais démarré
+/// n'a rien à perdre non plus — on le laisse donc partir sans question.
+#[derive(Default)]
+pub struct Interface {
+    pub prete: std::sync::atomic::AtomicBool,
+}
+
+/// L'interface annonce qu'elle écoute. Appelée une fois, au chargement.
+#[tauri::command]
+pub fn interface_prete(interface: State<Interface>) {
+    interface
+        .prete
+        .store(true, std::sync::atomic::Ordering::Relaxed);
 }
 
 /// Relit le manuscrit à sa source d'origine et remplace la copie embarquée.
@@ -866,6 +890,22 @@ fn nom_sidecar() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Les libellés des boutons font foi au retour : le plugin rend le texte du
+    /// bouton, pas un `Yes`/`No`. Une comparaison qui dériverait de l'affichage
+    /// enverrait « Enregistrer » sur « ignorer », et le travail serait perdu.
+    #[test]
+    fn la_reponse_de_la_garde_se_lit_par_ses_libelles() {
+        use tauri_plugin_dialog::MessageDialogResult as R;
+        assert_eq!(reponse_garde(R::Custom(ENREGISTRER.into())), "enregistrer");
+        assert_eq!(reponse_garde(R::Custom(IGNORER.into())), "ignorer");
+        assert_eq!(reponse_garde(R::Custom(ANNULER.into())), "annuler");
+        assert_eq!(reponse_garde(R::Yes), "enregistrer");
+        assert_eq!(reponse_garde(R::No), "ignorer");
+        assert_eq!(reponse_garde(R::Cancel), "annuler");
+        // Fermer la boîte sans choisir ne doit rien perdre.
+        assert_eq!(reponse_garde(R::Custom("autre chose".into())), "annuler");
+    }
 
     /// L'interface envoie les prestataires cochés dans un tableau, et Tauri ne
     /// renomme que les arguments d'une commande : si `Choix` cessait de lire les
