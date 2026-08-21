@@ -828,3 +828,40 @@ test('fermer le projet efface les sous-libellés et éteint les témoins', async
     assert.equal(alerte(els, cle), false, `témoin ${cle} survit au projet fermé`);
   }
 });
+
+test('la dédicace saisie part avec le livre', async () => {
+  const a = atelier();
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  els.get('inDedicace').value = 'À M., qui a tenu la lampe.';
+  await els.get('inDedicace').declenche('change');
+
+  const envoi = a.appels.findLast(([c]) => c === 'livre_modifier');
+  assert.ok(envoi, 'aucun livre_modifier : le champ n\'a pas d\'écouteur');
+  assert.equal(envoi[1].livre.dedicace, 'À M., qui a tenu la lampe.');
+});
+
+/**
+ * `livre_modifier` remplace le livre entier, et le champ est facultatif côté Rust : un
+ * livre envoyé sans sa dédicace ne lève rien, il l'efface. Modifier son titre suffirait
+ * donc à la perdre, sans un message et sans que rien ne se voie avant le tirage.
+ */
+test('modifier un autre champ n\'efface pas la dédicace', async () => {
+  const a = atelier({
+    sur: {
+      livre: {
+        titre: 'Les Heures creuses', titre_page: null, auteur: 'Ivan Pjig',
+        genre: 'roman', copyright: '', chapitres: null, dedicace: 'À M.',
+      },
+    },
+  });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  els.get('inTitre').value = 'Les Heures pleines';
+  await els.get('inTitre').declenche('change');
+
+  const envoi = a.appels.findLast(([c]) => c === 'livre_modifier');
+  assert.equal(envoi[1].livre.dedicace, 'À M.', 'la dédicace a été effacée en douce');
+});

@@ -323,6 +323,8 @@ function afficherProjet(p) {
   $('inAuteur').value = p.livre.auteur;
   $('inGenre').value = p.livre.genre;
   $('inCopyright').value = p.livre.copyright;
+  // Le champ est absent du JSON quand le livre n'a pas de dédicace : `skip_serializing_if`.
+  $('inDedicace').value = p.livre.dedicace ?? '';
   $('inChapitres').value = p.livre.chapitres ?? '';
   $('inPoliceInterieur').value = p.interieur.police;
 
@@ -560,15 +562,25 @@ async function enregistrerSous() {
 
 /* ---------- livre et manuscrit ---------- */
 
+/**
+ * Le livre entier, à chaque modification d'un seul de ses champs : `livre_modifier`
+ * remplace ce qu'il tient par ce qu'on lui envoie. Un champ oublié ici n'est pas une
+ * erreur côté Rust, c'est une donnée effacée — la dédicace, facultative, se perdrait
+ * ainsi au premier changement de titre.
+ */
 function livre() {
   const chap = $('inChapitres').value.trim();
   const tp = $('inTitrePage').value.trim();
+  const ded = $('inDedicace').value;
   return {
     titre: $('inTitre').value.trim(),
     titre_page: tp === '' ? null : tp,
     auteur: $('inAuteur').value.trim(),
     genre: $('inGenre').value.trim() || 'roman',
     copyright: $('inCopyright').value,
+    // Non rogné : c'est le Rust qui rogne, en un seul endroit. Le `trim` ne sert ici
+    // qu'à distinguer un champ vide d'un champ renseigné.
+    dedicace: ded.trim() === '' ? null : ded,
     chapitres: chap === '' ? null : Number(chap),
   };
 }
@@ -1185,7 +1197,8 @@ $('btAjouterDestinataire').addEventListener('click', () => tente(async () =>
   }))));
 construireEtapes();
 construireFaces();
-for (const id of ['inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright', 'inChapitres']) {
+for (const id of ['inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright',
+  'inDedicace', 'inChapitres']) {
   $(id).addEventListener('change', majLivre);
 }
 chargerProviders()
