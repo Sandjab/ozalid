@@ -92,8 +92,74 @@ réglages), tout `app/src-tauri/src/` sauf `menu.rs`, `index.html` à la racine 
 
 ## Écarts assumés en cours d'exécution
 
-*(Section à remplir pendant l'exécution, comme au lot 1 : ce qui a divergé du plan et
-pourquoi. La laisser vide si rien n'a divergé.)*
+**Défauts du plan lui-même, découverts à l'exécution de la tâche 2.**
+
+*Le tableau du Step 7 est faux dans ses chiffres.* Ses numéros de ligne sont décalés de
+16 à 45 lignes — il a été écrit avant que la tâche 1 ne retire les listes `IDS` — et ses
+décomptes sont inventés : « 9 sites » de `secLivre.hidden === true` là où le fichier en
+portait 4, « 5 sites » de clics sur les boutons d'enregistrement là où il n'y en avait
+qu'un. Les descriptions, elles, étaient exactes, et c'est sur elles que le travail s'est
+fait. **Un plan qui compte les sites sans les compter vraiment coûte plus qu'il ne
+rapporte : décrire suffit.**
+
+*Une justification du tableau était fausse.* Il prescrivait de supprimer sans
+remplacement deux assertions `disabled` de `composition.test.js` au motif que « le test
+`:191` vérifie déjà » l'état d'enregistrement. Ce test-là ne vérifiait rien de tel.
+Supprimer sec aurait baissé la couverture ; une assertion sur `etatEnregistrement` a été
+ajoutée à la place.
+
+*Le commentaire du test « sans projet, Aller ne montre rien », donné par le plan,
+décrivait deux dangers inexistants* — une étape vide qui se montrerait, une exception qui
+remonterait dans le rappel de `listen`. Ni l'un ni l'autre : `majEtapes()` masque tout
+quand `projet` est nul, et les deux identifiants existent. Réécrit pour dire ce que le
+test vérifie vraiment. La garde d'`allerA()` est bien redondante avec ce masquage, et
+elle est **gardée** pour une raison que le plan n'avait pas vue : dans le faux DOM,
+`declenche('click')` ignore `disabled`, et c'est elle qui rend l'onglet réellement inerte
+côté tests.
+
+**Trous trouvés par mutation, comblés hors plan (tâche 2).**
+
+1. *`tente()` n'effaçait l'alerte que par un chemin non gardé.* Retirer `alerter('')` de
+   `tente()` ne faisait tomber aucun test. Le trou est **neuf** : l'erreur vivait
+   auparavant dans `#etat`, qu'une section masquée emportait ; l'entête, elle, ne
+   disparaît jamais, et une erreur qu'on n'y efface pas se lit comme le compte rendu du
+   geste suivant. Commit `232a873`.
+2. *Les onglets naissaient dans l'état du balisage.* Un `chargerProviders()` en échec
+   n'appelle jamais `afficherAucunProjet`, donc jamais `majEtapes()` : les quatre onglets
+   restaient d'apparence active, et le `tablist` sans onglet sélectionné. `majEtapes()`
+   appelé à la fin de `construireEtapes()`. Commit `af92477`.
+3. *Une erreur d'enregistrement survivait à l'enregistrement qui réussit.*
+   `enregistrerQuelquePart` et `enregistrerSous` sont les deux seules écritures d'alerte
+   hors `tente()` : elles écrivaient l'erreur sans jamais l'effacer. Le comportement
+   préexistait — l'ancien code n'effaçait pas `#etat` non plus — mais la tâche 2 a fait de
+   cette bande le canal unique et permanent. `alerter('')` posé **après** la garde
+   `if (!projet) return false;` dans les deux : un ⌘S inerte n'a pas à effacer un
+   « démarrage impossible » qui dit encore vrai. Commit `83c6d1a`, garde de ce placement
+   en `6685c0a`.
+
+**Décisions prises au-delà du plan (à ne pas « corriger » sans raison).**
+
+- *La règle des deux canaux d'erreur est désormais écrite* au-dessus d'`alerter()` : ce
+  qui refuse une saisie monte à l'entête, parce que le geste est fini et que le message
+  doit survivre au changement d'étape ; ce qui rend compte d'un travail long — composer,
+  tirer une épreuve, générer les packages — reste dans `#etat`, `#etatEpreuve`,
+  `#etatPackages`, à côté du bouton qui l'a lancé. Faire remonter le reste par symétrie
+  ferait perdre la différence.
+- *`aria-live="polite"` sur `#alerte`*, non prévu : le canal d'erreur devenant unique et
+  le focus restant dans le champ refusé, un lecteur d'écran n'annonçait jamais rien.
+  Gardé par un test qui **lit `index.html` au lieu de passer par l'application** —
+  exception assumée et documentée sur place : le faux DOM ne rapporte que la balise,
+  `disabled`, `hidden` et `value`, et l'étendre pour un attribut ferait payer à soixante-dix
+  tests le prix d'un seul.
+
+**Versé à la suite du chantier, non fait ici.**
+
+- *Le pattern d'onglets est incomplet* : pas d'`aria-controls` sur les onglets, pas
+  d'`aria-labelledby` sur les sections, et pas de navigation aux flèches avec un seul
+  onglet dans l'ordre de tabulation. C'est le plan qui l'a écrit ainsi. À reprendre au
+  lot 4, la passe visuelle.
+- *`#etapes button:disabled` est redondant* avec la règle globale `button:disabled`.
+  Gardé par fidélité au Step 4 ; à revoir quand la tâche 5 posera les témoins.
 
 ---
 
