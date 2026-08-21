@@ -27,6 +27,7 @@ const PROJET = {
     destinataires: [{ provider: 'lulu', papier: 'standard', dos_mm: null, fond_perdu_mm: null }],
     courant: 'lulu',
   },
+  envois: { main: { mode: 'police', police: 'Caveat' }, liste: [] },
 };
 
 const invokeMuet = async (cmd) => {
@@ -38,6 +39,7 @@ const invokeMuet = async (cmd) => {
     }];
     case 'polices_liste': return ['Bodoni Moda'];
     case 'polices_texte_liste': return ['EB Garamond'];
+    case 'mains_liste': return ['Caveat', 'Dancing Script'];
     case 'maquettes_liste': return [];
     case 'recents_liste': return [];
     case 'interface_prete': return null;

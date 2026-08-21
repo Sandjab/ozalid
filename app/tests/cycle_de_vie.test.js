@@ -32,6 +32,7 @@ function projet(sur = {}) {
     couverture_importee: false,
     images: [],
     interieur: { police: 'EB Garamond' },
+    envois: { main: { mode: 'police', police: 'Caveat' }, liste: [] },
     livraison: {
       destinataires: [{ provider: 'lulu', papier: 'standard', dos_mm: null, fond_perdu_mm: null }],
       courant: 'lulu',
@@ -49,6 +50,7 @@ function atelier({ garde = 'ignorer', recents = [], sur = {} } = {}) {
       case 'providers_liste': return [LULU];
       case 'polices_liste': return ['Bodoni Moda'];
       case 'polices_texte_liste': return ['EB Garamond'];
+      case 'mains_liste': return ['Caveat', 'Dancing Script'];
       case 'maquettes_liste': return [];
       case 'recents_liste': return recents;
       case 'garde_modifications': return garde;

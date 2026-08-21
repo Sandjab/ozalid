@@ -189,3 +189,119 @@ async function packager() {
     bt.disabled = false;
   }
 }
+
+/* ---------- envois ---------- */
+
+/**
+ * La liste des envois : un dédicataire, son mot, et de quoi le voir ou le retirer.
+ *
+ * Le mot est un `textarea` : un envoi tient en deux ou trois lignes, et un `input` en
+ * cacherait la fin — or c'est précisément ce qui sera imprimé.
+ */
+function afficherEnvois() {
+  const box = $('envois');
+  box.textContent = '';
+  for (const [i, e] of projet.envois.liste.entries()) {
+    const ligne = h('div', undefined, 'destinataire');
+
+    const qui = document.createElement('input');
+    qui.type = 'text';
+    qui.value = e.dedicataire;
+    qui.setAttribute('aria-label', `Dédicataire ${i + 1}`);
+    qui.addEventListener('change', () => reglerEnvoi(i, { dedicataire: qui.value }));
+
+    const mot = document.createElement('textarea');
+    mot.rows = 2;
+    mot.value = e.contenu;
+    mot.setAttribute('aria-label', `Mot pour ${e.dedicataire || 'ce dédicataire'}`);
+    mot.addEventListener('change', () => reglerEnvoi(i, { contenu: mot.value }));
+
+    const voir = h('button', 'Voir la page');
+    voir.type = 'button';
+    voir.addEventListener('click', () => apercuEnvoi(i));
+
+    const retirer = h('button', 'Retirer');
+    retirer.type = 'button';
+    retirer.addEventListener('click', () => envoisModifier(
+      projet.envois.liste.filter((_, n) => n !== i)));
+
+    ligne.append(qui, mot, voir, retirer);
+    box.append(ligne);
+  }
+  $('btEnvoyer').disabled = projet.envois.liste.length === 0;
+}
+
+/** Remplace un envoi par lui-même modifié. */
+function reglerEnvoi(i, sur) {
+  return envoisModifier(
+    projet.envois.liste.map((e, n) => (n === i ? { ...e, ...sur } : e)));
+}
+
+/**
+ * Envoie la liste **et la main** : la commande remplace l'objet entier, et une main
+ * omise reviendrait au défaut — tous les exemplaires changeraient d'écriture sans que
+ * personne ne l'ait demandé.
+ */
+async function envoisModifier(liste) {
+  await tente(async () => afficherProjet(await invoke('envois_modifier', {
+    envois: { main: projet.envois.main, liste },
+  })));
+}
+
+/**
+ * La page de titre de cet envoi, telle qu'elle sera imprimée.
+ *
+ * C'est la seule façon de voir qu'un mot déborde : le compte de pages, lui, ne bougera
+ * pas — c'est tout l'objet du `#place`, et c'est aussi ce qui rend un débordement
+ * silencieux.
+ */
+async function apercuEnvoi(i) {
+  const img = $('apercuEnvoi');
+  await tente(async () => {
+    img.src = await invoke('envoi_apercu', { index: i });
+    img.alt = `Page de titre de l'exemplaire de ${projet.envois.liste[i].dedicataire}`;
+    img.hidden = false;
+  });
+}
+
+async function envoyer() {
+  const bt = $('btEnvoyer');
+  bt.disabled = true;
+  $('resultatEnvois').hidden = true;
+  $('etatEnvois').className = 'etat';
+  $('etatEnvois').textContent = `composition de ${projet.envois.liste.length} envoi(s)…`;
+  try {
+    afficherResultatEnvois(await invoke('envoyer'));
+    $('etatEnvois').textContent = '';
+  } catch (e) {
+    $('etatEnvois').textContent = String(e);
+    $('etatEnvois').className = 'etat erreur';
+  } finally {
+    bt.disabled = false;
+  }
+}
+
+/**
+ * Ce qui a été écrit, pour qui, et où le trouver.
+ *
+ * Le répertoire montré est celui qui a réellement été écrit, assaini : c'est celui-là
+ * qu'il faut ouvrir, et il ne porte pas toujours le nom saisi.
+ */
+function afficherResultatEnvois(resultats) {
+  const box = $('resultatEnvois');
+  box.textContent = '';
+  for (const r of resultats) {
+    const bloc = h('div', undefined, 'package');
+    bloc.append(h('h3', r.dedicataire || 'sans nom'));
+    bloc.append(h('p', `envois/${r.dossier}/ — ${r.package.pages} pages, dos `
+      + `${r.package.dos.toFixed(2)} mm`, 'chemin'));
+    if (r.vignette) {
+      const img = h('img', undefined, 'vignette');
+      img.src = r.vignette;
+      img.alt = `Planche de l'exemplaire de ${r.dedicataire}`;
+      bloc.append(img);
+    }
+    box.append(bloc);
+  }
+  box.hidden = false;
+}

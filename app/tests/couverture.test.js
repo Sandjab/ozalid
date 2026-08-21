@@ -92,6 +92,7 @@ function projet(couverture) {
     couverture_importee: !!couverture,
     images: ['couverture.jpg'],
     interieur: { police: 'Alegreya' },
+    envois: { main: { mode: 'police', police: 'Caveat' }, liste: [] },
     livraison: {
       destinataires: [{ provider: 'lulu', papier: 'standard', dos_mm: null, fond_perdu_mm: null }],
       courant: 'lulu',
@@ -115,6 +116,7 @@ async function ouvre(couverture, sur = {}, dialogues = []) {
     if (cmd === 'providers_liste') return [LULU];
     if (cmd === 'polices_liste') return ['Archivo', 'Spectral', 'Bodoni Moda'];
     if (cmd === 'polices_texte_liste') return ['EB Garamond', 'Alegreya', 'Cardo'];
+    if (cmd === 'mains_liste') return ['Caveat', 'Dancing Script'];
     if (cmd === 'maquettes_liste') {
       return [
         { cle: 'folio', libelle: 'Folio' },

@@ -277,6 +277,9 @@ async function chargerProviders() {
   for (const p of await invoke('polices_texte_liste')) {
     $('inPoliceInterieur').append(new Option(p, p));
   }
+  for (const main of await invoke('mains_liste')) {
+    $('inMain').append(new Option(main, main));
+  }
   for (const m of await invoke('maquettes_liste')) {
     const b = h('button', m.libelle);
     b.type = 'button';
@@ -357,6 +360,7 @@ function afficherProjet(p) {
   $('reglages').hidden = !p.couverture;
   if (p.couverture) afficherCouverture(p.couverture);
   afficherDestinataires();
+  afficherEnvois();
   demanderApercu();
   majPied();
   majEtapes();
@@ -398,19 +402,24 @@ function oublierLesSorties() {
   // regardait. Rester sur la Livraison en ouvrant un autre livre donnerait à lire ses
   // packages sous le titre du nouveau.
   etape = 'livre';
-  for (const id of ['resultat', 'packages']) {
+  for (const id of ['resultat', 'packages', 'resultatEnvois']) {
     $(id).replaceChildren();
     $(id).hidden = true;
   }
   // La liste des destinataires appartient au projet, pas à l'écran : sans projet, elle
   // n'a personne à nommer, et `afficherProjet` la refait entièrement pour le suivant.
   $('destinataires').replaceChildren();
+  // Les envois de même : ce sont les mots écrits pour les lecteurs du livre A, et
+  // l'aperçu de page de titre qui va avec.
+  $('envois').replaceChildren();
+  $('apercuEnvoi').removeAttribute('src');
+  $('apercuEnvoi').hidden = true;
   $('cheminEpreuve').textContent = '';
-  // Les quatre canaux de compte rendu, et pas seulement celui de la composition : un
+  // Les cinq canaux de compte rendu, et pas seulement celui de la composition : un
   // message rouge appartient au livre qui l'a provoqué autant que le chiffre qu'il
   // commente. Effacer le chemin de l'épreuve en laissant l'erreur qui disait pourquoi
   // elle avait échoué donnerait à lire l'échec du livre A sous le titre du livre B.
-  for (const id of ['etat', 'etatEpreuve', 'etatPackages']) {
+  for (const id of ['etat', 'etatEpreuve', 'etatPackages', 'etatEnvois']) {
     $(id).textContent = '';
     $(id).className = 'etat';
   }
@@ -1010,6 +1019,23 @@ $('inDestinataire').addEventListener('change', () => tente(async () =>
 $('btAjouterDestinataire').addEventListener('click', () => tente(async () =>
   afficherProjet(await invoke('destinataire_ajouter', {
     providerCle: $('inAjoutDestinataire').value,
+  }))));
+$('btEnvoyer').addEventListener('click', envoyer);
+// Un envoi neuf n'a pas encore de mot : c'est le nom qui l'ouvre, et le mot se saisit
+// dans la ligne. Un dédicataire vide n'ajoute rien plutôt que d'ajouter un anonyme.
+$('btAjouterEnvoi').addEventListener('click', () => {
+  const qui = $('inDedicataire').value.trim();
+  if (qui === '') return undefined;
+  $('inDedicataire').value = '';
+  return envoisModifier([...projet.envois.liste, { dedicataire: qui, contenu: '' }]);
+});
+// La main appartient au livre : la changer réécrit tous ses envois d'un coup.
+$('inMain').addEventListener('change', () => tente(async () =>
+  afficherProjet(await invoke('envois_modifier', {
+    envois: {
+      main: { mode: 'police', police: $('inMain').value },
+      liste: projet.envois.liste,
+    },
   }))));
 construireEtapes();
 construireFaces();

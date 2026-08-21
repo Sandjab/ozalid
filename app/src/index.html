@@ -151,6 +151,30 @@
       </div>
       <div id="packages" class="resultat" hidden></div>
     </div>
+
+    <div class="bloc">
+      <h2>Envois</h2>
+      <p class="note">Un mot manuscrit sur la page de titre, et un exemplaire par
+        personne. L'envoi ne déplace aucune page : le dos et la planche restent ceux du
+        tirage. Les fichiers sont écrits dans <code>envois/</code>, à côté du
+        <code>.ozalid</code>.</p>
+      <label><span>Main</span><select id="inMain"></select></label>
+      <div class="ligne">
+        <!-- Même parti que le select d'ajout d'un destinataire : posé contre son bouton,
+             il se lit comme le geste d'ajout, et l'`aria-label` le dit à qui ne le voit
+             pas. -->
+        <input type="text" id="inDedicataire" placeholder="à qui ?"
+               aria-label="Dédicataire à ajouter">
+        <button id="btAjouterEnvoi" type="button">Ajouter</button>
+      </div>
+      <div id="envois" class="destinataires"></div>
+      <img id="apercuEnvoi" class="apercu" alt="" hidden>
+      <div class="ligne">
+        <button id="btEnvoyer" type="button" disabled>Générer les envois</button>
+        <span id="etatEnvois" class="etat"></span>
+      </div>
+      <div id="resultatEnvois" class="resultat" hidden></div>
+    </div>
   </section>
 
 </main>

@@ -43,6 +43,7 @@ const PROJET = {
   couverture_importee: false,
   images: ['couverture.jpg'],
   interieur: { police: 'Alegreya' },
+  envois: { main: { mode: 'police', police: 'Caveat' }, liste: [] },
 };
 
 const COMPOSITION = {
@@ -96,6 +97,7 @@ async function ouvre(providers, sur = {}, { couverture = null, destinataires } =
     if (cmd === 'providers_liste') return providers;
     if (cmd === 'polices_liste') return ['Archivo', 'Spectral'];
     if (cmd === 'polices_texte_liste') return ['EB Garamond', 'Alegreya', 'Cardo'];
+    if (cmd === 'mains_liste') return ['Caveat', 'Dancing Script'];
     if (cmd === 'maquettes_liste') return [{ cle: 'folio', libelle: 'Folio' }];
     if (cmd === 'projet_ouvrir') return projet;
     if (cmd === 'couverture_apercu') return 'data:image/png;base64,QUJD';

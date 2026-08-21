@@ -38,6 +38,7 @@ function projet(sur = {}) {
     images: [],
     interieur: { police: 'EB Garamond' },
     livraison: { destinataires: [dest(LULU)], courant: LULU.cle },
+    envois: { main: { mode: 'police', police: 'Caveat' }, liste: [] },
     ...sur,
   };
 }
@@ -58,6 +59,7 @@ function atelier({ recents = [], sur = {}, providers = [LULU], destinataires } =
       case 'providers_liste': return providers;
       case 'polices_liste': return ['Bodoni Moda'];
       case 'polices_texte_liste': return ['EB Garamond'];
+      case 'mains_liste': return ['Caveat', 'Dancing Script'];
       case 'maquettes_liste': return [];
       case 'recents_liste': return recents;
       case 'garde_modifications': return 'ignorer';
@@ -864,4 +866,51 @@ test('modifier un autre champ n\'efface pas la dédicace', async () => {
 
   const envoi = a.appels.findLast(([c]) => c === 'livre_modifier');
   assert.equal(envoi[1].livre.dedicace, 'À M.', 'la dédicace a été effacée en douce');
+});
+
+/**
+ * `envois_modifier` remplace l'objet entier : un envoi ajouté sans la main du livre
+ * ramènerait la main au défaut, et tous les exemplaires changeraient d'écriture sans
+ * qu'on l'ait demandé. Même piège que la dédicace, même garde.
+ */
+test('ajouter un envoi conserve la main du livre', async () => {
+  const a = atelier({
+    sur: { envois: { main: { mode: 'police', police: 'Dancing Script' }, liste: [] } },
+  });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  els.get('inDedicataire').value = 'Léa';
+  await els.get('btAjouterEnvoi').declenche('click');
+
+  const envoi = a.appels.findLast(([c]) => c === 'envois_modifier');
+  assert.ok(envoi, 'aucun envois_modifier : le bouton n\'a pas d\'écouteur');
+  assert.equal(envoi[1].envois.main.police, 'Dancing Script');
+  assert.equal(envoi[1].envois.liste[0].dedicataire, 'Léa');
+});
+
+/**
+ * Le bouton suit la liste. Vérifier qu'il est éteint sans envoi ne prouverait rien : il
+ * l'est déjà dans le HTML, et le test passerait sans une ligne de JavaScript. C'est
+ * l'allumage qui se garde.
+ */
+test('le bouton des envois s\'allume dès qu\'un mot est écrit', async () => {
+  const avec = atelier({
+    sur: {
+      envois: {
+        main: { mode: 'police', police: 'Caveat' },
+        liste: [{ dedicataire: 'Léa', contenu: 'À Léa.' }],
+      },
+    },
+  });
+  const { els } = await charge({ invoke: avec.invoke });
+  await els.get('btNouveau').declenche('click');
+  assert.equal(els.get('btEnvoyer').disabled, false,
+    'un envoi est écrit et le bouton reste éteint');
+
+  const sans = atelier();
+  const b = await charge({ invoke: sans.invoke });
+  await b.els.get('btNouveau').declenche('click');
+  assert.equal(b.els.get('btEnvoyer').disabled, true,
+    'la liste est vide et le bouton reste allumé');
 });

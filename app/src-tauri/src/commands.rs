@@ -103,6 +103,9 @@ pub struct ProjetVue {
     /// Les destinataires du livre et celui qu'on vise. Le front les joint à la table des
     /// gabarits par leur clé : les libellés, les formats et les papiers viennent de là.
     pub livraison: Livraison,
+    /// La main du livre et ses envois. Toujours sérialisée, même vide : le front y
+    /// lit la liste sans avoir à se demander si la section existe.
+    pub envois: crate::envoi::Envois,
 }
 
 #[derive(Serialize)]
@@ -1046,6 +1049,7 @@ fn vue(o: &Ouvert) -> Result<ProjetVue, String> {
         images: o.projet.images.keys().cloned().collect(),
         interieur: o.projet.meta.interieur.clone(),
         livraison: o.projet.meta.livraison.clone(),
+        envois: o.projet.meta.envois.clone(),
     })
 }
 
