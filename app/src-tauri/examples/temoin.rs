@@ -44,6 +44,8 @@ fn main() -> Result<(), String> {
         auteur: "Voltaire".into(),
         genre: "conte philosophique".into(),
         copyright: "Texte du domaine public.".into(),
+        // Sans dédicace, délibérément : c'est ce qui garde le témoin à 98 pages.
+        dedicace: None,
         chapitres: Some(30),
     };
     let mut projet = Projet::nouveau(livre, include_str!("../temoin/manuscrit.md").to_string());

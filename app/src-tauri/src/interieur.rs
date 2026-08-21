@@ -266,6 +266,7 @@ mod tests {
             auteur: "Ivan Pjig".into(),
             genre: "roman".into(),
             copyright: "© Ivan Pjig, 2026.\nTous droits réservés.".into(),
+            dedicace: None,
             chapitres: None,
         }
     }

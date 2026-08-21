@@ -43,6 +43,10 @@ pub struct Livre {
     pub genre: String,
     #[serde(default)]
     pub copyright: String,
+    /// Dédicace imprimée, en belle page après le copyright. Absente ou vide, aucune
+    /// page n'est composée : c'est `dedicace()` qui en juge, pas ses appelants.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dedicace: Option<String>,
     /// Contrôle d'intégrité facultatif : il n'a de sens qu'au gel du manuscrit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chapitres: Option<u32>,
@@ -63,6 +67,7 @@ impl Livre {
             auteur: String::new(),
             genre: genre_defaut(),
             copyright: String::new(),
+            dedicace: None,
             chapitres: None,
         }
     }
@@ -70,6 +75,18 @@ impl Livre {
     /// Titre tel qu'il doit paraître sur la page de titre, sauts de ligne compris.
     pub fn titre_page(&self) -> &str {
         self.titre_page.as_deref().unwrap_or(&self.titre)
+    }
+
+    /// La dédicace, si le livre en porte une qui ne soit pas que du blanc.
+    ///
+    /// Le rognage est ici et nulle part ailleurs : une dédicace réduite à une espace
+    /// ajouterait sinon deux pages au livre, donc du dos, sans que rien ne se voie à
+    /// l'écran.
+    pub fn dedicace(&self) -> Option<&str> {
+        self.dedicace
+            .as_deref()
+            .map(str::trim)
+            .filter(|d| !d.is_empty())
     }
 }
 
@@ -337,6 +354,7 @@ mod tests {
             auteur: "Ivan Pjig".into(),
             genre: "roman".into(),
             copyright: "© Ivan Pjig, 2026.\nTous droits réservés.".into(),
+            dedicace: None,
             chapitres: Some(64),
         }
     }
@@ -359,6 +377,7 @@ mod tests {
         let mut p = Projet::nouveau(livre(), "## 01 - Un\n\nTexte.\n".into());
         p.meta.manuscrit.source = Some("/travail/roman.md".into());
         p.meta.interieur.police = "Cardo".into();
+        p.meta.livre.dedicace = Some("À M., qui a tenu la lampe.".into());
         let mut maquette = crate::maquettes::blanche();
         maquette.pad_x = 16.5;
         maquette.titre.taille = 9.25;
@@ -376,6 +395,7 @@ mod tests {
             Some("/travail/roman.md")
         );
         assert_eq!(r.meta.interieur.police, "Cardo");
+        assert_eq!(r.meta.livre.dedicace(), Some("À M., qui a tenu la lampe."));
         assert_eq!(r.texte, p.texte);
         assert_eq!(r.images["couverture.jpg"], vec![0xFF, 0xD8, 0xFF]);
 
@@ -556,5 +576,34 @@ auteur = "Ivan Pjig"
             noms,
             vec!["images/quatrieme.png", "manuscrit.md", "projet.toml"]
         );
+    }
+
+    /// Un `.ozalid` écrit avant la dédicace s'ouvre sans un mot : le champ est
+    /// facultatif, `VERSION` n'a donc pas bougé. Même principe que la police et que
+    /// `[livraison]` avant elle.
+    #[test]
+    fn un_projet_sans_champ_dedicace_se_relit() {
+        let toml = r#"
+[ozalid]
+version = 2
+
+[livre]
+titre = "Les Heures creuses"
+auteur = "Ivan Pjig"
+"#;
+        let m: Metadonnees = toml::from_str(toml).expect("projet sans dédicace refusé");
+        assert_eq!(m.livre.dedicace, None);
+    }
+
+    /// Une dédicace faite d'espaces ne doit pas coûter deux pages et du dos : c'est
+    /// l'accesseur qui tranche, une seule fois, pour tous ses appelants.
+    #[test]
+    fn une_dedicace_de_blanc_equivaut_a_pas_de_dedicace() {
+        let mut l = livre();
+        assert_eq!(l.dedicace(), None);
+        l.dedicace = Some("   \n  ".into());
+        assert_eq!(l.dedicace(), None, "du blanc a été pris pour une dédicace");
+        l.dedicace = Some("  À M.  ".into());
+        assert_eq!(l.dedicace(), Some("À M."), "les bords doivent être rognés");
     }
 }

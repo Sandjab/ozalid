@@ -59,6 +59,9 @@ pub fn lire_livre_toml(contenu: &str) -> Result<(Livre, Designations), String> {
         auteur: s.auteur,
         genre: s.genre.unwrap_or_else(|| "roman".into()),
         copyright: s.copyright,
+        // Un `livre.toml` de la chaîne Python ne porte pas de dédicace : le champ
+        // n'existe pas de ce côté-là, et rien ne se perd à l'import.
+        dedicace: None,
         chapitres: s.chapitres,
     };
     let designations = Designations {
@@ -582,6 +585,7 @@ couverture = "in/covers/LHC-Photo.png"
                 auteur: "A".into(),
                 genre: "roman".into(),
                 copyright: String::new(),
+                dedicace: None,
                 chapitres: None,
             },
             "## 01\n\nA.\n".into(),
@@ -750,6 +754,7 @@ couverture = "in/covers/LHC-Photo.png"
                 auteur: "A".into(),
                 genre: "roman".into(),
                 copyright: String::new(),
+                dedicace: None,
                 chapitres: None,
             },
             "## 01\n\nA.\n".into(),

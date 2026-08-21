@@ -285,6 +285,7 @@ mod tests {
             auteur: "Ivan Pjig".into(),
             genre: "roman".into(),
             copyright: String::new(),
+            dedicace: None,
             chapitres: None,
         }
     }
