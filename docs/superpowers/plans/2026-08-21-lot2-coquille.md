@@ -184,6 +184,29 @@ le prestataire. La classe entière est fermée par `[hidden] { display: none !im
 la règle cesse de dépendre de sa position et de la spécificité des autres — et les trois
 `:not([hidden])` posés entre-temps sont retirés, devenus des précautions trompeuses.
 
+**La mise en page des étapes, refaite deux fois (tâche 6).**
+
+Le plan donnait une colonne de 46 rem. Mesuré à 900 × 640, Livre demandait 568 px pour
+398 offerts — et laissait 200 px vides à droite : c'était la **hauteur** qui manquait, jamais
+la largeur. D'où une grille de colonnes de 23 rem.
+
+Elle a dû être refaite : une grille aligne ses rangées, et Intérieur composé mettait le bloc
+de résultat dans la colonne de droite pendant que la gauche restait vide sur 300 px. La
+disposition gaspillait exactement la place qui lui manquait, et la barre était présente à
+**1400 × 800** — donc à la taille par défaut de la fenêtre, 1040 × 780. Remplacée par un flux
+en colonnes (`column-width`, `break-inside: avoid`), où Épreuve remonte dès qu'il y a la place.
+
+Conséquence non prévue : **le filet a changé d'étage.** Un multi-colonnes contraint en hauteur
+ne produit pas d'ascenseur vertical, il fragmente vers la droite — l'étape Épreuve est passée
+hors écran derrière une barre horizontale. Un flux ne peut pas être à la fois ce qui coule et
+ce qui défile. C'est donc `main` qui porte l'`overflow-y: auto`, et Livre et Intérieur
+reprennent `height: auto`.
+
+**La marge est fine et il faut le savoir** : à 1040 × 780, l'état composé passe avec 5 à 10 px
+(mesuré par dichotomie : 775 tient, 770 défile). Le cas tient parce qu'on a resserré le rythme,
+pas parce qu'il y avait de la place. Une ligne de plus au bloc de résultat le rouvre. Le seul
+remède durable est de raccourcir ce bloc — lot 4.
+
 **Versé à la suite du chantier, non fait ici.**
 
 - *Le pattern d'onglets est incomplet* : pas d'`aria-controls` sur les onglets, pas
