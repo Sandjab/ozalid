@@ -261,9 +261,15 @@ test('« Quitter » demande comme le reste, et ferme par destroy', async () => {
 test('l\'interface ne s\'annonce qu\'une fois ses écouteurs posés', async () => {
   const a = atelier();
   const poses = [];
+  let temoin = null;
   await charge({
     ids: IDS,
-    invoke: a.invoke,
+    invoke: async (cmd, args) => {
+      // Photographier les écouteurs déjà posés à l'instant de l'annonce : c'est le
+      // seul moment où l'ordre est observable.
+      if (cmd === 'interface_prete') temoin = poses.slice();
+      return a.invoke(cmd, args);
+    },
     listen: async (nom) => {
       // Un tour de boucle avant de résoudre : une annonce prématurée passerait devant.
       await new Promise((r) => setImmediate(r));
@@ -274,6 +280,33 @@ test('l\'interface ne s\'annonce qu\'une fois ses écouteurs posés', async () =
   await new Promise((r) => setImmediate(r));
 
   assert.deepEqual(poses.sort(), ['fermeture-demandee', 'menu']);
-  const rang = a.noms().indexOf('interface_prete');
-  assert.ok(rang >= 0, 'l\'interface doit s\'annoncer');
+  assert.ok(temoin !== null, 'l\'interface doit s\'annoncer');
+  assert.deepEqual(temoin.sort(), ['fermeture-demandee', 'menu'],
+    'annoncée avant que les deux écouteurs ne soient posés');
+});
+
+/**
+ * Les chiffres d'une composition ne valent que pour le livre qui les a produits.
+ * Les laisser à l'écran pendant qu'on en ouvre un autre donnerait à lire la
+ * pagination du mauvais livre — l'erreur même que l'application existe pour éviter.
+ */
+test('ouvrir un autre projet oublie les sorties du précédent', async () => {
+  const a = atelier();
+  const { els } = await charge({
+    ids: IDS,
+    invoke: a.invoke,
+    open: async () => '/livres/B.ozalid',
+  });
+  await els.get('btNouveau').declenche('click');
+
+  // Ce qu'une composition aurait laissé à l'écran.
+  els.get('resultat').textContent = '262 pages, dos 16,5 mm';
+  els.get('resultat').hidden = false;
+  els.get('cheminEpreuve').textContent = '/livres/A/epreuve.pdf';
+
+  await els.get('btOuvrir').declenche('click');
+
+  assert.equal(els.get('resultat').hidden, true);
+  assert.equal(els.get('resultat').textContent, '');
+  assert.equal(els.get('cheminEpreuve').textContent, '');
 });

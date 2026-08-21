@@ -785,7 +785,15 @@ async function routerMenu(id) {
 Promise.all([
   listen('menu', (ev) => routerMenu(ev.payload)),
   listen('fermeture-demandee', quitter),
-]).then(() => invoke('interface_prete'));
+])
+  .then(() => invoke('interface_prete'))
+  .catch((e) => {
+    // Sans écouteurs, le menu et la fermeture ne mènent nulle part. Le Rust s'en
+    // tire — faute de témoin, il ne retient rien et l'application reste quittable —
+    // mais l'utilisateur mérite de savoir pourquoi la moitié des gestes est inerte.
+    $('etatEnregistrement').textContent = `menu inopérant : ${e}`;
+    $('etatEnregistrement').className = 'etat erreur';
+  });
 
 $('btNouveau').addEventListener('click', nouveau);
 $('btOuvrir').addEventListener('click', ouvrir);

@@ -73,6 +73,10 @@ class El {
 
   replaceChildren(...n) {
     this.enfants = [];
+    // Le vrai DOM emporte aussi le texte. Le garder ferait passer une boîte vidée pour
+    // une boîte encore pleine, et un test qui vérifie qu'on a bien oublié les sorties
+    // du projet précédent passerait sans que rien n'ait été oublié.
+    this._texte = '';
     if (this.tagName === 'SELECT') this.value = '';
     this.append(...n);
   }
