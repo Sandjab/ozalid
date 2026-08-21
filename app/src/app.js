@@ -332,9 +332,19 @@ function oublierLesSorties() {
     $(id).hidden = true;
   }
   $('cheminEpreuve').textContent = '';
-  $('etat').textContent = '';
-  $('etat').className = 'etat';
+  // Les quatre canaux de compte rendu, et pas seulement celui de la composition : un
+  // message rouge appartient au livre qui l'a provoqué autant que le chiffre qu'il
+  // commente. Effacer le chemin de l'épreuve en laissant l'erreur qui disait pourquoi
+  // elle avait échoué donnerait à lire l'échec du livre A sous le titre du livre B.
+  for (const id of ['etat', 'etatEpreuve', 'etatPackages']) {
+    $(id).textContent = '';
+    $(id).className = 'etat';
+  }
   alerter('');
+  // L'aperçu est une sortie comme les autres, et la seule qu'on lise sans la lire :
+  // une couverture laissée en place est le genre d'erreur qui ne se remarque qu'une
+  // fois la planche partie chez l'imprimeur.
+  poserApercu(null);
 }
 
 /**
@@ -687,6 +697,9 @@ async function rendreApercu() {
   if (!projet?.couverture) {
     poserApercu(null);
     $('etatApercu').textContent = 'Choisir une maquette de départ.';
+    // Sans cette ligne, une invitation à choisir s'écrirait en rouge dès que l'aperçu
+    // précédent avait échoué : la classe survivrait au message qu'elle qualifiait.
+    $('etatApercu').className = 'note';
     return;
   }
   $('etatApercu').textContent = 'composition de l\'aperçu…';
@@ -952,7 +965,16 @@ async function routerMenu(id) {
     await ouvrirChemin(id.slice(RECENT.length));
     return;
   }
-  await MENU[id]?.();
+  const fait = MENU[id];
+  if (!fait) {
+    // Le Rust et le front se donnent rendez-vous sur des chaînes que ni le compilateur
+    // ni le navigateur ne confronte. Avalée, une clé qui ne correspond plus rendrait
+    // l'entrée de menu et son accélérateur inertes sans un mot, et c'est l'application
+    // entière qui paraîtrait en panne pour une lettre de travers.
+    alerter(`entrée de menu inconnue : ${id}`);
+    return;
+  }
+  await fait();
 }
 
 /**

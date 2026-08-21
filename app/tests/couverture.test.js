@@ -364,3 +364,33 @@ test('un aperçu qui échoue efface l\'image et affiche la cause', async () => {
   assert.match(els.get('etatApercu').textContent, /largeur du dos/);
   assert.strictEqual(els.get('etatApercu').className, 'note alerte');
 });
+
+/**
+ * La classe qui colore un message lui survit si personne ne la reprend. Après un aperçu
+ * en échec, l'invitation à choisir une maquette s'écrirait en rouge — et une invitation
+ * en rouge se lit comme un refus, alors qu'elle ne demande qu'un choix.
+ */
+test('l\'invitation à choisir une maquette n\'hérite pas du rouge de l\'échec', async () => {
+  let couverture = maquette();
+  const { els } = await ouvre(
+    couverture,
+    {
+      couverture_apercu: () => {
+        throw 'prolongement panoramique : la largeur du dos est inconnue';
+      },
+      projet_ouvrir: () => projet(couverture),
+    },
+    ['/livres/B.ozalid']
+  );
+  await attendreApercu();
+  assert.strictEqual(els.get('etatApercu').className, 'note alerte');
+
+  // Le même écran, mais un projet sans maquette : c'est l'invitation qui s'affiche.
+  couverture = null;
+  await els.get('btOuvrir').declenche('click');
+  await attendreApercu();
+
+  assert.match(els.get('etatApercu').textContent, /Choisir une maquette/);
+  assert.strictEqual(els.get('etatApercu').className, 'note',
+    'une invitation à choisir écrite en rouge se lit comme un refus');
+});

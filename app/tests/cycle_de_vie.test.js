@@ -4,6 +4,8 @@
 // garde, et ce que le menu déclenche. La boîte de dialogue elle-même est native :
 // elle se vérifie dans l'application, pas ici.
 
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert');
 const { charge } = require('./dom_shim');
@@ -221,6 +223,23 @@ test('un chemin qui contient un deux-points survit au préfixe', async () => {
   assert.deepEqual(ouvre[1], { chemin: '/Users/x/Mon:livre.ozalid' });
 });
 
+/**
+ * Le Rust et le front se donnent rendez-vous sur des chaînes que ni l'un ni l'autre ne
+ * vérifie. Une clé renommée dans `ETAPES`, une faute de frappe dans `menu.rs`, et
+ * l'entrée de menu comme son accélérateur cessent d'agir — sans message, sans test
+ * rouge, dans les deux langages. Muet, le geste se lit comme une panne de
+ * l'application ; nommé, il se lit comme la faute de frappe qu'il est.
+ */
+test('une entrée de menu que le front ne connaît pas se donne à voir', async () => {
+  const a = atelier();
+  const { els, menu } = await charge({ invoke: a.invoke });
+
+  await menu('aller.quatrieme_de_couverture');
+
+  assert.match(els.get('alerte').textContent, /aller\.quatrieme_de_couverture/,
+    'une entrée inconnue n\'a rien dit : le menu paraît en panne');
+});
+
 test('la fenêtre ne se ferme que si la garde le permet', async () => {
   const refuse = atelier({ garde: 'annuler' });
   let fermetures = 0;
@@ -293,6 +312,37 @@ test('l\'interface ne s\'annonce qu\'une fois ses écouteurs posés', async () =
  * Les laisser à l'écran pendant qu'on en ouvre un autre donnerait à lire la
  * pagination du mauvais livre — l'erreur même que l'application existe pour éviter.
  */
+/**
+ * Les canaux de compte rendu, lus dans le balisage au lieu d'être recopiés de
+ * `oublierLesSorties`.
+ *
+ * Un test qui énumère ce que la fonction efface ne peut que confirmer ce qu'elle fait :
+ * il resterait vert le jour où l'on ajoute un `#etatMachin` sans l'effacer, c'est-à-dire
+ * précisément le jour où il devrait parler. Celui-ci part de l'écran — tout ce qui porte
+ * `etat` ou `resultat` rend compte d'un geste, donc appartient au livre qui l'a produit.
+ *
+ * Une seule échappe, et pour la raison inverse : `etatEnregistrement` décrit le projet
+ * qu'on vient d'ouvrir, pas celui qu'on quitte.
+ */
+const DECRIT_LE_NOUVEAU = new Set(['etatEnregistrement']);
+
+function canauxDeCompteRendu() {
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'index.html'),
+    'utf8'
+  );
+  const canaux = [];
+  for (const [, attrs] of html.matchAll(/<\w+([^>]*)>/g)) {
+    const id = attrs.match(/\bid="([^"]+)"/);
+    const classe = attrs.match(/\bclass="([^"]*)"/);
+    if (!id || !classe) continue;
+    const classes = classe[1].split(/\s+/);
+    if (!classes.includes('etat') && !classes.includes('resultat')) continue;
+    if (!DECRIT_LE_NOUVEAU.has(id[1])) canaux.push(id[1]);
+  }
+  return canaux;
+}
+
 test('ouvrir un autre projet oublie les sorties du précédent', async () => {
   const a = atelier();
   const { els, menu } = await charge({
@@ -301,17 +351,28 @@ test('ouvrir un autre projet oublie les sorties du précédent', async () => {
   });
   await els.get('btNouveau').declenche('click');
 
-  // Ce qu'une composition aurait laissé à l'écran.
-  els.get('resultat').textContent = '262 pages, dos 16,5 mm';
-  els.get('resultat').hidden = false;
+  const canaux = canauxDeCompteRendu();
+  assert.ok(canaux.length >= 5, `inventaire suspect : ${canaux.join(', ')}`);
+  // Ce que des gestes du projet A auraient laissé à l'écran — tous, sans en choisir.
+  for (const id of canaux) {
+    els.get(id).textContent = `compte rendu du livre A (${id})`;
+    els.get(id).hidden = false;
+  }
   els.get('cheminEpreuve').textContent = '/livres/A/epreuve.pdf';
+  els.get('apercu').src = 'data:image/png;base64,AAAA';
 
   // Par le menu : un projet ouvert masque l'accueil, et « Ouvrir » avec lui.
   await menu('fichier.ouvrir');
 
+  for (const id of canaux) {
+    assert.equal(els.get(id).textContent, '',
+      `« ${id} » raconte encore le livre qu'on vient de quitter`);
+  }
   assert.equal(els.get('resultat').hidden, true);
-  assert.equal(els.get('resultat').textContent, '');
+  assert.equal(els.get('packages').hidden, true);
   assert.equal(els.get('cheminEpreuve').textContent, '');
+  assert.equal(els.get('apercu').src, undefined,
+    'la couverture du livre précédent reste affichée');
 });
 
 /**
