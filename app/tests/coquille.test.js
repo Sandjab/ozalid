@@ -120,6 +120,117 @@ test('une seule étape est montrée à la fois', async () => {
   assert.equal(els.get('onglet-couverture').getAttribute('aria-selected'), 'true');
 });
 
+/** Une touche, comme le navigateur la donne : sa lettre et le refus qu'on lui oppose. */
+function touche(key) {
+  const ev = { key, defaut: true, preventDefault() { ev.defaut = false; } };
+  return ev;
+}
+
+/**
+ * Le `tablist` a deux moitiés, et seule la première se voyait : les rôles y étaient, le
+ * clavier n'y était pas. Sans les flèches, atteindre le contenu d'une étape demande de
+ * tabuler à travers les onglets qui la précèdent — le défaut est d'accès, pas de
+ * confort, et il ne se voit pas à la souris.
+ */
+test('les flèches traversent les étapes et la sélection les suit', async () => {
+  const a = atelier();
+  const { els, contexte } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  const ev = touche('ArrowRight');
+  await els.get('etapes').declenche('keydown', ev);
+
+  assert.deepEqual(montree(els), ['interieur']);
+  assert.equal(els.get('onglet-interieur').getAttribute('aria-selected'), 'true');
+  // Une flèche qui change d'onglet ne doit pas, en plus, faire défiler la bande sous
+  // elle : le geste est pris, il n'est pas partagé.
+  assert.equal(ev.defaut, false, 'la flèche a gardé son effet par défaut');
+  assert.equal(contexte.document.activeElement, els.get('onglet-interieur'),
+    'le focus est resté sur l\'onglet quitté');
+});
+
+/**
+ * Un seul onglet dans l'ordre de tabulation : c'est ce qui distingue un `tablist` d'une
+ * rangée de boutons, et c'est ce qui rend la bande traversable d'une tabulation.
+ */
+test('seul l\'onglet sélectionné est dans l\'ordre de tabulation', async () => {
+  const a = atelier();
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  await els.get('onglet-couverture').declenche('click');
+
+  const rang = (cle) => els.get(`onglet-${cle}`).getAttribute('tabindex');
+  assert.equal(rang('couverture'), '0');
+  assert.deepEqual(
+    ETAPES.filter((c) => rang(c) === '0'), ['couverture'],
+    'plusieurs onglets tabulables à la fois'
+  );
+});
+
+/**
+ * Les flèches bouclent, et `Home`/`End` sautent aux extrémités : c'est le pattern, et
+ * c'est surtout ce qui évite de compter les pas pour revenir à la première étape.
+ */
+test('la flèche boucle et Home revient à la première étape', async () => {
+  const a = atelier();
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  await els.get('etapes').declenche('keydown', touche('ArrowLeft'));
+  assert.deepEqual(montree(els), ['livraison'], 'la flèche gauche n\'a pas bouclé');
+
+  await els.get('etapes').declenche('keydown', touche('Home'));
+  assert.deepEqual(montree(els), ['livre']);
+});
+
+/**
+ * Une touche que le `tablist` ne connaît pas doit rester à qui de droit : `preventDefault`
+ * sur tout ce qui passe volerait la tabulation elle-même.
+ */
+test('une touche étrangère au tablist n\'est pas confisquée', async () => {
+  const a = atelier();
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  const ev = touche('Tab');
+  await els.get('etapes').declenche('keydown', ev);
+
+  assert.equal(ev.defaut, true, 'la tabulation a été confisquée');
+  assert.deepEqual(montree(els), ['livre']);
+});
+
+/**
+ * Sans projet, les onglets sont éteints — et une flèche ne doit pas faire par le clavier
+ * ce que le clic ne fait pas. Le garde est dans `allerA`, partagé avec le menu ; ce test
+ * vérifie que le clavier passe bien par lui.
+ */
+test('sans projet, les flèches ne mènent nulle part', async () => {
+  const a = atelier();
+  const { els, contexte } = await charge({ invoke: a.invoke });
+
+  await els.get('etapes').declenche('keydown', touche('ArrowRight'));
+
+  assert.deepEqual(montree(els), []);
+  assert.equal(contexte.document.activeElement, null);
+});
+
+/**
+ * Ce que l'onglet commande et le nom que la section en prend. Les deux sortent de la
+ * table `ETAPES` et d'elle seule : le balisage n'en porte aucun, et une section renommée
+ * sans son onglet donnerait un `aria-controls` qui pointe dans le vide.
+ */
+test('chaque onglet dit quelle section il commande, et réciproquement', async () => {
+  const a = atelier();
+  const { els } = await charge({ invoke: a.invoke });
+
+  for (const cle of ETAPES) {
+    const section = `etape${cle[0].toUpperCase()}${cle.slice(1)}`;
+    assert.equal(els.get(`onglet-${cle}`).getAttribute('aria-controls'), section);
+    assert.equal(els.get(section).getAttribute('aria-labelledby'), `onglet-${cle}`);
+  }
+});
+
 /**
  * Le menu et l'onglet doivent appeler la même fonction. Deux implémentations
  * dériveraient, et c'est la leçon que le lot 1 a déjà payée sur « Enregistrer ».

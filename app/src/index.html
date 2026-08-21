@@ -22,14 +22,14 @@
 
 <!-- Les onglets sont construits par app.js depuis la table ETAPES. La nav est écrite
      indifférente à sa disposition : passer au rail vertical demanderait un autre
-     --coquille et un --onglets-flux: row, pas un autre balisage.
+     --coquille et un --onglets-flux: row, pas un autre balisage — et les flèches
+     verticales dans `toucheEtapes`, avec l'aria-orientation qui va avec.
 
-     Dette, et c'est un défaut d'accès, pas de confort : le pattern `tablist` n'est
-     tenu qu'à moitié. Il manque `aria-controls` sur chaque onglet, `aria-labelledby`
-     sur chaque section, et la navigation aux flèches avec un seul onglet dans l'ordre
-     de tabulation — au clavier, les quatre onglets se traversent aujourd'hui un par
-     un, et rien ne dit quelle section chacun commande. Le reste du pattern est en
-     place (`role`, `aria-selected`), ce qui rend le manque d'autant moins visible. -->
+     Le pattern `tablist` est tenu en entier, et la moitié qui manquait est venue du
+     JS : `aria-controls` sur chaque onglet et `aria-labelledby` sur chaque section
+     sortent de la table, seule à savoir quelle section va avec quelle clé. Aucune des
+     sections ci-dessous ne porte donc son `aria-labelledby` en dur : le chercher ici
+     serait le chercher au mauvais endroit. -->
 <nav id="etapes" role="tablist" aria-label="Étapes du livre"></nav>
 
 <main id="contenu">
@@ -135,7 +135,10 @@
         pagination, donc son propre dos et sa propre planche. Les fichiers sont écrits à côté
         du <code>.ozalid</code>, dans un répertoire par prestataire.</p>
       <div class="ligne">
-        <select id="inAjoutDestinataire"></select>
+        <!-- Le seul contrôle de la fenêtre sans étiquette visible, et c'est voulu : posé
+             à côté de son bouton, il se lit comme le geste d'ajout. Ce que l'œil déduit
+             de la disposition, l'`aria-label` le dit à qui ne la voit pas. -->
+        <select id="inAjoutDestinataire" aria-label="Prestataire à ajouter"></select>
         <button id="btAjouterDestinataire" type="button">Ajouter</button>
       </div>
       <div id="destinataires" class="destinataires"></div>

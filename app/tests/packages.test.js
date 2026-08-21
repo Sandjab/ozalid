@@ -307,6 +307,45 @@ test('un package affiche le dos, la planche et les fichiers produits', async () 
 });
 
 /**
+ * Le répertoire une fois, les noms ensuite. Ce n'est pas de la cosmétique : le compte
+ * rendu de deux destinataires ne tient dans la fenêtre que si le chemin du projet n'y
+ * est pas écrit quatre fois. Ce que le test protège, c'est que les noms de fichiers
+ * restent lisibles — pas la mise en page qui les range.
+ */
+test('les fichiers d\'un package nomment leur répertoire une seule fois', async () => {
+  const { els } = await ouvre([LULU], {
+    packager: () => [{
+      provider: 'lulu', libelle: 'Lulu', package: paquet(), vignette: null, erreur: null,
+    }],
+  });
+  await els.get('btPackager').declenche('click');
+
+  const lignes = els.get('packages').textes('p');
+  assert.deepStrictEqual(lignes, [
+    '/livres/LHC/lulu/',
+    'interieur-lulu.pdf   couverture-lulu.pdf',
+  ]);
+});
+
+/**
+ * Deux fichiers dans deux répertoires n'ont pas de répertoire commun à mettre en
+ * facteur : chacun reprend le sien, en entier. Un chemin long se lit ; un chemin
+ * raccourci de travers se suit jusqu'à un fichier qui n'existe pas.
+ */
+test('des fichiers dispersés gardent chacun leur chemin entier', async () => {
+  const disperses = { ...paquet(), chemins: ['/a/interieur.pdf', '/b/couverture.pdf'] };
+  const { els } = await ouvre([LULU], {
+    packager: () => [{
+      provider: 'lulu', libelle: 'Lulu', package: disperses, vignette: null, erreur: null,
+    }],
+  });
+  await els.get('btPackager').declenche('click');
+
+  assert.deepStrictEqual(els.get('packages').textes('p'),
+    ['/a/interieur.pdf', '/b/couverture.pdf']);
+});
+
+/**
  * La vignette est le seul endroit où « est-ce que ça tient » se vérifie sur du vrai,
  * pour chaque prestataire, avec son dos mesuré. Le package qui a échoué n'en a pas —
  * et l'absence ne doit pas poser une image vide, qui se lirait comme une planche.

@@ -68,8 +68,18 @@ livre ouvert, son chemin et son état d'enregistrement ; une rangée de quatre
 fait ; l'**étape** courante, seule ; un **pied** où l'on choisit pour qui l'on
 regarde, et qui dit ce que vaut le dos. Ce qui ne tient pas se règle par la mise en
 page ; le panneau de réglages de la couverture garde son propre ascenseur — sa
-longueur est irréductible — et l'étape Livraison le sien, le temps que le compte
-rendu de génération soit compacté.
+longueur est irréductible. Une étape qui déborde tombe, elle, dans le filet de la
+bande de contenu : c'est le cas de la Livraison dès le deuxième compte rendu de
+génération, et la barre qui paraît alors est un défaut de mise en page, pas un
+ascenseur qu'on offre.
+
+Les quatre onglets se traversent aux flèches, et une seule tabulation suffit à sortir
+de la bande : c'est le pattern `tablist`, tenu en entier.
+
+La coquille est en **gris chauds**, blanc pour les surfaces de travail — les champs,
+les comptes rendus, l'étape ouverte. Le rouge n'y sert qu'à l'alerte. L'écran est
+d'un outil qui s'efface : sur un fond crème, un blanc paraît bleu et un beige paraît
+neutre, et une couverture ne s'y juge pas. Elle est ici le seul objet coloré.
 
 Chaque onglet porte un sous-libellé qui énonce où en est son étape — le nombre de
 chapitres, la police, la maquette — et un témoin rouge quand elle réclame :

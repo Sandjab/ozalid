@@ -1,8 +1,30 @@
+/* L'atelier neutre. La coquille était crème — le papier de la Blanche — et une
+   couverture posée dessus ne se jugeait pas : sur du crème, un blanc paraît bleu et un
+   beige paraît neutre. Elle est désormais d'un gris chaud, le blanc est rendu aux
+   surfaces de travail (les champs, les comptes rendus, l'étape ouverte), et le rouge à
+   la seule alerte — il ne décore plus rien. La couverture est le seul objet coloré de
+   l'écran, et c'est ce qu'on est venu regarder.
+   Ce que le choix coûte est écrit dans la spec (§ 1) : l'application perd le caractère
+   qui la distinguait d'un formulaire, à retrouver dans la typographie, les espacements
+   et le soin des états, pas dans le fond.
+   Les gris ne sont pas quatre nuances au hasard : `--gris` est le plus clair qui tienne
+   4,5:1 sur les trois fonds où l'on écrit — `--fond`, `--surface` et `--survol`, le plus
+   sombre des trois — et tout ce qui est écrit dessous descend. Éclaircir l'un des fonds
+   sans relire ce rapport, c'est perdre un sous-libellé sous le curseur.
+   `--survol` et `--eteint` sont voisins et ne disent pas la même chose : l'un est le
+   creux passager sous le curseur, l'autre l'état d'un champ qui n'attend rien. Les
+   confondre ferait passer un bouton survolé pour un bouton mort. */
 :root {
-  --papier: #fcf0d8;
-  --encre: #191917;
+  --fond: #eceae6;
+  --surface: #fff;
+  --encre: #1a1917;
+  --encre-survol: #35322d;
+  --gris: #625e57;
+  --gris-fort: #514d47;
   --rouge: #c00000;
-  --trait: #d8cdb4;
+  --trait: #d5d1c9;
+  --survol: #dedbd3;
+  --eteint: #e3e0d9;
   --onglets-flux: column;
   /* La coquille, en quatre bandes à la hauteur exacte de la fenêtre. Passer au rail
      vertical serait une autre valeur ici et un `--onglets-flux: row` : le balisage,
@@ -28,7 +50,7 @@ body {
   grid-template: var(--coquille);
   font: 14px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif;
   color: var(--encre);
-  background: var(--papier);
+  background: var(--fond);
 }
 
 #entete { grid-area: entete; }
@@ -72,11 +94,11 @@ body {
 
 #etapes button[aria-selected="true"] {
   border-bottom-color: var(--encre);
-  background: #fff;
+  background: var(--surface);
 }
 
 #etapes .nom { font-size: .9rem; }
-#etapes .sous { font-size: .75rem; color: #7a7368; }
+#etapes .sous { font-size: .75rem; color: var(--gris); }
 
 /* Le témoin est un point, pas une couleur de fond : discret, mais lu d'un coup d'œil
    depuis n'importe quelle étape. */
@@ -89,7 +111,7 @@ body {
   gap: .6rem;
   padding: .5rem 2rem;
   border-top: 1px solid var(--trait);
-  color: #7a7368;
+  color: var(--gris);
   font-size: .85rem;
 }
 
@@ -188,20 +210,23 @@ main {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-/* L'ascenseur reste, mais plus pour la raison qu'on croyait. Le lot 3 a bien réduit la
-   liste aux seuls destinataires du livre — deux ou trois lignes au lieu de quatorze —
-   et elle tient désormais sans peine. Ce qui déborde maintenant, ce sont les comptes
-   rendus de génération : par destinataire, cinq chiffres, deux chemins de fichiers et
-   la vignette de sa planche. Mesuré : un seul package remplit déjà la bande de contenu
-   à 1040 × 780.
-   Cela ne fait pas deux ascenseurs dans le même écran — celui du panneau de couverture
-   vit dans une autre étape, et les deux ne paraissent jamais ensemble. Compacter le
-   compte rendu reste la vraie réponse ; elle appartient au lot 4.
+/* L'étape n'a plus d'ascenseur à elle : ce qui déborde tombe dans le filet de `main`,
+   comme dans les trois autres étapes. Ce n'est pas la même chose qu'un débordement
+   supprimé, et il ne faut pas le lire comme tel.
+   Mesuré à 1040 × 780, la bande de contenu offre 535 px. Le haut de l'étape — le titre,
+   sa note, la ligne d'ajout, deux destinataires, le bouton — en prend 255 à lui seul et
+   ne varie pas. Un compte rendu compacté en prend 205, où le lot 3 constatait qu'un seul
+   remplissait déjà la bande entière : un destinataire tient désormais avec de la marge.
+   Deux ne tiennent pas, et aucune compaction du compte rendu n'y changera rien
+   — c'est le haut de l'étape qu'il faudrait rétrécir, ou le compte rendu qu'il faudrait
+   replier, et l'un comme l'autre est un travail, pas un réglage.
+   Ce qui est parti, en revanche, c'est la zone défilante propre à l'étape : elle faisait
+   glisser le compte rendu sous un titre resté immobile, et l'étape se comportait
+   autrement que ses trois voisines. Une seule barre, au même endroit que partout.
    Pas de `max-width` ici, à la différence des autres étapes : une ligne de destinataire
    porte un libellé, un papier, un format et parfois un relevé de dos. La brider à la
    largeur d'une colonne de lecture ne la raccourcissait pas, elle la faisait déborder
    de côté — et un ascenseur horizontal cache des réglages au lieu de les ranger. */
-#etapeLivraison { overflow-y: auto; }
 
 .bloc { padding: 1.2rem 0; border-bottom: 1px solid var(--trait); }
 .bloc:last-child { border-bottom: none; }
@@ -212,7 +237,7 @@ h2 {
   font-weight: 600;
   letter-spacing: .1em;
   text-transform: uppercase;
-  color: #7a7368;
+  color: var(--gris);
 }
 
 label {
@@ -223,20 +248,20 @@ label {
   margin-bottom: .5rem;
 }
 
-label > span { color: #5c564d; }
+label > span { color: var(--gris-fort); }
 
 input, select, textarea {
   font: inherit;
   padding: .35rem .5rem;
   border: 1px solid var(--trait);
   border-radius: 3px;
-  background: #fff;
+  background: var(--surface);
   color: inherit;
   width: 100%;
 }
 
 textarea { resize: vertical; }
-select:disabled { color: #9a9488; background: #f4ecd9; }
+select:disabled { color: var(--gris); background: var(--eteint); }
 
 .ligne { display: flex; align-items: center; gap: .8rem; }
 
@@ -246,29 +271,63 @@ button {
   border: 1px solid var(--encre);
   border-radius: 3px;
   background: var(--encre);
-  color: var(--papier);
+  color: var(--surface);
   cursor: pointer;
 }
 
 button:disabled { opacity: .4; cursor: default; }
 
+/* Le soin des états, faute de couleur. La coquille ayant rendu le rouge à l'alerte, ce
+   qui la sépare d'un formulaire tient désormais à la typographie, aux blancs et à ceci :
+   qu'elle réponde sous le curseur et sous le doigt. Les trois états manquaient, et le
+   navigateur ne les rendait pas à notre place — sous WebKit, un bouton ne reçoit même
+   pas de bague de focus sans que l'accès clavier complet soit activé dans le système.
+   Le focus n'est pas un agrément, c'est la moitié du travail d'accessibilité de ce lot :
+   depuis que les flèches traversent les étapes, un onglet qui prend le focus sans le
+   montrer laisse au clavier une navigation qu'on ne peut pas suivre des yeux.
+   `:focus-visible` et non `:focus` : un bouton cliqué à la souris n'a pas à garder une
+   bague derrière lui.
+   Aucune transition : ce qui répond doit répondre tout de suite, et un fondu de 150 ms
+   sur un outil qu'on manie à la journée se paie en attente, pas en douceur. */
+:focus-visible { outline: 2px solid var(--encre); outline-offset: 2px; }
+
+button:hover:not(:disabled) { background: var(--encre-survol); border-color: var(--encre-survol); }
+button:active:not(:disabled) { background: var(--encre); border-color: var(--encre); }
+
+/* Les boutons sans fond — les onglets d'étape, les faces de couverture — se creusent au
+   lieu de s'assombrir : ils n'ont pas de fond à foncer, et la règle ci-dessus les
+   remplirait d'encre. L'onglet sélectionné et la face active, eux, sont arrivés : ils
+   ne bougent plus sous le curseur.
+   La face redit la bordure qu'elle garde, l'onglet non — et ce n'est pas une négligence.
+   `#etapes button` l'emporte par son identifiant sur `button:hover`, quand `.onglets
+   button` lui cède : la face doit donc reprendre son filet, faute de quoi le survol le
+   teindrait d'encre. C'est le genre de différence qu'on ne voit qu'en la cherchant.
+   Les récents ont déjà leur état à eux, un soulignement de lien : leur en poser un
+   second ferait deux réponses pour un seul geste. */
+#etapes button:hover:not(:disabled):not([aria-selected="true"]) { background: var(--survol); }
+
+.onglets button:hover:not(:disabled):not([aria-pressed="true"]) {
+  background: var(--survol);
+  border-color: var(--trait);
+}
+
 .chemin {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: .78rem;
-  color: #7a7368;
+  color: var(--gris);
   word-break: break-all;
 }
 
-.note { margin: .6rem 0 0; color: #7a7368; font-size: .85rem; }
+.note { margin: .6rem 0 0; color: var(--gris); font-size: .85rem; }
 .note.alerte { color: var(--rouge); }
 
-.etat { font-size: .85rem; color: #7a7368; }
+.etat { font-size: .85rem; color: var(--gris); }
 .etat.erreur { color: var(--rouge); white-space: pre-wrap; }
 
 .resultat {
   margin-top: 1rem;
   padding: 1rem 1.2rem;
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--trait);
   border-radius: 3px;
 }
@@ -280,12 +339,12 @@ dl {
   margin: 0;
 }
 
-dt { color: #5c564d; }
+dt { color: var(--gris-fort); }
 dd { margin: 0; font-variant-numeric: tabular-nums; }
 
 /* ---------- couverture ---------- */
 
-.lab { color: #5c564d; }
+.lab { color: var(--gris-fort); }
 
 .couv {
   display: grid;
@@ -326,7 +385,7 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
 
 .onglets button[aria-pressed="true"] {
   background: var(--encre);
-  color: var(--papier);
+  color: var(--surface);
   border-color: var(--encre);
 }
 
@@ -336,7 +395,7 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
   max-height: 100%;
   width: auto;
   height: auto;
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 8px 20px -8px rgba(0, 0, 0, .4);
 }
 
@@ -356,7 +415,7 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
   font-weight: 600;
   letter-spacing: .1em;
   text-transform: uppercase;
-  color: #7a7368;
+  color: var(--gris);
   border-bottom: 1px solid var(--trait);
   padding-bottom: .3rem;
 }
@@ -397,19 +456,44 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
    se met au-dessus de son champ, et la paire tient dans la ligne du destinataire au
    lieu de réclamer les 13 rem d'une colonne de formulaire. */
 .releve .petit { display: grid; grid-template-columns: 1fr; gap: .1rem; margin: 0; }
-.releve .petit span { font-size: .75rem; color: #7a7368; }
+.releve .petit span { font-size: .75rem; color: var(--gris); }
 .releve .petit input { width: 6rem; }
 
+/* Le compte rendu d'un package : son nom en bandeau, ses chiffres et ses fichiers à
+   gauche, sa planche à droite. Empilés, les trois faisaient d'un seul destinataire la
+   hauteur entière de la bande ; côte à côte, la hauteur du compte rendu est celle de la
+   plus haute de ses deux colonnes.
+   La vignette est en `auto` et non en `1fr` : c'est elle qui a une largeur propre — la
+   `width` de `.vignette` — et les chiffres prennent ce qui reste. L'inverse étirerait la
+   planche jusqu'à manger la moitié de l'écran. */
+.package { display: grid; grid-template-columns: 1fr auto; gap: 0 1.5rem; align-items: start; }
 .package + .package { margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--trait); }
-.package h3 { margin: 0 0 .6rem; font-size: .95rem; }
+.package h3 { grid-column: 1 / -1; margin: 0 0 .6rem; font-size: .95rem; }
+/* Le message d'un package en échec n'a pas de vignette à côté de lui : il court sur les
+   deux colonnes plutôt que de se plier dans la moitié gauche. */
+.package .note.alerte { grid-column: 1 / -1; }
+
+/* Les chiffres du package, deux par ligne. La colonne de libellés est à la largeur du
+   plus long d'entre eux, pas aux 13 rem d'une colonne de formulaire : « Gouttière »
+   suivi de trois centimètres de blanc éloignait chaque chiffre de ce qu'il mesure.
+   Cinq chiffres empilés faisaient cinq lignes ; appariés, ils en font trois, et c'est
+   la moitié de ce qui manquait pour tenir deux destinataires dans la fenêtre.
+   La dernière paire — la planche et son fond perdu — court sur toute la largeur : c'est
+   la seule dont la valeur est une phrase, et la moitié d'une ligne la repliait. */
+.package dl { grid-template-columns: auto 1fr auto 1fr; gap: .1rem .8rem; }
+.package dl dd:last-child { grid-column: 2 / -1; }
 
 /* La planche du package. Une vignette, pas un aperçu : de quoi voir qu'elle tient,
-   avec le dos mesuré de ce prestataire-là. C'est le PDF à côté qui fait foi. */
+   avec le dos mesuré de ce prestataire-là. C'est le PDF à côté qui fait foi.
+   Elle a rétréci de 22 à 12 rem en passant à droite des chiffres, et le chiffre est
+   mesuré : au-delà, c'est sa hauteur qui fixe celle du compte rendu au lieu des trois
+   lignes de chiffres et des deux de chemins qu'elle accompagne. L'agrandir la rendrait
+   donc à l'ascenseur, sans rien montrer de plus — une planche à cette taille dit déjà
+   « ça tient », et le PDF à côté fait foi pour le reste. */
 .vignette {
   display: block;
-  margin-top: .6rem;
   max-width: 100%;
-  width: 22rem;
+  width: 12rem;
   border: 1px solid var(--trait);
 }
 
@@ -427,7 +511,13 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
   text-align: left;
 }
 
-.recents button:hover { text-decoration: underline; }
+/* Le soulignement était déjà là ; le fond et le filet, eux, sont à redire — `button:hover`
+   l'emporte sur `.recents button` et remplirait d'encre un chemin de fichier. */
+.recents button:hover {
+  text-decoration: underline;
+  background: transparent;
+  border-color: transparent;
+}
 
 /* ---------- masquage ---------- */
 

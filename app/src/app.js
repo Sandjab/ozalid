@@ -63,11 +63,17 @@ const ETAPES = [
 let etape = 'livre';
 
 function construireEtapes() {
-  for (const [cle, libelle] of ETAPES) {
+  for (const [cle, libelle, section] of ETAPES) {
     const b = h('button');
     b.type = 'button';
     b.id = `onglet-${cle}`;
     b.setAttribute('role', 'tab');
+    // Les deux moitiés du lien entre l'onglet et sa section : ce que l'onglet commande,
+    // et le nom que la section prend de son onglet. Elles ne sont écrites nulle part
+    // dans le balisage — la table est la seule à savoir quelle section va avec quelle
+    // clé, et c'est ici qu'elle le dit.
+    b.setAttribute('aria-controls', section);
+    $(section).setAttribute('aria-labelledby', b.id);
     b.append(h('span', libelle, 'nom'));
     // Le sous-libellé porte l'état de l'étape ; il est retrouvable par son identifiant
     // plutôt que par son rang, pour qu'ajouter un élément à l'onglet ne le déplace pas.
@@ -77,11 +83,46 @@ function construireEtapes() {
     b.addEventListener('click', () => allerA(cle));
     $('etapes').append(b);
   }
+  $('etapes').addEventListener('keydown', toucheEtapes);
   // Éteints dès leur naissance, sans attendre le premier projet : un démarrage qui
   // échoue n'affiche jamais rien et ne repasserait donc jamais par ici. Les onglets
   // resteraient d'apparence active sans mener nulle part, et le rang sans onglet
   // sélectionné — l'état que le HTML décrit n'est celui de personne.
   majEtapes();
+}
+
+/**
+ * Les flèches traversent les étapes ; la tabulation les traverse d'un bloc.
+ *
+ * C'est le pattern `tablist` : un seul onglet dans l'ordre de tabulation — celui qui est
+ * sélectionné, `majEtapes` s'en charge — et les flèches pour passer de l'un à l'autre.
+ * Sans cela, atteindre au clavier le contenu de la Livraison demandait de traverser les
+ * quatre onglets un par un ; avec, une tabulation suffit à sortir de la bande.
+ *
+ * La sélection suit la flèche, sans qu'il faille valider : quatre étapes qui montrent un
+ * formulaire chacune, aucune n'est coûteuse à afficher, et l'activation manuelle du
+ * pattern est faite pour les onglets qui chargent quelque chose.
+ *
+ * Le focus suit ce que `allerA` a bien voulu changer, et non ce qu'on lui a demandé :
+ * sans projet il ne change rien, et il n'y a pas de second garde à écrire ici.
+ *
+ * Les quatre onglets sont en ligne : ce sont les flèches horizontales qui les
+ * traversent. Un rail vertical demanderait les verticales et un `aria-orientation` — la
+ * disposition, elle seule, dit lesquelles.
+ */
+function toucheEtapes(ev) {
+  const cles = ETAPES.map(([cle]) => cle);
+  const rang = cles.indexOf(etape);
+  const vise = {
+    ArrowRight: (rang + 1) % cles.length,
+    ArrowLeft: (rang - 1 + cles.length) % cles.length,
+    Home: 0,
+    End: cles.length - 1,
+  }[ev.key];
+  if (vise === undefined) return;
+  ev.preventDefault();
+  allerA(cles[vise]);
+  $(`onglet-${etape}`).focus();
 }
 
 /**
@@ -152,6 +193,10 @@ function majEtapes() {
     const onglet = $(`onglet-${cle}`);
     onglet.disabled = !projet;
     onglet.setAttribute('aria-selected', String(!!projet && cle === etape));
+    // Un seul onglet dans l'ordre de tabulation : voir `toucheEtapes`. Sans projet,
+    // aucun — ils sont éteints, et un onglet éteint qui prendrait le focus laisserait la
+    // tabulation dans une bande où il n'y a rien à faire.
+    onglet.setAttribute('tabindex', !!projet && cle === etape ? '0' : '-1');
     $(section).hidden = !projet || cle !== etape;
     const e = etats?.[cle];
     onglet.className = e?.alerte ? 'alerte' : '';
@@ -941,6 +986,26 @@ async function reglerDestinataire(cle) {
   })));
 }
 
+/**
+ * Les fichiers d'un package : leur répertoire une fois, leurs noms ensuite.
+ *
+ * Un package écrit tous ses fichiers au même endroit, et redire soixante-dix caractères
+ * de chemin identiques à chaque ligne coûtait deux lignes de plus par destinataire —
+ * l'ascenseur de la Livraison se payait en redites. Coupés ainsi, les noms tiennent sur
+ * une ligne au lieu de se replier au milieu d'un mot.
+ *
+ * Si les fichiers ne partagent pas leur répertoire, chacun reprend son chemin entier :
+ * un chemin long se lit, un chemin faux se suit jusqu'à un fichier qui n'y est pas. Les
+ * deux séparateurs sont reconnus — l'application est aussi empaquetée pour Windows, et
+ * un `\` pris pour une lettre rendrait le groupement muet là-bas.
+ */
+function cheminsGroupes(chemins) {
+  const dossier = (c) => c.slice(0, Math.max(c.lastIndexOf('/'), c.lastIndexOf('\\')) + 1);
+  const commun = chemins.length ? dossier(chemins[0]) : '';
+  if (!commun || !chemins.every((c) => dossier(c) === commun)) return chemins;
+  return [commun, chemins.map((c) => c.slice(commun.length)).join('   ')];
+}
+
 function afficherPackages(resultats) {
   const box = $('packages');
   box.replaceChildren();
@@ -960,8 +1025,13 @@ function afficherPackages(resultats) {
         ['Planche', `${nb(p.planche[0])} × ${nb(p.planche[1])} mm, `
           + `fond perdu ${nb(p.fond_perdu, 3)} mm`],
       ]) dl.append(h('dt', k), h('dd', v));
-      bloc.append(dl);
-      for (const c of p.chemins) bloc.append(h('p', c, 'chemin'));
+      // Les chiffres et les chemins d'un côté, la vignette de l'autre : ce qui
+      // s'empilait tient désormais côte à côte, et la hauteur d'un compte rendu est
+      // celle de sa planche au lieu d'en être la somme.
+      const infos = h('div', undefined, 'infos');
+      infos.append(dl);
+      for (const c of cheminsGroupes(p.chemins)) infos.append(h('p', c, 'chemin'));
+      bloc.append(infos);
       // La planche telle qu'elle part à l'impression, avec le dos mesuré de ce
       // prestataire-là : c'est ici que « est-ce que ça tient » se vérifie, sur du vrai
       // et non sur une approximation qu'on espère fidèle.

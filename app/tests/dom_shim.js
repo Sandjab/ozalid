@@ -105,9 +105,24 @@ class El {
     if (nom === 'src') this.src = undefined;
   }
 
-  /** Déclenche les écouteurs, comme le ferait un clic ou un change. */
-  async declenche(type) {
-    for (const fn of this.ecouteurs[type] || []) await fn();
+  /**
+   * Déclenche les écouteurs, comme le ferait un clic ou un change.
+   *
+   * L'événement est facultatif parce que la plupart des écouteurs n'en lisent rien : un
+   * clic sur un bouton est tout entier dans le fait qu'il a eu lieu. Une touche, elle,
+   * n'est que son événement — les tests en passent un pour dire laquelle.
+   */
+  async declenche(type, evenement) {
+    for (const fn of this.ecouteurs[type] || []) await fn(evenement);
+  }
+
+  /**
+   * Le focus, réduit à ce que le pattern `tablist` en demande : savoir où il est allé.
+   * Un onglet éteint le refuse, comme dans le navigateur — sans quoi une navigation au
+   * clavier qui n'aurait pas dû aboutir paraîtrait avoir abouti.
+   */
+  focus() {
+    if (this._doc && !this.disabled) this._doc.activeElement = this;
   }
 
   /** Textes des descendants d'un type donné — pour lire un rendu. */
@@ -169,10 +184,15 @@ async function charge({
     path.join(__dirname, '..', 'src', 'index.html'),
     'utf8'
   );
+  const document = {
+    activeElement: null,
+    getElementById: (id) => els.get(id) ?? null,
+    createElement: (tag) => Object.assign(new El(tag), { _registre: els, _doc: document }),
+  };
   const els = new Map(
     (ids ?? idsDuHtml(html)).map((id) => {
       const { tag, ...etat } = depuisHtml(html, id);
-      return [id, Object.assign(new El(tag), { id }, etat)];
+      return [id, Object.assign(new El(tag), { id, _doc: document }, etat)];
     })
   );
   // Les écouteurs que l'application pose, retenus pour que les tests puissent les
@@ -182,10 +202,6 @@ async function charge({
     ecouteurs[nom] = fn;
     return () => {};
   });
-  const document = {
-    getElementById: (id) => els.get(id) ?? null,
-    createElement: (tag) => Object.assign(new El(tag), { _registre: els }),
-  };
   const contexte = {
     document,
     Option: class extends El {
