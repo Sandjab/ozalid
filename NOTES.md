@@ -56,6 +56,10 @@ C'est cette contrainte qui explique une forme du code qui paraîtrait sinon tord
 
 **`manuscritRemplace` (`app/src/app.js`) remet `dosCompose` à `null` mais n'appelle pas `oublierLesSorties`.** Après un réimport du manuscrit, `#resultat`, `#packages` et `#cheminEpreuve` continuent donc d'afficher la pagination, le dos et les chemins de l'**ancien texte**, jusqu'à recomposition. C'est la même famille de défaut que celui corrigé au fil du cycle de vie pour le changement de projet, sur un chemin différent — et dans une application dont l'objet est que le nombre de pages soit vrai, montrer celui d'un texte périmé est précisément l'erreur à ne pas commettre. Non corrigé ici parce que ce lot avait déjà débordé de son périmètre, et parce que la correction mérite d'être vérifiée à l'écran.
 
+**Le vocabulaire partagé entre le Rust et le JavaScript n'est vérifié par rien.** Trois réponses de garde (`enregistrer`, `ignorer`, `annuler`), deux noms d'événements (`menu`, `fermeture-demandee`), sept identifiants d'entrées de menu et le préfixe des récents sont écrits en double, dans `commands.rs`/`menu.rs` d'un côté et dans `app.js` de l'autre, sans aucun test qui les lie. Le risque est aujourd'hui contenu : une divergence sur les identifiants ou les événements rend le menu inerte au premier essai, panne bruyante qui ne survit pas à une minute d'usage ; et le défaut de `garde()` a été inversé pour qu'une divergence de vocabulaire y devienne inoffensive — l'inconnu vaut « annuler », comme côté Rust. Le patron d'une garde existe si on la veut un jour : `dom_shim.js` lit déjà le vrai `index.html` à l'expression régulière pour que les tests partent du même état que l'application.
+
+**Le menu « Aller » porte quatre entrées désactivées** (`aller.livre`, `aller.interieur`, `aller.couverture`, `aller.livraison`, dans `app/src-tauri/src/menu.rs`). Elles attendent les étapes du lot 2 ; grisées, elles annoncent un chantier au lieu de ressembler à une panne. À réactiver quand elles mèneront quelque part.
+
 ---
 
 ## 5. Points d'attention juridiques

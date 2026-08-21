@@ -1052,6 +1052,9 @@ mod tests {
         assert!(!v.modifie, "le drapeau retombe à l'écriture");
         assert_eq!(o.chemin.as_deref(), Some(chemin.as_path()));
         assert!(chemin.is_file(), "l'archive est bien sur le disque");
+        // Relire, et pas seulement écrire : un projet neuf porte un manuscrit vide,
+        // et l'archive doit tout de même le contenir pour être relisible.
+        assert_eq!(Projet::ouvrir(&chemin).unwrap().texte, "");
     }
 
     /// Une écriture refusée ne doit ni faire retomber le drapeau, ni faire croire que

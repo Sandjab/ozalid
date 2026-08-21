@@ -74,8 +74,18 @@ pub fn poser(app: &AppHandle) -> tauri::Result<()> {
         )
         .separator()
         // Pas de ⌘W : sous macOS il ferme la fenêtre, et l'application n'en a qu'une.
-        .item(&MenuItemBuilder::with_id("fichier.fermer", "Fermer le projet").build(app)?)
-        .build()?;
+        .item(&MenuItemBuilder::with_id("fichier.fermer", "Fermer le projet").build(app)?);
+
+    // Sous macOS, « Quitter » vit dans le menu applicatif, où le système l'attend.
+    // Ailleurs, il revient au menu Fichier — sans lui, rien n'offrirait de quitter.
+    #[cfg(not(target_os = "macos"))]
+    let fichier = fichier.separator().item(
+        &MenuItemBuilder::with_id("fichier.quitter", "Quitter")
+            .accelerator("CmdOrCtrl+Q")
+            .build(app)?,
+    );
+
+    let fichier = fichier.build()?;
 
     // Les libellés sont écrits ici parce que personne d'autre ne le fera : les
     // entrées prédéfinies portent des chaînes anglaises fixes, que macOS ne
@@ -90,25 +100,32 @@ pub fn poser(app: &AppHandle) -> tauri::Result<()> {
         .select_all_with_text("Tout sélectionner")
         .build()?;
 
+    // Désactivées : les étapes qu'elles désignent n'existent pas encore, et le lot
+    // suivant les branchera. Une commande sans effet ressemble à une panne ; grisée,
+    // elle annonce un chantier.
     let aller = SubmenuBuilder::new(app, "Aller")
         .item(
             &MenuItemBuilder::with_id("aller.livre", "Livre")
                 .accelerator("CmdOrCtrl+1")
+                .enabled(false)
                 .build(app)?,
         )
         .item(
             &MenuItemBuilder::with_id("aller.interieur", "Intérieur")
                 .accelerator("CmdOrCtrl+2")
+                .enabled(false)
                 .build(app)?,
         )
         .item(
             &MenuItemBuilder::with_id("aller.couverture", "Couverture")
                 .accelerator("CmdOrCtrl+3")
+                .enabled(false)
                 .build(app)?,
         )
         .item(
             &MenuItemBuilder::with_id("aller.livraison", "Livraison")
                 .accelerator("CmdOrCtrl+4")
+                .enabled(false)
                 .build(app)?,
         )
         .build()?;
