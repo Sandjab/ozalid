@@ -162,7 +162,7 @@ async function enregistrer() {
   });
   if (!choix) return;
   await tente(async () =>
-    afficherProjet(await invoke('projet_enregistrer', { chemin: choix })));
+    afficherProjet(await invoke('projet_enregistrer_sous', { chemin: choix })));
 }
 
 /* ---------- livre et manuscrit ---------- */

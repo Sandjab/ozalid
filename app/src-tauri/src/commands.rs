@@ -157,7 +157,7 @@ pub fn projet_fermer(atelier: State<Atelier>) {
 /// Sans chemin mémorisé, l'interface bascule sur « Enregistrer sous… » : elle seule
 /// possède le sélecteur de fichiers.
 #[tauri::command]
-pub fn projet_enregistrer_courant(atelier: State<Atelier>) -> Result<ProjetVue, String> {
+pub fn projet_enregistrer(atelier: State<Atelier>) -> Result<ProjetVue, String> {
     let mut garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_mut().ok_or_else(aucun_projet)?;
     let chemin = o
@@ -176,7 +176,10 @@ pub fn projet_ouvrir(chemin: String, atelier: State<Atelier>) -> Result<ProjetVu
 }
 
 #[tauri::command]
-pub fn projet_enregistrer(chemin: String, atelier: State<Atelier>) -> Result<ProjetVue, String> {
+pub fn projet_enregistrer_sous(
+    chemin: String,
+    atelier: State<Atelier>,
+) -> Result<ProjetVue, String> {
     let mut garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_mut().ok_or_else(aucun_projet)?;
     let c = PathBuf::from(&chemin);
