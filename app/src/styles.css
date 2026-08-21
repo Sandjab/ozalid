@@ -75,8 +75,6 @@ body {
   background: #fff;
 }
 
-#etapes button:disabled { opacity: .4; cursor: default; }
-
 #etapes .nom { font-size: .9rem; }
 #etapes .sous { font-size: .75rem; color: #7a7368; }
 

@@ -87,7 +87,9 @@ Ce qui **refuse une saisie** monte à l'entête, la seule bande que toutes les �
 partagent : le geste est fini, et le message doit survivre au changement d'étape.
 Ce qui rend compte d'un **travail long** — composer, tirer une épreuve, générer les
 packages — reste à côté du bouton qui l'a lancé : on attend là où l'on a cliqué, et
-un compte rendu qui migre en haut de l'écran se lit comme une panne.
+un compte rendu qui migre en haut de l'écran se lit comme une panne. L'aperçu de
+couverture n'est ni l'un ni l'autre : **personne ne l'a demandé**, il se recompose à
+chaque réglage, et ce qu'il dit de lui-même se lit sous l'image comme une légende.
 
 **Enregistrer n'est plus qu'un geste de menu** (⌘S, ⇧⌘S) : les deux boutons ont
 quitté l'écran, comme dans tout éditeur de document macOS. Le sous-menu **« Aller »**

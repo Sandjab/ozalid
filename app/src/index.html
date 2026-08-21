@@ -21,8 +21,15 @@
 </header>
 
 <!-- Les onglets sont construits par app.js depuis la table ETAPES. La nav est écrite
-     indifférente à sa disposition : passer au rail vertical ne demanderait qu'une autre
-     valeur de --onglets-flux, pas un autre balisage. -->
+     indifférente à sa disposition : passer au rail vertical demanderait un autre
+     --coquille et un --onglets-flux: row, pas un autre balisage.
+
+     Dette, et c'est un défaut d'accès, pas de confort : le pattern `tablist` n'est
+     tenu qu'à moitié. Il manque `aria-controls` sur chaque onglet, `aria-labelledby`
+     sur chaque section, et la navigation aux flèches avec un seul onglet dans l'ordre
+     de tabulation — au clavier, les quatre onglets se traversent aujourd'hui un par
+     un, et rien ne dit quelle section chacun commande. Le reste du pattern est en
+     place (`role`, `aria-selected`), ce qui rend le manque d'autant moins visible. -->
 <nav id="etapes" role="tablist" aria-label="Étapes du livre"></nav>
 
 <main id="contenu">

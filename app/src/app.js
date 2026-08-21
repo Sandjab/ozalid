@@ -40,9 +40,17 @@ const nb = (v, d = 2) => v.toLocaleString('fr-FR', {
  * Les quatre étapes, dans l'ordre où le livre se fait : leur clé — celle des entrées
  * `aller.*` du menu, au préfixe près — leur libellé d'onglet, et la section montrée.
  *
- * La table est la seule source : les onglets, le routage du menu et le masquage des
- * sections en sortent tous. Ajouter une étape, c'est une ligne ici, une section dans
- * `index.html` et une entrée dans `menu.rs` — jamais trois listes à tenir d'accord.
+ * La table est la seule source de ce qu'elle porte : les onglets, le routage du menu et
+ * le masquage des sections en sortent tous, et aucune de ces trois listes n'est à tenir
+ * d'accord avec les autres.
+ *
+ * Ce qu'elle ne porte pas, en revanche, et qu'ajouter une étape demande encore : la
+ * section dans `index.html`, l'entrée dans `menu.rs`, la clé dans `ETAPES` de
+ * `coquille.test.js` — et, si l'étape est un formulaire, les deux sélecteurs de
+ * `styles.css` qui énumèrent `#etapeLivre, #etapeInterieur`. Les oublier ne casse rien
+ * de visible : l'étape hérite du `height: 100%` des autres, ses blocs ne coulent pas en
+ * colonnes, et c'est la mise en page qui paraît de travers sans qu'on sache pourquoi.
+ * Le README décrit l'écran, lui aussi. Six fichiers, donc, pas trois.
  */
 const ETAPES = [
   ['livre', '1 · Livre', 'etapeLivre'],
@@ -165,6 +173,11 @@ function majEtapes() {
  * qui l'a lancé : on attend là où l'on a cliqué, et un compte rendu qui migre en haut
  * de l'écran se lit comme une panne. Faire remonter le reste ici par symétrie ferait
  * perdre cette différence.
+ *
+ * Reste `#etatApercu`, qui n'entre dans aucun des deux : personne ne l'a demandé. La
+ * composition part d'elle-même à chaque réglage, et son échec est un fait sur l'image
+ * qu'on regarde, pas le compte rendu d'un geste — il se lit sous l'aperçu, comme une
+ * légende, et le réglage suivant l'emporte sans que personne ait à l'effacer.
  */
 function alerter(message) {
   $('alerte').textContent = message;
@@ -719,6 +732,19 @@ async function rendreApercu() {
   }
 }
 
+/**
+ * Les trois faces de la couverture.
+ *
+ * Rien à voir avec les onglets d'étape, malgré l'air de famille et le mot « onglets »
+ * qu'ils partagent en CSS : ceux-là sont des `tab` d'un `tablist`, dont un seul est
+ * sélectionné et qui commandent chacun une section ; ceux-ci sont des boutons à deux
+ * états (`aria-pressed`) qui changent ce qu'un même aperçu montre. Deux patterns ARIA,
+ * et deux façons de retrouver le bouton : par identifiant là-bas, **par rang** ici —
+ * `choisirFace` relit `FACES[i][0]` en parcourant les enfants de `#faces`.
+ *
+ * Les unifier serait un vrai travail, pas un nettoyage : il faudrait leur trouver un
+ * pattern commun qu'aucun des deux n'a. Les croire déjà unifiés coûterait plus cher.
+ */
 const FACES = [['une', '1ère'], ['quatre', '4ème'], ['planche', 'Planche']];
 
 function construireFaces() {
