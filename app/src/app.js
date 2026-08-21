@@ -243,8 +243,11 @@ async function enregistrerQuelquePart() {
 
 async function nouveau() {
   if (!await garde()) return;
-  oublierLesSorties();
-  await tente(async () => afficherProjet(await invoke('projet_nouveau')));
+  await tente(async () => {
+    const p = await invoke('projet_nouveau');
+    oublierLesSorties();
+    afficherProjet(p);
+  });
 }
 
 async function fermer() {
@@ -264,8 +267,13 @@ async function ouvrir() {
 }
 
 async function ouvrirChemin(chemin) {
-  oublierLesSorties();
-  await tente(async () => afficherProjet(await invoke('projet_ouvrir', { chemin })));
+  await tente(async () => {
+    const p = await invoke('projet_ouvrir', { chemin });
+    // Après le succès, jamais avant : un projet qu'on n'a pas pu ouvrir laisse
+    // intact celui qui l'est, et ses sorties avec lui.
+    oublierLesSorties();
+    afficherProjet(p);
+  });
 }
 
 async function importer() {
@@ -275,9 +283,11 @@ async function importer() {
     filters: [{ name: 'Livre de l\'ancienne chaîne', extensions: ['toml'] }],
   });
   if (!choix) return;
-  oublierLesSorties();
-  await tente(async () =>
-    afficherProjet(await invoke('projet_importer', { livreToml: choix })));
+  await tente(async () => {
+    const p = await invoke('projet_importer', { livreToml: choix });
+    oublierLesSorties();
+    afficherProjet(p);
+  });
 }
 
 /** « Enregistrer sous… » : demande où poser le projet. Rend vrai si écrit. */

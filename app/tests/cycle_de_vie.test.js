@@ -310,3 +310,34 @@ test('ouvrir un autre projet oublie les sorties du précédent', async () => {
   assert.equal(els.get('resultat').textContent, '');
   assert.equal(els.get('cheminEpreuve').textContent, '');
 });
+
+/**
+ * Un projet qu'on n'a pas pu ouvrir ne doit rien coûter à celui qui l'est déjà.
+ * Ses fichiers composés existent toujours sur le disque : effacer ce qui les
+ * désigne donnerait à croire qu'ils ont disparu.
+ */
+test('un projet illisible ne détruit pas les sorties de celui qui est ouvert', async () => {
+  const a = atelier();
+  const invoke = async (cmd, args) => {
+    if (cmd === 'projet_ouvrir') throw new Error('archive illisible');
+    return a.invoke(cmd, args);
+  };
+  const { els } = await charge({
+    ids: IDS,
+    invoke,
+    open: async () => '/livres/casse.ozalid',
+  });
+  await els.get('btNouveau').declenche('click');
+
+  els.get('resultat').textContent = '262 pages, dos 16,5 mm';
+  els.get('resultat').hidden = false;
+  els.get('cheminEpreuve').textContent = '/livres/A/epreuve.pdf';
+
+  await els.get('btOuvrir').declenche('click');
+
+  assert.equal(els.get('secLivre').hidden, false, 'le projet ouvert le reste');
+  assert.equal(els.get('resultat').hidden, false, 'ses sorties aussi');
+  assert.equal(els.get('resultat').textContent, '262 pages, dos 16,5 mm');
+  assert.equal(els.get('cheminEpreuve').textContent, '/livres/A/epreuve.pdf');
+  assert.match(els.get('etat').textContent, /illisible/);
+});
