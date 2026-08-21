@@ -10,12 +10,17 @@ le produit, la couverture le consomme, et le dos suit le manuscrit sans ressaisi
 
 **État : jalon 5** — projet `.ozalid`, import d'un livre existant, composition de
 l'intérieur, moteur de couverture, assemblage de la planche, packages
-multi-prestataires, épreuve de relecture et vérification Windows par intégration
-continue : chaque push et chaque pull request compilent, testent et paginent le
-témoin sur `windows-latest`, et un tag `v*` produit l'installeur, l'installe en
-silencieux pour vérifier son arborescence, et le dépose en release draft. Reste la
-vérification manuelle du premier lancement sur une machine Windows — aucun runner
-ne lance l'application avec sa fenêtre.
+multi-prestataires, épreuve de relecture, cycle de vie du document — créer,
+enregistrer, enregistrer sous, fermer, avec une garde avant tout ce qui perdrait
+du travail —, menu natif et ses raccourcis, écran d'accueil et projets récents, et
+vérification Windows par intégration continue : chaque push et chaque pull
+request compilent, testent et paginent le témoin sur `windows-latest`, et un tag
+`v*` produit l'installeur, l'installe en silencieux pour vérifier son
+arborescence, et le dépose en release draft. Reste la vérification manuelle du
+premier lancement sur une machine Windows — aucun runner ne lance l'application
+avec sa fenêtre — et, plus immédiatement, celle du cycle de vie à l'écran : aucune
+fenêtre ne s'est créée dans l'environnement où ce lot a été développé, et c'est à
+l'utilisateur de la mener.
 
 ## Stack
 
