@@ -56,6 +56,23 @@ cd app && node --test "tests/*.test.js"
 
 ---
 
+## Écarts assumés en cours d'exécution
+
+**Renommage de la paire d'enregistrement (décidé après la tâche 3).** La revue de qualité a
+relevé un nommage à contre-sens : `projet_enregistrer(chemin)` était en réalité
+« Enregistrer sous… », tandis que `projet_enregistrer_courant()` était le « Enregistrer »
+de ⌘S — le nom court désignait l'action longue. Les tâches 7 et 8 câblent précisément ⌘S,
+donc la confusion aurait été cimentée. Le renommage a été fait au début de la tâche 4, dans
+son propre commit :
+
+- `projet_enregistrer` → `projet_enregistrer_sous`
+- `projet_enregistrer_courant` → `projet_enregistrer`
+
+Les tâches 3 et 4 ci-dessous portent encore les anciens noms : c'est le texte tel qu'il a été
+exécuté, laissé comme trace. **Les tâches 7 et 8 ont été corrigées** et portent les nouveaux.
+
+---
+
 ## Task 1 : Le magasin de préférences
 
 **Files:**
@@ -1264,7 +1281,7 @@ async function garde() {
 async function enregistrerQuelquePart() {
   if (projet?.chemin) {
     try {
-      afficherProjet(await invoke('projet_enregistrer_courant'));
+      afficherProjet(await invoke('projet_enregistrer'));
       return true;
     } catch (e) {
       $('etat').textContent = String(e);
@@ -1319,7 +1336,7 @@ async function enregistrerSous() {
   });
   if (!choix) return false;
   try {
-    afficherProjet(await invoke('projet_enregistrer', { chemin: choix }));
+    afficherProjet(await invoke('projet_enregistrer_sous', { chemin: choix }));
     return true;
   } catch (e) {
     $('etat').textContent = String(e);
@@ -1547,7 +1564,7 @@ test('« Enregistrer » réécrit en place, sans sélecteur de fichiers', async 
   await els.get('btNouveau').declenche('click');   // ouvre un projet qui a un chemin
   await els.get('btEnregistrer').declenche('click');
 
-  assert.ok(a.noms().includes('projet_enregistrer_courant'));
+  assert.ok(a.noms().includes('projet_enregistrer'));
   assert.equal(demande, 0, 'un projet déjà posé ne redemande pas où');
 });
 
