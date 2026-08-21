@@ -4,22 +4,6 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { charge } = require('./dom_shim');
 
-const IDS = [
-  'btNouveau', 'btOuvrir', 'btImporter', 'btEnregistrer', 'btEnregistrerSous',
-  'cheminProjet', 'etatEnregistrement', 'recents',
-  'secLivre', 'secManuscrit', 'secCouverture', 'secComposer',
-  'inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright', 'inChapitres',
-  'etatManuscrit', 'sourceManuscrit', 'btReimporter', 'btChoisirManuscrit',
-  'etatImages', 'btImageUne', 'btImageQuatre',
-  'maquettes', 'etatCouverture', 'faces', 'apercu', 'etatApercu',
-  'reglages',
-  'inProvider', 'inPapier', 'noteFormat',
-  'btComposer', 'etat', 'resultat',
-  'secPackages', 'listePrestataires', 'btPackager', 'etatPackages', 'packages',
-  'secInterieur', 'inPoliceInterieur',
-  'secEpreuve', 'inEpreuveCorps', 'btEpreuve', 'etatEpreuve', 'cheminEpreuve',
-];
-
 const LULU = {
   cle: 'lulu', libelle: 'Lulu — poche 108 × 175',
   largeur: 108, hauteur: 175, fond_perdu: 3.175, dos_publie: true,
@@ -84,7 +68,7 @@ const COMPOSITION = {
 /* ---------- prestataires ---------- */
 
 test('le choix du papier n\'est offert que quand il y en a plusieurs', async () => {
-  const { els } = await charge({ ids: IDS, invoke: faux([LULU, KDP]) });
+  const { els } = await charge({ invoke: faux([LULU, KDP]) });
   assert.strictEqual(els.get('inPapier').disabled, true);
   assert.strictEqual(els.get('inPapier').children.length, 1);
 
@@ -98,7 +82,7 @@ test('le choix du papier n\'est offert que quand il y en a plusieurs', async () 
 });
 
 test('un prestataire à gabarit annonce que le fond perdu se relève', async () => {
-  const { els } = await charge({ ids: IDS, invoke: faux([COOLLIBRI]) });
+  const { els } = await charge({ invoke: faux([COOLLIBRI]) });
   const note = els.get('noteFormat').textContent;
   assert.match(note, /148,0 × 210,0 mm/);
   assert.match(note, /relever sur le gabarit/);
@@ -108,7 +92,7 @@ test('un prestataire à gabarit annonce que le fond perdu se relève', async () 
 /* ---------- projet ---------- */
 
 test('rien n\'est proposé tant qu\'aucun projet n\'est ouvert', async () => {
-  const { els } = await charge({ ids: IDS, invoke: faux([LULU]) });
+  const { els } = await charge({ invoke: faux([LULU]) });
   for (const s of ['secLivre', 'secManuscrit', 'secComposer']) {
     assert.strictEqual(els.get(s).hidden, true, `${s} visible sans projet`);
   }
@@ -117,7 +101,6 @@ test('rien n\'est proposé tant qu\'aucun projet n\'est ouvert', async () => {
 
 test('un projet importé remplit les champs et ouvre les sections', async () => {
   const { els } = await charge({
-    ids: IDS,
     invoke: faux([LULU], { projet_importer: PROJET }),
     open: async () => '/dev/ozalid/build/LHC/livre.toml',
   });
@@ -139,7 +122,6 @@ test('un projet importé remplit les champs et ouvre les sections', async () => 
 test('un manuscrit périmé est signalé, pas passé sous silence', async () => {
   const perime = { ...PROJET, chapitres_trouves: 61 };
   const { els } = await charge({
-    ids: IDS,
     invoke: faux([LULU], { projet_ouvrir: perime }),
     open: async () => '/livres/LHC.ozalid',
   });
@@ -154,7 +136,6 @@ test('un manuscrit périmé est signalé, pas passé sous silence', async () => 
 
 test('un manuscrit conforme n\'affiche aucune alerte', async () => {
   const { els } = await charge({
-    ids: IDS,
     invoke: faux([LULU], { projet_ouvrir: PROJET }),
     open: async () => '/livres/LHC.ozalid',
   });
@@ -171,7 +152,6 @@ test('un manuscrit conforme n\'affiche aucune alerte', async () => {
 test('réimporter n\'est offert que si une source est mémorisée', async () => {
   const sansSource = { ...PROJET, manuscrit_source: null };
   const { els } = await charge({
-    ids: IDS,
     invoke: faux([LULU], { projet_ouvrir: sansSource }),
     open: async () => '/livres/X.ozalid',
   });
@@ -183,7 +163,6 @@ test('réimporter n\'est offert que si une source est mémorisée', async () => 
 test('un projet non enregistré le dit, et reste enregistrable', async () => {
   const neuf = { ...PROJET, chemin: null };
   const { els } = await charge({
-    ids: IDS,
     invoke: faux([LULU], { projet_importer: neuf }),
     open: async () => '/x/livre.toml',
   });
@@ -199,7 +178,6 @@ test('un projet non enregistré le dit, et reste enregistrable', async () => {
 
 test('le dos calculé est affiché avec le compte de pages qui le produit', async () => {
   const { els } = await charge({
-    ids: IDS,
     invoke: faux([LULU], { projet_ouvrir: PROJET, composer: COMPOSITION }),
     open: async () => '/livres/LHC.ozalid',
   });
@@ -220,7 +198,6 @@ test('le dos calculé est affiché avec le compte de pages qui le produit', asyn
  */
 test('un prestataire sans formule n\'affiche jamais de dos chiffré', async () => {
   const { els } = await charge({
-    ids: IDS,
     invoke: faux([COOLLIBRI], {
       projet_ouvrir: PROJET,
       composer: { ...COMPOSITION, pages: 190, dos: null },
@@ -249,9 +226,7 @@ test('une erreur de composition efface le résultat précédent', async () => {
     }
     return base(cmd, args);
   };
-  const { els } = await charge({
-    ids: IDS, invoke, open: async () => '/livres/LHC.ozalid',
-  });
+  const { els } = await charge({ invoke, open: async () => '/livres/LHC.ozalid' });
   await els.get('btOuvrir').declenche('click');
   await els.get('btComposer').declenche('click');
   assert.strictEqual(els.get('resultat').hidden, false);
@@ -267,7 +242,6 @@ test('une erreur de composition efface le résultat précédent', async () => {
 /** Une erreur d'ouverture doit s'afficher, pas disparaître dans la console. */
 test('un fichier qui n\'est pas un projet est signalé à l\'écran', async () => {
   const { els } = await charge({
-    ids: IDS,
     invoke: faux([LULU], {
       projet_ouvrir: () => {
         throw 'archive sans projet.toml : ce n\'est pas un projet Ozalid.';

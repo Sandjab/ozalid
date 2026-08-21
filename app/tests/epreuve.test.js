@@ -8,22 +8,6 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { charge } = require('./dom_shim');
 
-const IDS = [
-  'btNouveau', 'btOuvrir', 'btImporter', 'btEnregistrer', 'btEnregistrerSous',
-  'cheminProjet', 'etatEnregistrement', 'recents',
-  'secLivre', 'secManuscrit', 'secCouverture', 'secComposer',
-  'inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright', 'inChapitres',
-  'etatManuscrit', 'sourceManuscrit', 'btReimporter', 'btChoisirManuscrit',
-  'etatImages', 'btImageUne', 'btImageQuatre',
-  'maquettes', 'etatCouverture', 'faces', 'apercu', 'etatApercu',
-  'reglages',
-  'inProvider', 'inPapier', 'noteFormat',
-  'btComposer', 'etat', 'resultat',
-  'secPackages', 'listePrestataires', 'btPackager', 'etatPackages', 'packages',
-  'secInterieur', 'inPoliceInterieur',
-  'secEpreuve', 'inEpreuveCorps', 'btEpreuve', 'etatEpreuve', 'cheminEpreuve',
-];
-
 const LULU = {
   cle: 'lulu', libelle: 'Lulu — poche 108 × 175',
   largeur: 108, hauteur: 175, fond_perdu: 3.175, dos_publie: true,
@@ -72,7 +56,6 @@ function faux(providers, sur = {}) {
 
 test('la police d\'intérieur du projet est celle qui paraît au panneau', async () => {
   const { els } = await charge({
-    ids: IDS,
     invoke: faux([LULU], { projet_importer: PROJET }),
     open: async () => '/dev/ozalid/build/LHC/livre.toml',
   });
@@ -88,7 +71,6 @@ test('la police d\'intérieur du projet est celle qui paraît au panneau', async
 test('changer la police enregistre le réglage dans le projet', async () => {
   let recu = null;
   const { els } = await charge({
-    ids: IDS,
     invoke: faux([LULU], {
       projet_importer: PROJET,
       interieur_modifier: (args) => {
@@ -113,7 +95,6 @@ test('changer la police enregistre le réglage dans le projet', async () => {
  */
 test('une police refusée est dite, et le panneau revient au projet', async () => {
   const { els } = await charge({
-    ids: IDS,
     invoke: faux([LULU], {
       projet_importer: PROJET,
       interieur_modifier: () => {
@@ -143,7 +124,6 @@ test('une police refusée est dite, et le panneau revient au projet', async () =
 test('l\'épreuve se tire sans intérieur composé', async () => {
   let corps = null;
   const { els } = await charge({
-    ids: IDS,
     invoke: faux([LULU], {
       projet_importer: PROJET,
       epreuve_tirer: (args) => {
@@ -167,7 +147,6 @@ test('l\'épreuve se tire sans intérieur composé', async () => {
 test('une épreuve en échec est signalée et efface le chemin précédent', async () => {
   let echoue = false;
   const { els } = await charge({
-    ids: IDS,
     invoke: faux([LULU], {
       projet_importer: PROJET,
       epreuve_tirer: () => {

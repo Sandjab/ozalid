@@ -8,21 +8,6 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { charge } = require('./dom_shim');
 
-const IDS = [
-  'btNouveau', 'btOuvrir', 'btImporter', 'btEnregistrer', 'btEnregistrerSous',
-  'cheminProjet', 'etatEnregistrement', 'recents',
-  'secLivre', 'secManuscrit', 'secCouverture', 'secComposer',
-  'inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright', 'inChapitres',
-  'etatManuscrit', 'sourceManuscrit', 'btReimporter', 'btChoisirManuscrit',
-  'etatImages', 'btImageUne', 'btImageQuatre',
-  'maquettes', 'etatCouverture', 'faces', 'apercu', 'etatApercu', 'reglages',
-  'inProvider', 'inPapier', 'noteFormat',
-  'btComposer', 'etat', 'resultat',
-  'secPackages', 'listePrestataires', 'btPackager', 'etatPackages', 'packages',
-  'secInterieur', 'inPoliceInterieur',
-  'secEpreuve', 'inEpreuveCorps', 'btEpreuve', 'etatEpreuve', 'cheminEpreuve',
-];
-
 const LULU = {
   cle: 'lulu', libelle: 'Lulu — poche 108 × 175',
   largeur: 108, hauteur: 175, fond_perdu: 3.175, dos_publie: true,
@@ -72,7 +57,7 @@ function atelier({ garde = 'ignorer', recents = [], sur = {} } = {}) {
 
 test('sans projet, aucune rubrique n\'est offerte et les récents s\'affichent', async () => {
   const a = atelier({ recents: ['/livres/A.ozalid', '/livres/B.ozalid'] });
-  const { els } = await charge({ ids: IDS, invoke: a.invoke });
+  const { els } = await charge({ invoke: a.invoke });
 
   assert.equal(els.get('secLivre').hidden, true);
   assert.equal(els.get('btEnregistrer').disabled, true);
@@ -83,7 +68,7 @@ test('sans projet, aucune rubrique n\'est offerte et les récents s\'affichent',
 
 test('cliquer un récent ouvre ce projet-là', async () => {
   const a = atelier({ recents: ['/livres/A.ozalid'] });
-  const { els } = await charge({ ids: IDS, invoke: a.invoke });
+  const { els } = await charge({ invoke: a.invoke });
 
   await els.get('recents').enfants.find((e) => e.tagName === 'BUTTON').declenche('click');
 
@@ -94,7 +79,7 @@ test('cliquer un récent ouvre ce projet-là', async () => {
 
 test('la garde refusée arrête tout : rien n\'est ouvert, rien n\'est perdu', async () => {
   const a = atelier({ garde: 'annuler' });
-  const { els } = await charge({ ids: IDS, invoke: a.invoke });
+  const { els } = await charge({ invoke: a.invoke });
 
   await els.get('btNouveau').declenche('click');
 
@@ -105,7 +90,7 @@ test('la garde refusée arrête tout : rien n\'est ouvert, rien n\'est perdu', a
 
 test('la garde acceptée laisse passer', async () => {
   const a = atelier({ garde: 'ignorer' });
-  const { els } = await charge({ ids: IDS, invoke: a.invoke });
+  const { els } = await charge({ invoke: a.invoke });
 
   await els.get('btNouveau').declenche('click');
 
@@ -117,7 +102,6 @@ test('« Enregistrer » réécrit en place, sans sélecteur de fichiers', async 
   const a = atelier();
   let demande = 0;
   const { els } = await charge({
-    ids: IDS,
     invoke: a.invoke,
     save: async () => { demande += 1; return '/ailleurs.ozalid'; },
   });
@@ -130,7 +114,7 @@ test('« Enregistrer » réécrit en place, sans sélecteur de fichiers', async 
 
 test('un projet jamais enregistré n\'offre que « Enregistrer sous… »', async () => {
   const a = atelier({ sur: { chemin: null, modifie: false } });
-  const { els } = await charge({ ids: IDS, invoke: a.invoke });
+  const { els } = await charge({ invoke: a.invoke });
   await els.get('btNouveau').declenche('click');
 
   assert.equal(els.get('btEnregistrer').disabled, true);
@@ -140,7 +124,7 @@ test('un projet jamais enregistré n\'offre que « Enregistrer sous… »', asyn
 
 test('l\'état d\'enregistrement suit le drapeau du Rust', async () => {
   const a = atelier({ sur: { modifie: true } });
-  const { els } = await charge({ ids: IDS, invoke: a.invoke });
+  const { els } = await charge({ invoke: a.invoke });
   await els.get('btNouveau').declenche('click');
 
   assert.equal(els.get('etatEnregistrement').textContent, 'modifié');
@@ -148,7 +132,7 @@ test('l\'état d\'enregistrement suit le drapeau du Rust', async () => {
 
 test('un manuscrit absent se dit absent, et non vide de chapitres', async () => {
   const a = atelier({ sur: { manuscrit_absent: true, chapitres_trouves: 0, mots: 0 } });
-  const { els } = await charge({ ids: IDS, invoke: a.invoke });
+  const { els } = await charge({ invoke: a.invoke });
   await els.get('btNouveau').declenche('click');
 
   assert.match(els.get('etatManuscrit').textContent, /Aucun manuscrit/);
@@ -157,18 +141,13 @@ test('un manuscrit absent se dit absent, et non vide de chapitres', async () => 
 
 test('le menu passe par le même code que les boutons', async () => {
   const a = atelier();
-  let router;
-  const { els } = await charge({
-    ids: IDS,
-    invoke: a.invoke,
-    listen: async (nom, fn) => { if (nom === 'menu') router = fn; return () => {}; },
-  });
+  const { els, menu } = await charge({ invoke: a.invoke });
 
-  await router({ payload: 'fichier.nouveau' });
+  await menu('fichier.nouveau');
   assert.ok(a.noms().includes('projet_nouveau'));
   assert.equal(els.get('secLivre').hidden, false);
 
-  await router({ payload: 'fichier.fermer' });
+  await menu('fichier.fermer');
   assert.ok(a.noms().includes('projet_fermer'));
   assert.equal(els.get('secLivre').hidden, true);
 });
@@ -181,16 +160,13 @@ test('le menu passe par le même code que les boutons', async () => {
 test('enregistrer depuis le menu sans projet ne lève rien', async () => {
   const a = atelier();
   let demande = 0;
-  let router;
-  await charge({
-    ids: IDS,
+  const { menu } = await charge({
     invoke: a.invoke,
     save: async () => { demande += 1; return null; },
-    listen: async (nom, fn) => { if (nom === 'menu') router = fn; return () => {}; },
   });
 
-  await router({ payload: 'fichier.enregistrer' });
-  await router({ payload: 'fichier.enregistrer_sous' });
+  await menu('fichier.enregistrer');
+  await menu('fichier.enregistrer_sous');
 
   assert.equal(demande, 0, 'aucun sélecteur de fichiers ne doit s\'ouvrir');
   assert.ok(!a.noms().includes('projet_enregistrer'));
@@ -203,7 +179,7 @@ test('enregistrer depuis le menu sans projet ne lève rien', async () => {
  */
 test('une réponse de garde inattendue arrête au lieu de poursuivre', async () => {
   const a = atelier({ garde: 'un mot que personne n\'attend' });
-  const { els } = await charge({ ids: IDS, invoke: a.invoke });
+  const { els } = await charge({ invoke: a.invoke });
 
   await els.get('btNouveau').declenche('click');
 
@@ -214,14 +190,9 @@ test('une réponse de garde inattendue arrête au lieu de poursuivre', async () 
 
 test('un récent du menu porte son chemin dans son identifiant', async () => {
   const a = atelier();
-  let router;
-  await charge({
-    ids: IDS,
-    invoke: a.invoke,
-    listen: async (nom, fn) => { if (nom === 'menu') router = fn; return () => {}; },
-  });
+  const { menu } = await charge({ invoke: a.invoke });
 
-  await router({ payload: 'fichier.recent:/livres/Z.ozalid' });
+  await menu('fichier.recent:/livres/Z.ozalid');
 
   const ouvre = a.appels.find(([c]) => c === 'projet_ouvrir');
   assert.deepEqual(ouvre[1], { chemin: '/livres/Z.ozalid' });
@@ -234,14 +205,9 @@ test('un récent du menu porte son chemin dans son identifiant', async () => {
  */
 test('un chemin qui contient un deux-points survit au préfixe', async () => {
   const a = atelier();
-  let router;
-  await charge({
-    ids: IDS,
-    invoke: a.invoke,
-    listen: async (nom, fn) => { if (nom === 'menu') router = fn; return () => {}; },
-  });
+  const { menu } = await charge({ invoke: a.invoke });
 
-  await router({ payload: 'fichier.recent:/Users/x/Mon:livre.ozalid' });
+  await menu('fichier.recent:/Users/x/Mon:livre.ozalid');
 
   const ouvre = a.appels.find(([c]) => c === 'projet_ouvrir');
   assert.deepEqual(ouvre[1], { chemin: '/Users/x/Mon:livre.ozalid' });
@@ -250,28 +216,22 @@ test('un chemin qui contient un deux-points survit au préfixe', async () => {
 test('la fenêtre ne se ferme que si la garde le permet', async () => {
   const refuse = atelier({ garde: 'annuler' });
   let fermetures = 0;
-  let surFermeture;
-  await charge({
-    ids: IDS,
+  const { fermeture } = await charge({
     invoke: refuse.invoke,
-    listen: async (nom, fn) => { if (nom === 'fermeture-demandee') surFermeture = fn; return () => {}; },
     destroy: () => { fermetures += 1; },
   });
 
-  await surFermeture({});
+  await fermeture();
   assert.equal(fermetures, 0, 'un « Annuler » qui ferme quand même perdrait tout');
 
   const accepte = atelier({ garde: 'ignorer' });
   let fermee = 0;
-  let surFermeture2;
-  await charge({
-    ids: IDS,
+  const { fermeture: fermeture2 } = await charge({
     invoke: accepte.invoke,
-    listen: async (nom, fn) => { if (nom === 'fermeture-demandee') surFermeture2 = fn; return () => {}; },
     destroy: () => { fermee += 1; },
   });
 
-  await surFermeture2({});
+  await fermeture2();
   assert.equal(fermee, 1);
 });
 
@@ -279,15 +239,12 @@ test('la fenêtre ne se ferme que si la garde le permet', async () => {
 test('« Quitter » demande comme le reste, et ferme par destroy', async () => {
   const a = atelier({ garde: 'ignorer' });
   let fermee = 0;
-  let router;
-  await charge({
-    ids: IDS,
+  const { menu } = await charge({
     invoke: a.invoke,
-    listen: async (nom, fn) => { if (nom === 'menu') router = fn; return () => {}; },
     destroy: () => { fermee += 1; },
   });
 
-  await router({ payload: 'fichier.quitter' });
+  await menu('fichier.quitter');
 
   assert.ok(a.noms().includes('garde_modifications'));
   assert.equal(fermee, 1);
@@ -302,7 +259,6 @@ test('l\'interface ne s\'annonce qu\'une fois ses écouteurs posés', async () =
   const poses = [];
   let temoin = null;
   await charge({
-    ids: IDS,
     invoke: async (cmd, args) => {
       // Photographier les écouteurs déjà posés à l'instant de l'annonce : c'est le
       // seul moment où l'ordre est observable.
@@ -332,7 +288,6 @@ test('l\'interface ne s\'annonce qu\'une fois ses écouteurs posés', async () =
 test('ouvrir un autre projet oublie les sorties du précédent', async () => {
   const a = atelier();
   const { els } = await charge({
-    ids: IDS,
     invoke: a.invoke,
     open: async () => '/livres/B.ozalid',
   });
@@ -362,7 +317,6 @@ test('un projet illisible ne détruit pas les sorties de celui qui est ouvert', 
     return a.invoke(cmd, args);
   };
   const { els } = await charge({
-    ids: IDS,
     invoke,
     open: async () => '/livres/casse.ozalid',
   });

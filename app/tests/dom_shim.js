@@ -141,16 +141,28 @@ function depuisHtml(html, id) {
 }
 
 /**
+ * Tous les identifiants posés dans le vrai index.html.
+ *
+ * Les énumérer dans chaque fichier de test revenait à tenir à la main une copie du
+ * balisage : une section renommée s'y voyait en `null` sans message, cinq fois de
+ * suite. Le faux DOM lit déjà le HTML pour connaître l'état initial de chaque élément ;
+ * qu'il en lise aussi la liste ne fait qu'aller au bout de la même idée.
+ */
+function idsDuHtml(html) {
+  return [...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
+}
+
+/**
  * Charge src/app.js dans un contexte muni d'un faux DOM.
- * `ids` : identifiants à créer ; leur balise et leur état initial viennent d'index.html.
- * `invoke` : implémentation des commandes Rust.
+ * `ids` : identifiants à créer ; par défaut, tous ceux du vrai index.html, avec leur
+ * balise et leur état initial. `invoke` : implémentation des commandes Rust.
  */
 async function charge({
   ids,
   invoke,
   open = async () => null,
   save = async () => null,
-  listen = async () => () => {},
+  listen,
   destroy = () => {},
 }) {
   const html = fs.readFileSync(
@@ -158,11 +170,18 @@ async function charge({
     'utf8'
   );
   const els = new Map(
-    ids.map((id) => {
+    (ids ?? idsDuHtml(html)).map((id) => {
       const { tag, ...etat } = depuisHtml(html, id);
       return [id, Object.assign(new El(tag), { id }, etat)];
     })
   );
+  // Les écouteurs que l'application pose, retenus pour que les tests puissent les
+  // actionner : le menu natif et la fermeture de fenêtre n'ont pas d'autre porte.
+  const ecouteurs = {};
+  const listenUtilise = listen ?? (async (nom, fn) => {
+    ecouteurs[nom] = fn;
+    return () => {};
+  });
   const document = {
     getElementById: (id) => els.get(id) ?? null,
     createElement: (tag) => Object.assign(new El(tag), { _registre: els }),
@@ -183,7 +202,7 @@ async function charge({
       __TAURI__: {
         core: { invoke },
         dialog: { open, save },
-        event: { listen },
+        event: { listen: listenUtilise },
         window: { getCurrentWindow: () => ({ destroy }) },
       },
     },
@@ -206,7 +225,25 @@ async function charge({
   }
   // chargerProviders() est asynchrone et lancé au chargement : lui laisser un tour.
   await new Promise((r) => setImmediate(r));
-  return { els, contexte };
+
+  const declencheEvenement = async (nom, charge) => {
+    const fn = ecouteurs[nom];
+    if (!fn) {
+      throw new Error(
+        `aucun écouteur « ${nom} » : un listen sur mesure a-t-il remplacé celui du faux DOM ?`
+      );
+    }
+    await fn(charge);
+  };
+
+  return {
+    els,
+    contexte,
+    /** Ce que fait une entrée de menu, désignée par son identifiant côté Rust. */
+    menu: (id) => declencheEvenement('menu', { payload: id }),
+    /** La fenêtre demande à se fermer. */
+    fermeture: () => declencheEvenement('fermeture-demandee', {}),
+  };
 }
 
-module.exports = { El, charge };
+module.exports = { El, charge, idsDuHtml };

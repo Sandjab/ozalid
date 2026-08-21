@@ -5,22 +5,6 @@ const assert = require('node:assert');
 const { charge } = require('./dom_shim');
 const { groupes, lire, ecrire } = require('../src/couverture.js');
 
-const IDS = [
-  'btNouveau', 'btOuvrir', 'btImporter', 'btEnregistrer', 'btEnregistrerSous',
-  'cheminProjet', 'etatEnregistrement', 'recents',
-  'secLivre', 'secManuscrit', 'secCouverture', 'secComposer',
-  'inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright', 'inChapitres',
-  'etatManuscrit', 'sourceManuscrit', 'btReimporter', 'btChoisirManuscrit',
-  'etatImages', 'btImageUne', 'btImageQuatre',
-  'maquettes', 'etatCouverture', 'faces', 'apercu', 'etatApercu',
-  'reglages',
-  'inProvider', 'inPapier', 'noteFormat',
-  'btComposer', 'etat', 'resultat',
-  'secPackages', 'listePrestataires', 'btPackager', 'etatPackages', 'packages',
-  'secInterieur', 'inPoliceInterieur',
-  'secEpreuve', 'inEpreuveCorps', 'btEpreuve', 'etatEpreuve', 'cheminEpreuve',
-];
-
 const LULU = {
   cle: 'lulu', libelle: 'Lulu', largeur: 108, hauteur: 175, fond_perdu: 3.175, dos_publie: true,
   papiers: [{ cle: 'standard', libelle: 'Papier standard' }],
@@ -144,7 +128,7 @@ async function ouvre(couverture, sur = {}, dialogues = []) {
     throw new Error(`commande inattendue : ${cmd}`);
   };
   const file = ['/livres/LHC.ozalid', ...dialogues];
-  const ctx = await charge({ ids: IDS, invoke, open: async () => file.shift() ?? null });
+  const ctx = await charge({ invoke, open: async () => file.shift() ?? null });
   await ctx.els.get('btOuvrir').declenche('click');
   return { ...ctx, appels };
 }
