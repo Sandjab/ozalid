@@ -235,6 +235,21 @@ function groupes() {
   }));
 }
 
+/**
+ * Le libellé public d'un mode de page, lu dans le schéma.
+ *
+ * Recopié ailleurs, il dériverait du jour où un mode change de nom : le schéma est la
+ * seule liste où ces trois mots sont écrits. Lu par `groupes()` et non dans `SCHEMA`,
+ * parce que les champs d'un groupe peuvent aussi vivre dans son `avant` ou son `apres` —
+ * ce n'est pas le cas de « Mode » aujourd'hui, et rien ne le garantit demain.
+ */
+function libelleMode(mode) {
+  const champ = groupes()
+    .flatMap((g) => g.champs)
+    .find((c) => c.chemin === 'mode');
+  return champ.options.find(([v]) => v === mode)?.[1] ?? mode;
+}
+
 const lire = (obj, chemin) => chemin.split('.').reduce((o, k) => (o ?? {})[k], obj);
 
 function ecrire(obj, chemin, valeur) {
@@ -244,4 +259,6 @@ function ecrire(obj, chemin, valeur) {
   cible[dernier] = valeur;
 }
 
-if (typeof module !== 'undefined') module.exports = { SCHEMA, groupes, lire, ecrire };
+if (typeof module !== 'undefined') {
+  module.exports = { SCHEMA, groupes, lire, ecrire, libelleMode };
+}

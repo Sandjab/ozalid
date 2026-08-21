@@ -58,6 +58,14 @@ body {
 
 #etapes button:disabled { opacity: .4; cursor: default; }
 
+#etapes .nom { font-size: .9rem; }
+#etapes .sous { font-size: .75rem; color: #7a7368; }
+
+/* Le témoin est un point, pas une couleur de fond : discret, mais lu d'un coup d'œil
+   depuis n'importe quelle étape. */
+#etapes button.alerte .sous { color: var(--rouge); }
+#etapes button.alerte .sous::before { content: "● "; }
+
 #pied {
   padding: .5rem 2rem;
   border-top: 1px solid var(--trait);

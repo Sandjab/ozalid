@@ -466,3 +466,189 @@ test('l\'entête s\'annonce à qui ne la voit pas', () => {
   assert.match(html, /id="alerte"[^>]*aria-live/,
     'l\'entête ne s\'annonce plus : le focus reste dans le champ refusé');
 });
+
+/* ---------- les témoins d'attention ---------- */
+
+const sous = (els, cle) => els.get(`sous-${cle}`).textContent;
+const alerte = (els, cle) => els.get(`onglet-${cle}`).className === 'alerte';
+
+test('l\'onglet Livre dit l\'état du manuscrit sans crier', async () => {
+  const a = atelier();
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  assert.equal(sous(els, 'livre'), '12 chapitres');
+  assert.equal(alerte(els, 'livre'), false);
+});
+
+/**
+ * L'écart avec le contrôle d'intégrité est le seul signe qu'un manuscrit périmé
+ * laisse : le gabarit, la police et le papier, eux, n'ont pas bougé.
+ */
+test('un écart de contrôle d\'intégrité allume le témoin du Livre', async () => {
+  const a = atelier({ sur: { chapitres_trouves: 2, livre: {
+    titre: 'Les Heures creuses', titre_page: null, auteur: 'Ivan Pjig',
+    genre: 'roman', copyright: '', chapitres: 64,
+  } } });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  assert.equal(sous(els, 'livre'), '2 chapitres, 64 attendus');
+  assert.equal(alerte(els, 'livre'), true);
+});
+
+/** Un manuscrit absent est un état de projet neuf, pas une anomalie à signaler. */
+test('un manuscrit absent se dit, sans allumer de témoin', async () => {
+  const a = atelier({ sur: { manuscrit_absent: true, chapitres_trouves: 0, mots: 0 } });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  assert.equal(sous(els, 'livre'), 'aucun manuscrit');
+  assert.equal(alerte(els, 'livre'), false);
+});
+
+test('sans maquette, l\'onglet Couverture le dit et s\'allume', async () => {
+  const a = atelier();
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  assert.equal(sous(els, 'couverture'), 'aucune maquette');
+  assert.equal(alerte(els, 'couverture'), true);
+});
+
+/**
+ * Le mode est nommé comme le panneau le nomme. Recopié ici, le libellé survivrait au
+ * jour où le schéma renomme un mode, et l'onglet dirait un mot que plus rien n'offre.
+ */
+test('une maquette en place nomme son mode et éteint le témoin', async () => {
+  const a = atelier({ sur: { couverture: { mode: 'bandeau' } } });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  assert.equal(sous(els, 'couverture'), 'Bandeau');
+  assert.equal(alerte(els, 'couverture'), false);
+});
+
+test('sans composition, l\'onglet Intérieur nomme la police et n\'alerte pas', async () => {
+  const a = atelier();
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  assert.equal(sous(els, 'interieur'), 'EB Garamond');
+  assert.equal(alerte(els, 'interieur'), false);
+});
+
+/**
+ * Le sous-libellé s'ajoute au nom de l'étape, il ne le remplace pas. Les deux textes
+ * vivent dans le même bouton, et un onglet qui ne dirait plus que « 12 chapitres »
+ * aurait perdu le seul mot qui dit où il mène.
+ */
+test('l\'onglet garde le nom de son étape sous le sous-libellé', async () => {
+  const a = atelier();
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  assert.match(els.get('onglet-livre').textContent, /^1 · Livre/);
+  assert.match(els.get('onglet-livre').textContent, /12 chapitres$/);
+});
+
+/**
+ * Changer de gabarit périme le dos : le même manuscrit ne fait pas le même nombre de
+ * pages en poche et en grand format. Le témoin dit où le réparer — à l'Intérieur, la
+ * seule étape qui recompose.
+ */
+test('un dos périmé par un changement de gabarit allume le témoin de l\'Intérieur', async () => {
+  const { els } = await charge({ invoke: atelierCompose([LULU, KDP]) });
+  await els.get('btNouveau').declenche('click');
+  await els.get('btComposer').declenche('click');
+  assert.equal(alerte(els, 'interieur'), false, 'un dos frais ne périme rien');
+
+  els.get('inProvider').value = 'kdp-6x9';
+  await els.get('inProvider').declenche('change');
+
+  assert.equal(sous(els, 'interieur'), 'dos périmé');
+  assert.equal(alerte(els, 'interieur'), true);
+});
+
+/**
+ * Le témoin dit où réparer ; il doit donc s'éteindre quand on y répare. Recomposer est
+ * le seul geste qui rend un dos juste, et il ne repasse pas par `afficherProjet` : un
+ * témoin qui survivrait à sa réparation enverrait recomposer un livre déjà composé.
+ */
+test('recomposer éteint le témoin de l\'Intérieur', async () => {
+  const { els } = await charge({ invoke: atelierCompose([LULU, KDP]) });
+  await els.get('btNouveau').declenche('click');
+  await els.get('btComposer').declenche('click');
+  els.get('inProvider').value = 'kdp-6x9';
+  await els.get('inProvider').declenche('change');
+  assert.equal(alerte(els, 'interieur'), true, 'le dos devait être périmé avant');
+
+  await els.get('btComposer').declenche('click');
+
+  assert.equal(sous(els, 'interieur'), 'EB Garamond');
+  assert.equal(alerte(els, 'interieur'), false);
+});
+
+/**
+ * Un dos jamais composé ne réclame rien : c'est l'état d'un projet qu'on vient
+ * d'ouvrir, et le pied le dit déjà. Seul un dos qui a existé et ne vaut plus allume.
+ */
+test('un dos jamais composé n\'allume pas le témoin de l\'Intérieur', async () => {
+  const { els } = await charge({ invoke: atelierCompose([LULU, KDP]) });
+  await els.get('btNouveau').declenche('click');
+
+  els.get('inProvider').value = 'kdp-6x9';
+  await els.get('inProvider').declenche('change');
+
+  assert.equal(sous(els, 'interieur'), 'EB Garamond');
+  assert.equal(alerte(els, 'interieur'), false);
+});
+
+/**
+ * Le papier périme le dos sans rien changer d'autre à l'écran : c'est le geste où un
+ * témoin qui ne repartirait pas serait le plus difficile à démentir.
+ */
+test('changer de papier allume aussi le témoin de l\'Intérieur', async () => {
+  const { els } = await charge({ invoke: atelierCompose([KDP]) });
+  await els.get('btNouveau').declenche('click');
+  await els.get('btComposer').declenche('click');
+  assert.equal(alerte(els, 'interieur'), false);
+
+  els.get('inPapier').value = 'blanc';
+  await els.get('inPapier').declenche('change');
+
+  assert.equal(sous(els, 'interieur'), 'dos périmé');
+  assert.equal(alerte(els, 'interieur'), true);
+});
+
+/**
+ * L'étape Livraison n'a rien de vrai à dire avant qu'un package n'ait été généré, et le
+ * pied porte déjà le dos. Un sous-libellé de remplissage se lirait comme un état.
+ */
+test('l\'onglet Livraison ne meuble pas', async () => {
+  const a = atelier();
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  assert.equal(sous(els, 'livraison'), '');
+  assert.equal(alerte(els, 'livraison'), false);
+});
+
+/**
+ * Les sous-libellés appartiennent au livre ouvert. Refermé, « 12 chapitres » resterait
+ * sous l'accueil, où plus rien ne dit de quel livre il parlait — et le témoin de la
+ * Couverture y réclamerait une maquette pour un projet qui n'existe plus.
+ */
+test('fermer le projet efface les sous-libellés et éteint les témoins', async () => {
+  const a = atelier();
+  const { els, menu } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  assert.equal(alerte(els, 'couverture'), true);
+
+  await menu('fichier.fermer');
+
+  for (const cle of ETAPES) {
+    assert.equal(sous(els, cle), '', `sous-libellé ${cle} survit au projet fermé`);
+    assert.equal(alerte(els, cle), false, `témoin ${cle} survit au projet fermé`);
+  }
+});

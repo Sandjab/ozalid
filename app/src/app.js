@@ -56,10 +56,16 @@ let etape = 'livre';
 
 function construireEtapes() {
   for (const [cle, libelle] of ETAPES) {
-    const b = h('button', libelle);
+    const b = h('button');
     b.type = 'button';
     b.id = `onglet-${cle}`;
     b.setAttribute('role', 'tab');
+    b.append(h('span', libelle, 'nom'));
+    // Le sous-libellé porte l'état de l'étape ; il est retrouvable par son identifiant
+    // plutôt que par son rang, pour qu'ajouter un élément à l'onglet ne le déplace pas.
+    const sous = h('span', '', 'sous');
+    sous.id = `sous-${cle}`;
+    b.append(sous);
     b.addEventListener('click', () => allerA(cle));
     $('etapes').append(b);
   }
@@ -84,18 +90,59 @@ function allerA(cle) {
 }
 
 /**
+ * Ce que chaque onglet dit de son étape : un sous-libellé qui énonce où en est le
+ * projet, et un témoin quand l'étape réclame attention.
+ *
+ * Trois témoins, et pas un de plus. Un manuscrit qui ne correspond plus au contrôle
+ * d'intégrité ; une couverture sans maquette ; un dos qui ne vaut plus pour ce qui est
+ * affiché, et qui s'allume à l'Intérieur parce que c'est là qu'on le répare. Un
+ * manuscrit absent n'en est pas un : c'est l'état d'un projet neuf, pas une anomalie.
+ */
+function etatEtapes(p) {
+  const attendu = p.livre.chapitres;
+  const ecart = attendu !== null && attendu !== undefined && attendu !== p.chapitres_trouves;
+  // Un dos existe et ne vaut plus : ni « jamais composé », qui ne réclame rien, ni
+  // « à jour ».
+  const dosPerime = dosCompose !== null && dosCourant() === null;
+  return {
+    livre: {
+      sous: ecart
+        ? `${p.chapitres_trouves} chapitres, ${attendu} attendus`
+        : (p.manuscrit_absent ? 'aucun manuscrit' : `${p.chapitres_trouves} chapitres`),
+      alerte: ecart,
+    },
+    interieur: {
+      sous: dosPerime ? 'dos périmé' : p.interieur.police,
+      alerte: dosPerime,
+    },
+    couverture: {
+      sous: p.couverture ? libelleMode(p.couverture.mode) : 'aucune maquette',
+      alerte: !p.couverture,
+    },
+    // Rien de vrai à dire avant qu'un package n'ait été généré, et le pied porte déjà
+    // le dos : mieux vaut se taire que meubler.
+    livraison: { sous: '', alerte: false },
+  };
+}
+
+/**
  * Onglets, étapes et accueil remis d'accord avec ce qui est ouvert.
  *
  * Une seule étape est montrée à la fois, et aucune sans projet : l'accueil est un état
- * de l'application, pas un écran de plus posé devant les autres.
+ * de l'application, pas un écran de plus posé devant les autres. Les sous-libellés et
+ * les témoins s'en vont avec lui : ils parlaient d'un livre qui n'est plus ouvert.
  */
 function majEtapes() {
+  const etats = projet ? etatEtapes(projet) : null;
   $('accueil').hidden = !!projet;
   for (const [cle, , section] of ETAPES) {
     const onglet = $(`onglet-${cle}`);
     onglet.disabled = !projet;
     onglet.setAttribute('aria-selected', String(!!projet && cle === etape));
     $(section).hidden = !projet || cle !== etape;
+    const e = etats?.[cle];
+    onglet.className = e?.alerte ? 'alerte' : '';
+    $(`sous-${cle}`).textContent = e ? e.sous : '';
   }
 }
 
@@ -721,6 +768,7 @@ async function composer() {
   } finally {
     bt.disabled = false;
     majPied();
+    majEtapes();
   }
 }
 
@@ -935,14 +983,18 @@ $('inPoliceInterieur').addEventListener('change', majInterieur);
 $('inProvider').addEventListener('change', () => {
   majPapiers();
   majPied();
+  // Le témoin du dos ne se déduit pas du projet : il tient au gabarit choisi, que ce
+  // geste déplace sans repasser par `afficherProjet`.
+  majEtapes();
   // Le format vient du prestataire : l'aperçu change avec lui, même si aucun réglage
   // de maquette n'a bougé.
   demanderApercu();
 });
 // Le papier ne change ni le format ni la maquette : il ne touche que le dos, et c'est
-// pour cela seul que l'aperçu et le pied doivent repartir.
+// pour cela seul que l'aperçu, le pied et le témoin de l'Intérieur doivent repartir.
 $('inPapier').addEventListener('change', () => {
   majPied();
+  majEtapes();
   demanderApercu();
 });
 construireEtapes();
