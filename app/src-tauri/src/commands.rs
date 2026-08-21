@@ -717,8 +717,12 @@ mod tests {
     fn le_nom_d_une_image_dit_la_face_qu_elle_sert() {
         assert_eq!(nom_image("une", "jpg").unwrap(), "couverture.jpg");
         assert_eq!(nom_image("quatre", "png").unwrap(), "quatrieme.png");
-        assert!(package::sert_la_quatrieme(&nom_image("quatre", "png").unwrap()));
-        assert!(!package::sert_la_quatrieme(&nom_image("une", "png").unwrap()));
+        assert!(package::sert_la_quatrieme(
+            &nom_image("quatre", "png").unwrap()
+        ));
+        assert!(!package::sert_la_quatrieme(
+            &nom_image("une", "png").unwrap()
+        ));
         assert!(nom_image("planche", "png").is_err());
     }
 }
