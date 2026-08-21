@@ -4,6 +4,14 @@
   --rouge: #c00000;
   --trait: #d8cdb4;
   --onglets-flux: column;
+  /* La coquille, en quatre bandes à la hauteur exacte de la fenêtre. Passer au rail
+     vertical serait une autre valeur ici et un `--onglets-flux: row` : le balisage,
+     lui, ne bougerait pas. */
+  --coquille:
+    "entete"  auto
+    "etapes"  auto
+    "contenu" minmax(0, 1fr)
+    "pied"    auto / 1fr;
   color-scheme: light;
 }
 
@@ -11,11 +19,22 @@
 
 body {
   margin: 0;
-  padding: 0 0 3rem;
+  /* La fenêtre ne défile plus : ce qui ne tient pas se règle par la mise en page, et
+     la seule zone défilante de l'application est le panneau de réglages de la
+     couverture — sa longueur, elle, est irréductible. */
+  height: 100vh;
+  overflow: hidden;
+  display: grid;
+  grid-template: var(--coquille);
   font: 14px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif;
   color: var(--encre);
   background: var(--papier);
 }
+
+#entete { grid-area: entete; }
+#etapes { grid-area: etapes; }
+#contenu { grid-area: contenu; }
+#pied { grid-area: pied; }
 
 #entete {
   display: flex;
@@ -82,9 +101,70 @@ h1 {
   letter-spacing: .02em;
 }
 
-main { padding: 0 2rem; }
+main {
+  padding: 0 2rem;
+  min-height: 0;
+  overflow: hidden;
+}
 
-.etape, #accueil { max-width: 46rem; }
+/* Une seule étape est montrée à la fois : elle prend toute la bande. `min-height: 0`
+   sans quoi une grille imbriquée refuserait de se laisser comprimer et repousserait
+   le pied hors de l'écran. */
+.etape, #accueil { height: 100%; min-height: 0; }
+
+/* Ces trois-là tiennent dans la fenêtre, et doivent continuer à y tenir : l'`auto`
+   n'est pas un ascenseur offert, c'est un filet. Un contrôle qu'on ne peut plus
+   atteindre est un piège ; une barre qui apparaît est un défaut de mise en page qui
+   se voit. Si elle apparaît, c'est la mise en page qu'on corrige, pas le filet qu'on
+   garde. */
+#accueil, #etapeLivre, #etapeInterieur { overflow-y: auto; }
+
+/* L'accueil n'offre que trois boutons et une liste : il garde la largeur d'une
+   colonne de lecture. */
+#accueil { max-width: 46rem; }
+
+/* Les blocs se rangent côte à côte plutôt que de s'empiler : c'est la hauteur qui
+   manque à la fenêtre, jamais la largeur, et une colonne unique de 46rem laissait la
+   moitié de l'écran vide en réclamant un ascenseur pour le reste. Chaque colonne garde
+   la largeur d'une ligne lisible ; c'est leur nombre qui suit la fenêtre.
+   Le `display` est conditionné à `:not([hidden])` pour la même raison que l'étape
+   Couverture : un identifiant l'emporterait sur la dernière règle du fichier. */
+#etapeLivre:not([hidden]), #etapeInterieur:not([hidden]) {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(23rem, 1fr));
+  align-content: start;
+  gap: 1.8rem 3rem;
+  padding: 1.2rem 0 .4rem;
+  max-width: 74rem;
+}
+
+/* Le filet qui séparait deux blocs empilés ne veut plus rien dire une fois les blocs
+   rangés en colonnes : il ne courrait que sous la première, au hasard de l'ordre du
+   balisage. C'est le blanc entre les colonnes qui sépare désormais — et le rembourrage
+   que les blocs portaient pour dégager ce filet se paie en double dans une colonne,
+   les huit pixels qui manquaient encore à l'étape Intérieur pour tenir. */
+#etapeLivre > .bloc, #etapeInterieur > .bloc { padding: 0; border-bottom: none; }
+
+/* L'étape Couverture donne sa hauteur au panneau : un bloc de réglages en haut, la
+   couverture et son panneau dessous.
+   Le `display` est conditionné à `:not([hidden])` et non posé sec : un sélecteur
+   d'identifiant l'emporterait sur la dernière règle du fichier, et l'étape resterait
+   affichée en permanence — c'est précisément le piège que cette dernière règle
+   documente, vu à l'écran sous la forme de la Couverture servie sous l'onglet
+   Livraison. */
+#etapeCouverture:not([hidden]) {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+/* Dette à date de péremption connue : la table compte quatorze gabarits, et la liste
+   ne tient pas dans la fenêtre à sa taille minimale. Le lot 3 la réduit aux seuls
+   destinataires du livre — une poignée — et cet ascenseur disparaîtra avec lui.
+   Pas de `max-width` ici, à la différence des autres étapes : une ligne de prestataire
+   porte une case, un libellé, un papier et parfois un relevé de dos. La brider à la
+   largeur d'une colonne de lecture ne la raccourcissait pas, elle la faisait déborder
+   de côté — et un ascenseur horizontal cache des réglages au lieu de les ranger. */
+#etapeLivraison { overflow-y: auto; }
 
 .bloc { padding: 1.2rem 0; border-bottom: 1px solid var(--trait); }
 .bloc:last-child { border-bottom: none; }
@@ -174,8 +254,31 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
   display: grid;
   grid-template-columns: minmax(14rem, 22rem) 1fr;
   gap: 1.5rem;
-  margin-top: 1rem;
-  align-items: start;
+  padding: 1rem 0;
+  min-height: 0;
+}
+
+/* La face : ses onglets en haut, son état en bas, et l'aperçu qui prend le reste. */
+.face {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: .8rem;
+  min-height: 0;
+}
+
+/* La scène a la hauteur ; l'image y garde ses proportions. Sans elle, une planche
+   haute pousserait la fenêtre, et un `object-fit` laisserait le fond blanc et l'ombre
+   déborder de la couverture. */
+.scene {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 0;
+  /* L'ombre portée déborde d'une douzaine de pixels sous l'image : sans ce
+     rembourrage, l'aperçu au plus haut de la scène se ferait couper son ombre par
+     l'`overflow` — la couverture paraîtrait posée à même le bord. */
+  padding-bottom: .9rem;
+  overflow: hidden;
 }
 
 .onglets button {
@@ -192,14 +295,18 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
 
 .apercu {
   display: block;
-  width: 100%;
-  margin-top: .8rem;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
   background: #fff;
   box-shadow: 0 8px 20px -8px rgba(0, 0, 0, .4);
 }
 
+/* La seule zone défilante de l'application, et elle défile sur la hauteur de la
+   fenêtre — plus sur un `max-height` en rem qui ignorait l'écran qu'on a. */
 .reglages {
-  max-height: 34rem;
+  min-height: 0;
   overflow-y: auto;
   padding-right: .6rem;
 }
@@ -225,8 +332,12 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
 
 .prestataires { margin-top: .8rem; }
 
+/* Les relevés passent sous la ligne plutôt que de la pousser hors de l'écran : chez
+   un prestataire à gabarit, la ligne réclame plus de mille pixels, et un ascenseur
+   horizontal cacherait justement les champs qu'il faut remplir. */
 .prestataire {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: .8rem;
   padding: .4rem 0;
