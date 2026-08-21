@@ -172,42 +172,7 @@ pub fn source(
         pr.corps_pt,
     ));
 
-    // — Liminaires, sans folio : faux-titre, blanche, page de titre, copyright —
-    s.push_str(&format!(
-        r#"#v(42mm)
-#align(center, text(size: 11pt, tracking: 0.12em)[{}])
-#pagebreak()
-#pagebreak()
-
-#v(30mm)
-#align(center, text(size: 10.5pt, tracking: 0.1em)[{}])
-#v(14mm)
-#align(center, text(size: 15pt, tracking: 0.06em)[{}])
-#v(10mm)
-#align(center, emph(text(size: 10pt)[{}]))
-#pagebreak()
-
-"#,
-        majuscules(&livre.titre),
-        majuscules(&livre.auteur),
-        majuscules(&livre.titre_page().replace('\n', "\u{1}")).replace('\u{1}', r" \ "),
-        echappe(&livre.genre),
-    ));
-
-    // Le pavé de copyright est calé en bas de la justification. La chaîne Python le
-    // posait à 143 mm du haut du corps — une valeur juste pour le poche Lulu et
-    // arbitraire ailleurs ; le bas de la justification est la même intention, exprimée
-    // indépendamment du format.
-    s.push_str(&format!(
-        r#"#place(bottom + center, block(width: 100%)[
-  #set par(leading: 0.5em, spacing: 0.5em, first-line-indent: 0pt, justify: false)
-  #align(center, text(size: 8pt)[{}])
-])
-#pagebreak()
-
-"#,
-        echappe(&livre.copyright).replace('\n', r" \ ")
-    ));
+    s.push_str(&liminaires(livre));
 
     // — Corps, folio rétabli. La numérotation court depuis le faux-titre, seul son
     //   affichage était supprimé : le premier chapitre s'ouvre donc en page 5. —
@@ -244,6 +209,51 @@ pub fn source(
         s.push_str("\n#page(footer: none)[]\n");
     }
     s.push_str(&format!("\n{MARQUEUR}\n"));
+    s
+}
+
+/// Les pages liminaires : faux-titre, blanche, page de titre, copyright.
+///
+/// Toutes sans folio, et sans avoir à le dire : `footer: none`, posé par l'entête que
+/// `source` écrit, court jusqu'au `#set page(footer: …)` qui ouvre le corps.
+fn liminaires(livre: &Livre) -> String {
+    let mut s = String::new();
+    s.push_str(&format!(
+        r#"#v(42mm)
+#align(center, text(size: 11pt, tracking: 0.12em)[{}])
+#pagebreak()
+#pagebreak()
+
+#v(30mm)
+#align(center, text(size: 10.5pt, tracking: 0.1em)[{}])
+#v(14mm)
+#align(center, text(size: 15pt, tracking: 0.06em)[{}])
+#v(10mm)
+#align(center, emph(text(size: 10pt)[{}]))
+#pagebreak()
+
+"#,
+        majuscules(&livre.titre),
+        majuscules(&livre.auteur),
+        majuscules(&livre.titre_page().replace('\n', "\u{1}")).replace('\u{1}', r" \ "),
+        echappe(&livre.genre),
+    ));
+
+    // Le pavé de copyright est calé en bas de la justification. La chaîne Python le
+    // posait à 143 mm du haut du corps — une valeur juste pour le poche Lulu et
+    // arbitraire ailleurs ; le bas de la justification est la même intention, exprimée
+    // indépendamment du format.
+    s.push_str(&format!(
+        r#"#place(bottom + center, block(width: 100%)[
+  #set par(leading: 0.5em, spacing: 0.5em, first-line-indent: 0pt, justify: false)
+  #align(center, text(size: 8pt)[{}])
+])
+#pagebreak()
+
+"#,
+        echappe(&livre.copyright).replace('\n', r" \ ")
+    ));
+
     s
 }
 
