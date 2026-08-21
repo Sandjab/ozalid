@@ -118,6 +118,23 @@ function alerter(message) {
   $('alerte').className = message ? 'etat erreur' : 'etat';
 }
 
+/**
+ * Le pied : pour qui l'on regarde, et ce que vaut le dos.
+ *
+ * Le prestataire y est nommé une fois pour toute la fenêtre. Le dos n'y paraît que s'il
+ * vaut pour ce qui est montré — c'est `dosCourant()` qui en répond — parce qu'un dos
+ * périmé écrit en bas de l'écran est exactement ce qu'on ne relirait pas.
+ */
+function majPied() {
+  if (!projet) {
+    $('piedPrestataire').textContent = '';
+    return;
+  }
+  const dos = dosCourant();
+  $('piedPrestataire').textContent = `Vu pour : ${providerCourant().libelle} · `
+    + (dos === null ? 'dos non composé' : `dos ${nb(dos, 1)} mm`);
+}
+
 /* ---------- prestataires ---------- */
 
 async function chargerProviders() {
@@ -204,6 +221,7 @@ function afficherProjet(p) {
   $('reglages').hidden = !p.couverture;
   if (p.couverture) afficherCouverture(p.couverture);
   demanderApercu();
+  majPied();
 }
 
 /**
@@ -267,6 +285,7 @@ async function afficherAucunProjet() {
   $('etatEnregistrement').textContent = '';
   majEtapes();
   await afficherRecents();
+  majPied();
 }
 
 async function afficherRecents() {
@@ -690,6 +709,7 @@ async function composer() {
     $('etat').className = 'etat erreur';
   } finally {
     bt.disabled = false;
+    majPied();
   }
 }
 
@@ -903,13 +923,17 @@ $('btEpreuve').addEventListener('click', epreuve);
 $('inPoliceInterieur').addEventListener('change', majInterieur);
 $('inProvider').addEventListener('change', () => {
   majPapiers();
+  majPied();
   // Le format vient du prestataire : l'aperçu change avec lui, même si aucun réglage
   // de maquette n'a bougé.
   demanderApercu();
 });
 // Le papier ne change ni le format ni la maquette : il ne touche que le dos, et c'est
-// pour cela seul que l'aperçu doit repartir.
-$('inPapier').addEventListener('change', demanderApercu);
+// pour cela seul que l'aperçu et le pied doivent repartir.
+$('inPapier').addEventListener('change', () => {
+  majPied();
+  demanderApercu();
+});
 construireEtapes();
 construireFaces();
 for (const id of ['inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright', 'inChapitres']) {

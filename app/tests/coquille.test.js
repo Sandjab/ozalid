@@ -296,6 +296,111 @@ test('un démarrage en échec laisse les onglets éteints, jamais indéterminés
   }
 });
 
+/* ---------- le pied ---------- */
+
+const COMPOSITION = {
+  pages: 262, chapitres: 12, gouttiere: 25, blanche: true,
+  dos: 16.513, pdf: '/livres/LHC/lulu/interieur-lulu.pdf',
+};
+
+test('le pied nomme le prestataire et dit le dos non composé', async () => {
+  const a = atelier();
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  assert.equal(els.get('piedPrestataire').textContent,
+    'Vu pour : Lulu — poche 108 × 175 · dos non composé');
+});
+
+/**
+ * Le dos affiché au pied vient de la pagination mesurée, jamais d'une saisie. C'est la
+ * même règle que pour l'aperçu de planche, et pour la même raison : un dos inventé se
+ * voit au massicot, jamais avant.
+ */
+test('une fois l\'intérieur composé, le pied porte le dos mesuré', async () => {
+  const a = atelier();
+  const invoke = async (cmd, args) => {
+    if (cmd === 'composer') return COMPOSITION;
+    return a.invoke(cmd, args);
+  };
+  const { els } = await charge({ invoke });
+  await els.get('btNouveau').declenche('click');
+
+  await els.get('btComposer').declenche('click');
+
+  assert.equal(els.get('piedPrestataire').textContent,
+    'Vu pour : Lulu — poche 108 × 175 · dos 16,5 mm');
+});
+
+test('sans projet, le pied ne prétend rien', async () => {
+  const a = atelier();
+  const { els } = await charge({ invoke: a.invoke });
+
+  assert.equal(els.get('piedPrestataire').textContent, '');
+});
+
+/**
+ * Le pied appartient au livre ouvert. Refermé, le nom du prestataire et le dos mesuré
+ * resteraient affichés sous l'accueil, où plus rien ne dit de quel livre ils parlaient.
+ */
+test('fermer le projet efface le pied', async () => {
+  const a = atelier();
+  const { els, menu } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  assert.match(els.get('piedPrestataire').textContent, /Lulu/);
+
+  await menu('fichier.fermer');
+
+  assert.equal(els.get('piedPrestataire').textContent, '');
+});
+
+/**
+ * Les deux causes que le pied porte lui-même : le prestataire qu'il nomme, et le papier
+ * qui périme le dos sans rien changer d'autre à l'écran. Un pied qui ne repart pas sur
+ * ces gestes-là dit un dos qui vaut pour un autre livre que celui qu'on regarde.
+ */
+const AUTRE = {
+  cle: 'kdp-6x9', libelle: 'Amazon KDP — 6 × 9 po',
+  largeur: 152.4, hauteur: 228.6, fond_perdu: 3.175, dos_publie: true,
+  papiers: [{ cle: 'creme', libelle: 'Crème' }, { cle: 'blanc', libelle: 'Blanc' }],
+};
+
+/** Un atelier qui compose, pour partir d'un pied qui porte un dos. */
+function atelierCompose(liste) {
+  const a = atelier();
+  return async (cmd, args) => {
+    if (cmd === 'providers_liste') return liste;
+    if (cmd === 'composer') return COMPOSITION;
+    return a.invoke(cmd, args);
+  };
+}
+
+test('changer de prestataire renomme le pied et lui retire le dos', async () => {
+  const { els } = await charge({ invoke: atelierCompose([LULU, AUTRE]) });
+  await els.get('btNouveau').declenche('click');
+  await els.get('btComposer').declenche('click');
+  assert.match(els.get('piedPrestataire').textContent, /dos 16,5 mm/);
+
+  els.get('inProvider').value = 'kdp-6x9';
+  await els.get('inProvider').declenche('change');
+
+  assert.equal(els.get('piedPrestataire').textContent,
+    'Vu pour : Amazon KDP — 6 × 9 po · dos non composé');
+});
+
+test('changer de papier retire le dos du pied', async () => {
+  const { els } = await charge({ invoke: atelierCompose([AUTRE]) });
+  await els.get('btNouveau').declenche('click');
+  await els.get('btComposer').declenche('click');
+  assert.match(els.get('piedPrestataire').textContent, /dos 16,5 mm/);
+
+  els.get('inPapier').value = 'blanc';
+  await els.get('inPapier').declenche('change');
+
+  assert.equal(els.get('piedPrestataire').textContent,
+    'Vu pour : Amazon KDP — 6 × 9 po · dos non composé');
+});
+
 /**
  * Ce test lit le balisage au lieu de passer par l'application, et ne prouve donc rien
  * de son comportement. Ce n'est pas un exemple à suivre : c'est le seul filet possible
