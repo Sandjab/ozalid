@@ -676,6 +676,12 @@ fn memoriser(app: &tauri::AppHandle, chemin: &Path) {
     p.ajouter_recent(chemin);
     if let Err(e) = preferences::enregistrer(&dir, &p) {
         eprintln!("préférences : {e}");
+        return;
+    }
+    // Le sous-menu des récents vient d'être périmé par cette écriture : le
+    // reconstruire ici évite d'avoir à s'en souvenir à chaque point d'appel.
+    if let Err(e) = crate::menu::poser(app) {
+        eprintln!("menu : reconstruction impossible : {e}");
     }
 }
 

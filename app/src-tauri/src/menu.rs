@@ -1,0 +1,140 @@
+//! Le menu natif, et le seul chemin par lequel ses entrées agissent.
+//!
+//! Aucune entrée n'exécute quoi que ce soit : chacune émet un événement que
+//! l'interface traite avec le code de ses propres boutons. Il n'y a donc jamais
+//! deux façons d'ouvrir un projet, seulement deux façons de demander la même — et
+//! une garde des modifications à tenir à un seul endroit.
+//!
+//! Le menu Édition n'est pas décoratif : déclarer un menu sur mesure remplace celui
+//! que Tauri pose par défaut, et ⌘C cesserait de fonctionner dans les champs de
+//! saisie. Il en va de même du menu applicatif de macOS.
+
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::{AppHandle, Manager, Runtime};
+
+use crate::preferences;
+
+/// Nom de l'événement porté à l'interface. Sa charge utile est l'identifiant de
+/// l'entrée choisie.
+pub const EVENEMENT: &str = "menu";
+
+/// Préfixe des entrées « Ouvrir un récent ». Ce qui suit est le chemin du projet :
+/// l'identifiant transporte la donnée, ce qui évite de tenir un index en parallèle
+/// du menu.
+pub const RECENT: &str = "fichier.recent:";
+
+/// Construit le menu et le pose sur l'application.
+///
+/// Appelée au démarrage, puis à chaque fois que la liste des récents change : le
+/// menu entier est reconstruit plutôt que retouché, parce que reconstruire est sûr
+/// et que ce menu est petit.
+pub fn poser<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+    let mut recents = SubmenuBuilder::new(app, "Ouvrir un récent");
+    let liste = liste_recents(app);
+    if liste.is_empty() {
+        recents = recents.item(
+            &MenuItemBuilder::new("Aucun projet récent")
+                .enabled(false)
+                .build(app)?,
+        );
+    } else {
+        for c in &liste {
+            recents = recents.text(format!("{RECENT}{c}"), c);
+        }
+    }
+    let recents = recents.build()?;
+
+    let fichier = SubmenuBuilder::new(app, "Fichier")
+        .item(
+            &MenuItemBuilder::with_id("fichier.nouveau", "Nouveau projet")
+                .accelerator("CmdOrCtrl+N")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("fichier.ouvrir", "Ouvrir un projet…")
+                .accelerator("CmdOrCtrl+O")
+                .build(app)?,
+        )
+        .item(&recents)
+        .separator()
+        .item(&MenuItemBuilder::with_id("fichier.importer", "Importer un livre.toml…").build(app)?)
+        .separator()
+        .item(
+            &MenuItemBuilder::with_id("fichier.enregistrer", "Enregistrer")
+                .accelerator("CmdOrCtrl+S")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("fichier.enregistrer_sous", "Enregistrer sous…")
+                .accelerator("CmdOrCtrl+Shift+S")
+                .build(app)?,
+        )
+        .separator()
+        // Pas de ⌘W : sous macOS il ferme la fenêtre, et l'application n'en a qu'une.
+        .item(&MenuItemBuilder::with_id("fichier.fermer", "Fermer le projet").build(app)?)
+        .build()?;
+
+    let edition = SubmenuBuilder::new(app, "Édition")
+        .undo()
+        .redo()
+        .separator()
+        .cut()
+        .copy()
+        .paste()
+        .select_all()
+        .build()?;
+
+    let aller = SubmenuBuilder::new(app, "Aller")
+        .item(
+            &MenuItemBuilder::with_id("aller.livre", "Livre")
+                .accelerator("CmdOrCtrl+1")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("aller.interieur", "Intérieur")
+                .accelerator("CmdOrCtrl+2")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("aller.couverture", "Couverture")
+                .accelerator("CmdOrCtrl+3")
+                .build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("aller.livraison", "Livraison")
+                .accelerator("CmdOrCtrl+4")
+                .build(app)?,
+        )
+        .build()?;
+
+    let menu = MenuBuilder::new(app);
+    // Sous macOS, le premier sous-menu devient le menu applicatif. Sans lui, ni
+    // « À propos », ni « Masquer », ni ⌘Q.
+    #[cfg(target_os = "macos")]
+    let menu = menu.item(
+        &SubmenuBuilder::new(app, "Ozalid Studio")
+            .about(None)
+            .separator()
+            .services()
+            .separator()
+            .hide()
+            .hide_others()
+            .show_all()
+            .separator()
+            .quit()
+            .build()?,
+    );
+    let menu = menu.items(&[&fichier, &edition, &aller]).build()?;
+    app.set_menu(menu)?;
+    Ok(())
+}
+
+/// Les récents à porter au sous-menu. Même source que l'écran d'accueil, et même
+/// élagage : un projet effacé n'y figure pas.
+fn liste_recents<R: Runtime>(app: &AppHandle<R>) -> Vec<String> {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|d| preferences::charger(&d).recents_existants())
+        .unwrap_or_default()
+}
