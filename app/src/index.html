@@ -16,11 +16,15 @@
   <section>
     <h2>Projet</h2>
     <div class="ligne">
+      <button id="btNouveau" type="button">Nouveau projet</button>
       <button id="btOuvrir" type="button">Ouvrir un .ozalid…</button>
       <button id="btImporter" type="button">Importer un livre.toml…</button>
-      <button id="btEnregistrer" type="button" disabled>Enregistrer sous…</button>
+      <button id="btEnregistrer" type="button" disabled>Enregistrer</button>
+      <button id="btEnregistrerSous" type="button" disabled>Enregistrer sous…</button>
     </div>
     <p class="chemin" id="cheminProjet">aucun projet ouvert</p>
+    <p class="etat" id="etatEnregistrement"></p>
+    <div id="recents" class="recents"></div>
   </section>
 
   <section id="secLivre" hidden>

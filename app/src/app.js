@@ -75,7 +75,12 @@ function majPapiers() {
 function afficherProjet(p) {
   projet = p;
   $('cheminProjet').textContent = p.chemin ?? 'projet non enregistré';
-  $('btEnregistrer').disabled = false;
+  $('btEnregistrer').disabled = !p.chemin;
+  $('btEnregistrerSous').disabled = false;
+  $('etatEnregistrement').textContent = p.modifie
+    ? 'modifié'
+    : (p.chemin ? 'enregistré' : 'jamais enregistré');
+  $('recents').hidden = true;
   for (const s of ['secLivre', 'secManuscrit', 'secInterieur', 'secCouverture',
                    'secComposer', 'secPackages', 'secEpreuve']) {
     $(s).hidden = false;
@@ -92,11 +97,18 @@ function afficherProjet(p) {
   const attendu = p.livre.chapitres;
   const ecart = attendu !== null && attendu !== undefined && attendu !== p.chapitres_trouves;
   const em = $('etatManuscrit');
-  em.textContent = ecart
-    ? `${p.chapitres_trouves} chapitres dans le manuscrit embarqué, ${attendu} attendus `
-      + '— manuscrit périmé ou contrôle d\'intégrité à corriger.'
-    : `${p.chapitres_trouves} chapitres, ${p.mots.toLocaleString('fr-FR')} mots.`;
-  em.className = ecart ? 'note alerte' : 'note';
+  // Un manuscrit absent et un manuscrit sans chapitre composable comptent tous deux
+  // zéro : seul le Rust sait lequel des deux, et ce n'est pas la même chose à faire.
+  if (p.manuscrit_absent) {
+    em.textContent = 'Aucun manuscrit : en choisir un pour composer le livre.';
+    em.className = 'note';
+  } else {
+    em.textContent = ecart
+      ? `${p.chapitres_trouves} chapitres dans le manuscrit embarqué, ${attendu} attendus `
+        + '— manuscrit périmé ou contrôle d\'intégrité à corriger.'
+      : `${p.chapitres_trouves} chapitres, ${p.mots.toLocaleString('fr-FR')} mots.`;
+    em.className = ecart ? 'note alerte' : 'note';
+  }
 
   $('sourceManuscrit').textContent = p.manuscrit_source ?? 'aucune source mémorisée';
   $('btReimporter').disabled = !p.manuscrit_source;
@@ -136,16 +148,99 @@ async function tente(fn) {
   }
 }
 
+/**
+ * L'écran sans projet : les rubriques disparaissent, les récents s'offrent.
+ *
+ * Appelé au démarrage et après « Fermer le projet ». Il ne se contente pas de vider
+ * l'affichage : il remet `projet` à null, faute de quoi l'aperçu continuerait de se
+ * composer sur un livre qui n'est plus ouvert.
+ */
+async function afficherAucunProjet() {
+  projet = null;
+  dosCompose = null;
+  $('cheminProjet').textContent = 'aucun projet ouvert';
+  $('etatEnregistrement').textContent = '';
+  $('btEnregistrer').disabled = true;
+  $('btEnregistrerSous').disabled = true;
+  for (const s of ['secLivre', 'secManuscrit', 'secInterieur', 'secCouverture',
+                   'secComposer', 'secPackages', 'secEpreuve']) {
+    $(s).hidden = true;
+  }
+  await afficherRecents();
+}
+
+async function afficherRecents() {
+  const box = $('recents');
+  box.replaceChildren();
+  const liste = await invoke('recents_liste');
+  if (liste.length) {
+    box.append(h('p', 'Projets récents', 'note'));
+    for (const c of liste) {
+      const b = h('button', c);
+      b.type = 'button';
+      b.addEventListener('click', () => ouvrirChemin(c));
+      box.append(b);
+    }
+  }
+  box.hidden = !liste.length;
+}
+
+/**
+ * La garde : ce qui protège du travail non enregistré.
+ *
+ * Rend vrai quand l'appelant peut poursuivre. Le Rust pose la question et rend le
+ * choix ; l'interface l'exécute, parce qu'elle seule possède le sélecteur de
+ * fichiers dont « Enregistrer sous… » a besoin.
+ */
+async function garde() {
+  const choix = await invoke('garde_modifications');
+  if (choix === 'annuler') return false;
+  if (choix === 'enregistrer') return enregistrerQuelquePart();
+  return true;
+}
+
+/** Enregistre en place si le projet a un chemin, sinon demande où. Rend vrai si écrit. */
+async function enregistrerQuelquePart() {
+  if (projet?.chemin) {
+    try {
+      afficherProjet(await invoke('projet_enregistrer'));
+      return true;
+    } catch (e) {
+      $('etat').textContent = String(e);
+      $('etat').className = 'etat erreur';
+      return false;
+    }
+  }
+  return enregistrerSous();
+}
+
+async function nouveau() {
+  if (!await garde()) return;
+  await tente(async () => afficherProjet(await invoke('projet_nouveau')));
+}
+
+async function fermer() {
+  if (!await garde()) return;
+  await invoke('projet_fermer');
+  await afficherAucunProjet();
+}
+
 async function ouvrir() {
+  if (!await garde()) return;
   const choix = await open({
     multiple: false,
     filters: [{ name: 'Projet Ozalid', extensions: ['ozalid'] }],
   });
   if (!choix) return;
-  await tente(async () => afficherProjet(await invoke('projet_ouvrir', { chemin: choix })));
+  await ouvrirChemin(choix);
+}
+
+async function ouvrirChemin(chemin) {
+  await tente(async () => afficherProjet(await invoke('projet_ouvrir', { chemin })));
 }
 
 async function importer() {
+  if (!await garde()) return;
   const choix = await open({
     multiple: false,
     filters: [{ name: 'Livre de l\'ancienne chaîne', extensions: ['toml'] }],
@@ -155,14 +250,21 @@ async function importer() {
     afficherProjet(await invoke('projet_importer', { livreToml: choix })));
 }
 
-async function enregistrer() {
+/** « Enregistrer sous… » : demande où poser le projet. Rend vrai si écrit. */
+async function enregistrerSous() {
   const choix = await save({
     defaultPath: `${projet.livre.titre || 'projet'}.ozalid`,
     filters: [{ name: 'Projet Ozalid', extensions: ['ozalid'] }],
   });
-  if (!choix) return;
-  await tente(async () =>
-    afficherProjet(await invoke('projet_enregistrer_sous', { chemin: choix })));
+  if (!choix) return false;
+  try {
+    afficherProjet(await invoke('projet_enregistrer_sous', { chemin: choix }));
+    return true;
+  } catch (e) {
+    $('etat').textContent = String(e);
+    $('etat').className = 'etat erreur';
+    return false;
+  }
 }
 
 /* ---------- livre et manuscrit ---------- */
@@ -598,9 +700,11 @@ async function epreuve() {
   }
 }
 
+$('btNouveau').addEventListener('click', nouveau);
 $('btOuvrir').addEventListener('click', ouvrir);
 $('btImporter').addEventListener('click', importer);
-$('btEnregistrer').addEventListener('click', enregistrer);
+$('btEnregistrer').addEventListener('click', enregistrerQuelquePart);
+$('btEnregistrerSous').addEventListener('click', enregistrerSous);
 $('btReimporter').addEventListener('click', reimporter);
 $('btChoisirManuscrit').addEventListener('click', choisirManuscrit);
 $('btImageUne').addEventListener('click', () => choisirImage('une'));
@@ -622,4 +726,4 @@ construireFaces();
 for (const id of ['inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright', 'inChapitres']) {
   $(id).addEventListener('change', majLivre);
 }
-chargerProviders();
+chargerProviders().then(afficherAucunProjet);
