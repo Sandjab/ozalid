@@ -52,6 +52,14 @@ FICHIERS=(
   "cardo/Cardo-Regular.ttf"
   "cardo/Cardo-Italic.ttf"
   "cardo/Cardo-Bold.ttf"
+  # Mains manuscrites des envois autographes. Retenues sur relevé fontTools, pas sur
+  # la fiche du fondeur : chacune porte les accents français, la ligature œ, les
+  # guillemets et l'apostrophe courbe. Une main qui les ignorerait serait composée par
+  # repli, sans un mot, et l'envoi partirait chez le dédicataire dans deux écritures —
+  # le mécanisme même contre lequel `Envois::verifie` est posé.
+  "caveat/Caveat[wght].ttf"
+  "dancingscript/DancingScript[wght].ttf"
+  "petitformalscript/PetitFormalScript-Regular.ttf"
 )
 
 mkdir -p "$DEST"
