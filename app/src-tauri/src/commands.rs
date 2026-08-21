@@ -31,6 +31,9 @@ pub struct Atelier {
 struct Ouvert {
     chemin: Option<PathBuf>,
     projet: Projet,
+    /// Vrai dès qu'une commande a touché au projet sans qu'il ait été réécrit.
+    /// C'est lui, et lui seul, qui décide si fermer perd du travail.
+    modifie: bool,
 }
 
 /// Vue d'un prestataire pour l'interface.
@@ -84,6 +87,12 @@ pub struct ProjetVue {
     /// Chapitres réellement trouvés dans le manuscrit embarqué.
     pub chapitres_trouves: u32,
     pub mots: u32,
+    /// Vrai quand le projet ne porte aucun texte. Distinct de « zéro chapitre » :
+    /// un manuscrit présent mais non composable en trouve zéro aussi, et ce n'est
+    /// pas la même chose à corriger.
+    pub manuscrit_absent: bool,
+    /// Modifications non enregistrées.
+    pub modifie: bool,
     /// Maquette de couverture du projet, si le projet en porte une.
     pub couverture: Option<Couverture>,
     pub couverture_importee: bool,
@@ -114,14 +123,14 @@ pub fn providers_liste() -> Vec<ProviderVue> {
 #[tauri::command]
 pub fn projet_importer(livre_toml: String, atelier: State<Atelier>) -> Result<ProjetVue, String> {
     let projet = import::depuis_livre_toml(Path::new(&livre_toml))?;
-    poser(&atelier, None, projet)
+    poser(&atelier, None, projet, true)
 }
 
 #[tauri::command]
 pub fn projet_ouvrir(chemin: String, atelier: State<Atelier>) -> Result<ProjetVue, String> {
     let c = PathBuf::from(&chemin);
     let projet = Projet::ouvrir(&c)?;
-    poser(&atelier, Some(c), projet)
+    poser(&atelier, Some(c), projet, false)
 }
 
 #[tauri::command]
@@ -131,7 +140,7 @@ pub fn projet_enregistrer(chemin: String, atelier: State<Atelier>) -> Result<Pro
     let c = PathBuf::from(&chemin);
     o.projet.enregistrer(&c)?;
     o.chemin = Some(c);
-    vue(o)
+    vue_enregistree(o)
 }
 
 /// Relit le manuscrit à sa source d'origine et remplace la copie embarquée.
@@ -148,7 +157,7 @@ pub fn manuscrit_reimporter(atelier: State<Atelier>) -> Result<ProjetVue, String
     })?;
     o.projet.texte = std::fs::read_to_string(&source)
         .map_err(|e| format!("manuscrit introuvable ({source}) : {e}"))?;
-    vue(o)
+    vue_modifiee(o)
 }
 
 /// Remplace le manuscrit par un fichier choisi, et mémorise son chemin.
@@ -159,7 +168,7 @@ pub fn manuscrit_choisir(chemin: String, atelier: State<Atelier>) -> Result<Proj
     o.projet.texte =
         std::fs::read_to_string(&chemin).map_err(|e| format!("manuscrit illisible : {e}"))?;
     o.projet.meta.manuscrit.source = Some(chemin);
-    vue(o)
+    vue_modifiee(o)
 }
 
 #[tauri::command]
@@ -167,7 +176,7 @@ pub fn livre_modifier(livre: Livre, atelier: State<Atelier>) -> Result<ProjetVue
     let mut garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_mut().ok_or_else(aucun_projet)?;
     o.projet.meta.livre = livre;
-    vue(o)
+    vue_modifiee(o)
 }
 
 #[tauri::command]
@@ -184,7 +193,7 @@ pub fn interieur_modifier(
     let mut garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_mut().ok_or_else(aucun_projet)?;
     o.projet.meta.interieur = interieur;
-    vue(o)
+    vue_modifiee(o)
 }
 
 /// Compose l'intérieur du projet ouvert et rend le compte de pages avec le dos qui
@@ -313,7 +322,7 @@ pub fn maquette_choisir(cle: String, atelier: State<Atelier>) -> Result<ProjetVu
     let mut garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_mut().ok_or_else(aucun_projet)?;
     o.projet.meta.couverture.maquette = Some(m);
-    vue(o)
+    vue_modifiee(o)
 }
 
 #[tauri::command]
@@ -324,7 +333,7 @@ pub fn couverture_modifier(
     let mut garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_mut().ok_or_else(aucun_projet)?;
     o.projet.meta.couverture.maquette = Some(couverture);
-    vue(o)
+    vue_modifiee(o)
 }
 
 /// Nom sous lequel une image entre dans le projet, selon la face qu'elle sert.
@@ -364,7 +373,7 @@ pub fn image_choisir(
     let mut garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_mut().ok_or_else(aucun_projet)?;
     poser_image(&mut o.projet.images, nom, octets);
-    vue(o)
+    vue_modifiee(o)
 }
 
 /// Pose l'image d'une face et retire celle qui tenait déjà ce rôle.
@@ -578,9 +587,14 @@ fn poser(
     atelier: &State<Atelier>,
     chemin: Option<PathBuf>,
     projet: Projet,
+    modifie: bool,
 ) -> Result<ProjetVue, String> {
     let mut garde = atelier.ouvert.lock().unwrap();
-    *garde = Some(Ouvert { chemin, projet });
+    *garde = Some(Ouvert {
+        chemin,
+        projet,
+        modifie,
+    });
     vue(garde.as_ref().unwrap())
 }
 
@@ -596,11 +610,28 @@ fn vue(o: &Ouvert) -> Result<ProjetVue, String> {
         manuscrit_source: o.projet.meta.manuscrit.source.clone(),
         chapitres_trouves,
         mots: o.projet.texte.split_whitespace().count() as u32,
+        manuscrit_absent: o.projet.texte.trim().is_empty(),
+        modifie: o.modifie,
         couverture: o.projet.meta.couverture.maquette.clone(),
         couverture_importee: o.projet.meta.couverture.maquette.is_some(),
         images: o.projet.images.keys().cloned().collect(),
         interieur: o.projet.meta.interieur.clone(),
     })
+}
+
+/// La vue d'un projet qu'on vient de modifier.
+///
+/// Deux fonctions plutôt qu'un drapeau posé à la main dans chaque commande : le
+/// point d'appel dit ce qu'il a fait, et oublier de le dire se voit à la lecture.
+fn vue_modifiee(o: &mut Ouvert) -> Result<ProjetVue, String> {
+    o.modifie = true;
+    vue(o)
+}
+
+/// La vue d'un projet qu'on vient d'écrire sur le disque.
+fn vue_enregistree(o: &mut Ouvert) -> Result<ProjetVue, String> {
+    o.modifie = false;
+    vue(o)
 }
 
 fn aucun_projet() -> String {
@@ -724,5 +755,67 @@ mod tests {
             &nom_image("une", "png").unwrap()
         ));
         assert!(nom_image("planche", "png").is_err());
+    }
+
+    fn ouvert_neuf() -> Ouvert {
+        Ouvert {
+            chemin: None,
+            projet: Projet::nouveau(Livre::vide(), String::new()),
+            modifie: false,
+        }
+    }
+
+    /// Le drapeau est ce qui décide si fermer l'application perd du travail. Il ne
+    /// doit se lever que par une mutation, et retomber par une écriture — jamais
+    /// par une simple relecture du projet.
+    #[test]
+    fn le_drapeau_de_modification_suit_les_mutations_et_les_ecritures() {
+        let mut o = ouvert_neuf();
+        assert!(
+            !vue(&o).unwrap().modifie,
+            "un projet neuf n'est pas modifié"
+        );
+        assert!(!vue(&o).unwrap().modifie, "relire ne modifie pas");
+
+        assert!(vue_modifiee(&mut o).unwrap().modifie);
+        assert!(vue(&o).unwrap().modifie, "le drapeau reste levé");
+
+        assert!(!vue_enregistree(&mut o).unwrap().modifie);
+    }
+
+    /// Un manuscrit absent et un manuscrit sans chapitre composable rendent tous
+    /// deux zéro chapitre. L'interface doit pouvoir dire « aucun manuscrit » plutôt
+    /// que « 0 chapitre » : ce n'est pas la même chose à corriger.
+    #[test]
+    fn un_manuscrit_vide_se_declare_absent_et_non_vide_de_chapitres() {
+        let vide = ouvert_neuf();
+        let v = vue(&vide).unwrap();
+        assert!(v.manuscrit_absent);
+        assert_eq!(v.chapitres_trouves, 0);
+
+        let mut plein = ouvert_neuf();
+        plein.projet.texte = "## 01 - Un\n\nTexte.\n".into();
+        let v = vue(&plein).unwrap();
+        assert!(!v.manuscrit_absent);
+        assert_eq!(v.chapitres_trouves, 1);
+
+        // Du texte qui ne porte aucun « ## » : présent, mais sans chapitre.
+        let mut sans_chapitre = ouvert_neuf();
+        sans_chapitre.projet.texte = "juste une phrase\n".into();
+        let v = vue(&sans_chapitre).unwrap();
+        assert!(!v.manuscrit_absent, "présent, même s'il ne compose pas");
+        assert_eq!(v.chapitres_trouves, 0);
+    }
+
+    /// Le genre par défaut ne doit vivre qu'à un endroit : un projet neuf et un
+    /// projet relu d'un TOML sans genre doivent porter le même.
+    #[test]
+    fn un_livre_vide_prend_le_genre_par_defaut() {
+        let l = Livre::vide();
+        assert_eq!(l.genre, "roman");
+        assert!(l.titre.is_empty());
+        assert!(l.auteur.is_empty());
+        assert_eq!(l.chapitres, None);
+        assert_eq!(l.titre_page, None);
     }
 }

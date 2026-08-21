@@ -53,6 +53,20 @@ fn genre_defaut() -> String {
 }
 
 impl Livre {
+    /// Un livre à remplir : tous les champs vides, sauf le genre, dont le défaut
+    /// vaut mieux qu'un blanc — et c'est le même défaut que celui d'un `projet.toml`
+    /// qui ne le porte pas.
+    pub fn vide() -> Self {
+        Self {
+            titre: String::new(),
+            titre_page: None,
+            auteur: String::new(),
+            genre: genre_defaut(),
+            copyright: String::new(),
+            chapitres: None,
+        }
+    }
+
     /// Titre tel qu'il doit paraître sur la page de titre, sauts de ligne compris.
     pub fn titre_page(&self) -> &str {
         self.titre_page.as_deref().unwrap_or(&self.titre)
