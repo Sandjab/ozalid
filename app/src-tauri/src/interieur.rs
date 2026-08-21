@@ -254,6 +254,22 @@ fn liminaires(livre: &Livre) -> String {
         echappe(&livre.copyright).replace('\n', r" \ ")
     ));
 
+    // La dédicace prend une belle page, son verso reste blanc — deux `#pagebreak()`
+    // d'affilée, le dispositif de la blanche du faux-titre. Le corps s'ouvre donc en
+    // page 7 au lieu de 5, et le dos en tient compte de lui-même puisqu'il découle de
+    // la pagination mesurée, jamais d'une saisie.
+    if let Some(d) = livre.dedicace() {
+        s.push_str(&format!(
+            r#"#v(48mm)
+#align(right, emph(text(size: 9.5pt)[{}]))
+#pagebreak()
+#pagebreak()
+
+"#,
+            echappe(d).replace('\n', r" \ ")
+        ));
+    }
+
     s
 }
 
@@ -546,5 +562,57 @@ mod tests {
             1,
             "un seul saut, entre les deux chapitres"
         );
+    }
+
+    /// Une dédicace renseignée coûte exactement deux pages : la belle page et sa
+    /// blanche. Une seule, et le premier chapitre s'ouvrirait au verso ; trois, et le
+    /// livre gagne un feuillet que personne n'a demandé — dans les deux cas le dos est
+    /// faux, et il ne se découvre qu'après tirage.
+    #[test]
+    fn une_dedicace_ajoute_une_belle_page_et_sa_blanche() {
+        let sans = liminaires(&livre());
+        let mut l = livre();
+        l.dedicace = Some("À M., qui a tenu la lampe.".into());
+        let avec = liminaires(&l);
+
+        assert_eq!(
+            avec.matches("#pagebreak()").count(),
+            sans.matches("#pagebreak()").count() + 2,
+            "la dédicace ne coûte pas deux pages"
+        );
+        assert!(
+            avec.contains("#align(right, emph(text(size: 9.5pt)[À M., qui a tenu la lampe.]))"),
+            "la dédicace n'est pas composée en petit italique à droite : {avec}"
+        );
+    }
+
+    /// Absente, vide ou faite d'espaces : la même source, à l'octet près. C'est ce qui
+    /// garantit qu'un livre déjà composé ne change pas de pagination — donc pas de dos —
+    /// du seul fait que le champ existe désormais.
+    #[test]
+    fn une_dedicace_vide_ou_blanche_ne_compose_rien() {
+        let sans = liminaires(&livre());
+        for creux in ["", "   ", "\n \n"] {
+            let mut l = livre();
+            l.dedicace = Some(creux.into());
+            assert_eq!(
+                liminaires(&l),
+                sans,
+                "« {creux:?} » a été pris pour une dédicace"
+            );
+        }
+    }
+
+    /// Les deux pièges déjà gardés pour le titre de page : le markup Typst doit être
+    /// échappé, et les sauts de ligne voulus doivent survivre. Un `#` non échappé fait
+    /// échouer la compilation du livre entier, plusieurs centaines de pages plus loin.
+    #[test]
+    fn une_dedicace_est_echappee_et_garde_ses_sauts_de_ligne() {
+        let mut l = livre();
+        l.dedicace = Some("À #M.,\nqui a tenu la lampe.".into());
+        let s = liminaires(&l);
+
+        assert!(s.contains(r"À \#M.,"), "dédicace non échappée : {s}");
+        assert!(s.contains(r"\ qui a tenu la lampe."), "saut de ligne perdu : {s}");
     }
 }
