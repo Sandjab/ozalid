@@ -1,0 +1,174 @@
+'use strict';
+
+// La coquille : ce qui est montré, et quand. Une seule étape à la fois, aucune sans
+// projet, et le même code derrière l'onglet et derrière le menu. La mise en page,
+// elle, se vérifie dans l'application — pas ici.
+
+const test = require('node:test');
+const assert = require('node:assert');
+const { charge } = require('./dom_shim');
+
+const LULU = {
+  cle: 'lulu', libelle: 'Lulu — poche 108 × 175',
+  largeur: 108, hauteur: 175, fond_perdu: 3.175, dos_publie: true,
+  papiers: [{ cle: 'standard', libelle: 'Papier standard' }],
+};
+
+function projet(sur = {}) {
+  return {
+    chemin: '/livres/LHC.ozalid',
+    livre: {
+      titre: 'Les Heures creuses', titre_page: null, auteur: 'Ivan Pjig',
+      genre: 'roman', copyright: '', chapitres: null,
+    },
+    manuscrit_source: null,
+    chapitres_trouves: 12,
+    mots: 42000,
+    manuscrit_absent: false,
+    modifie: false,
+    couverture: null,
+    couverture_importee: false,
+    images: [],
+    interieur: { police: 'EB Garamond' },
+    ...sur,
+  };
+}
+
+function atelier({ recents = [], sur = {} } = {}) {
+  const appels = [];
+  const invoke = async (cmd, args) => {
+    appels.push([cmd, args]);
+    switch (cmd) {
+      case 'providers_liste': return [LULU];
+      case 'polices_liste': return ['Bodoni Moda'];
+      case 'polices_texte_liste': return ['EB Garamond'];
+      case 'maquettes_liste': return [];
+      case 'recents_liste': return recents;
+      case 'garde_modifications': return 'ignorer';
+      case 'projet_fermer': return null;
+      case 'interface_prete': return null;
+      case 'couverture_apercu': throw new Error('pas de maquette');
+      default: return projet(sur);
+    }
+  };
+  return { appels, invoke, noms: () => appels.map(([c]) => c) };
+}
+
+const ETAPES = ['livre', 'interieur', 'couverture', 'livraison'];
+const montree = (els) =>
+  ETAPES.filter((c) => els.get(`etape${c[0].toUpperCase()}${c.slice(1)}`).hidden === false);
+
+test('sans projet, l\'accueil s\'offre et les onglets sont inertes', async () => {
+  const a = atelier();
+  const { els } = await charge({ invoke: a.invoke });
+
+  assert.equal(els.get('accueil').hidden, false);
+  assert.deepEqual(montree(els), [], 'une étape est montrée sans projet');
+  for (const cle of ETAPES) {
+    assert.equal(els.get(`onglet-${cle}`).disabled, true, `onglet ${cle} actif sans projet`);
+  }
+});
+
+test('ouvrir un projet retire l\'accueil et montre la première étape', async () => {
+  const a = atelier();
+  const { els } = await charge({ invoke: a.invoke });
+
+  await els.get('btNouveau').declenche('click');
+
+  assert.equal(els.get('accueil').hidden, true);
+  assert.deepEqual(montree(els), ['livre']);
+  assert.equal(els.get('onglet-livre').getAttribute('aria-selected'), 'true');
+  assert.equal(els.get('titreLivre').textContent, 'Les Heures creuses');
+});
+
+test('une seule étape est montrée à la fois', async () => {
+  const a = atelier();
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  await els.get('onglet-couverture').declenche('click');
+
+  assert.deepEqual(montree(els), ['couverture']);
+  assert.equal(els.get('onglet-livre').getAttribute('aria-selected'), 'false');
+  assert.equal(els.get('onglet-couverture').getAttribute('aria-selected'), 'true');
+});
+
+/**
+ * Le menu et l'onglet doivent appeler la même fonction. Deux implémentations
+ * dériveraient, et c'est la leçon que le lot 1 a déjà payée sur « Enregistrer ».
+ */
+test('le menu « Aller » montre la même étape que l\'onglet', async () => {
+  const a = atelier();
+  const { els, menu } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  await menu('aller.livraison');
+
+  assert.deepEqual(montree(els), ['livraison']);
+  assert.equal(els.get('onglet-livraison').getAttribute('aria-selected'), 'true');
+});
+
+/**
+ * Les onglets sont grisés sans projet ; le menu, lui, offre toujours ses entrées.
+ * Sans garde ici, ⌘3 sur l'accueil montrerait une étape vide — et une exception
+ * remonterait dans le rappel de `listen`, que personne n'attrape.
+ */
+test('sans projet, « Aller » ne montre rien et ne lève rien', async () => {
+  const a = atelier();
+  const { els, menu } = await charge({ invoke: a.invoke });
+
+  await menu('aller.couverture');
+
+  assert.equal(els.get('accueil').hidden, false);
+  assert.deepEqual(montree(els), []);
+});
+
+/**
+ * L'étape courante appartient au projet qu'on regardait. Rester sur la Livraison en
+ * ouvrant un autre livre donnerait à lire ses packages sous le titre du nouveau.
+ */
+test('ouvrir un autre projet ramène à la première étape', async () => {
+  const a = atelier();
+  const { els, menu } = await charge({
+    invoke: a.invoke,
+    open: async () => '/livres/B.ozalid',
+  });
+  await els.get('btNouveau').declenche('click');
+  await els.get('onglet-livraison').declenche('click');
+
+  await menu('fichier.ouvrir');
+
+  assert.deepEqual(montree(els), ['livre']);
+});
+
+test('fermer le projet rend l\'accueil et éteint les onglets', async () => {
+  const a = atelier();
+  const { els, menu } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  await menu('fichier.fermer');
+
+  assert.equal(els.get('accueil').hidden, false);
+  assert.deepEqual(montree(els), []);
+  assert.equal(els.get('onglet-livre').disabled, true);
+  assert.equal(els.get('titreLivre').textContent, 'Ozalid Studio');
+});
+
+/**
+ * Une erreur survenue à l'étape 4 doit se lire depuis l'étape 1 : l'entête est la
+ * seule bande que toutes les étapes partagent, et c'est pour cela qu'elle la porte.
+ */
+test('une erreur s\'affiche dans l\'entête, visible depuis n\'importe quelle étape', async () => {
+  const a = atelier();
+  const invoke = async (cmd, args) => {
+    if (cmd === 'livre_modifier') throw new Error('titre vide');
+    return a.invoke(cmd, args);
+  };
+  const { els } = await charge({ invoke });
+  await els.get('btNouveau').declenche('click');
+
+  await els.get('inTitre').declenche('change');
+
+  assert.match(els.get('alerte').textContent, /titre vide/);
+  assert.equal(els.get('alerte').className, 'etat erreur');
+});

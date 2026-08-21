@@ -55,12 +55,16 @@ function faux(providers, sur = {}) {
 /* ---------- intérieur ---------- */
 
 test('la police d\'intérieur du projet est celle qui paraît au panneau', async () => {
-  const { els } = await charge({
+  const { els, menu } = await charge({
     invoke: faux([LULU], { projet_importer: PROJET }),
     open: async () => '/dev/ozalid/build/LHC/livre.toml',
   });
   await els.get('btImporter').declenche('click');
-  assert.strictEqual(els.get('secInterieur').hidden, false);
+  // L'ouverture arrive au Livre ; l'Intérieur est à une étape de là, et le panneau
+  // qu'on y trouve porte déjà la police du projet.
+  assert.strictEqual(els.get('etapeLivre').hidden, false);
+  await menu('aller.interieur');
+  assert.strictEqual(els.get('etapeInterieur').hidden, false);
   assert.strictEqual(els.get('inPoliceInterieur').value, 'Alegreya');
 });
 
@@ -106,8 +110,9 @@ test('une police refusée est dite, et le panneau revient au projet', async () =
   await els.get('btImporter').declenche('click');
   els.get('inPoliceInterieur').value = 'Cardo';
   await els.get('inPoliceInterieur').declenche('change');
-  assert.match(els.get('etat').textContent, /police d'intérieur inconnue/);
-  assert.strictEqual(els.get('etat').className, 'etat erreur');
+  // Le refus passe par `tente()`, qui écrit dans l'entête et non dans l'étape.
+  assert.match(els.get('alerte').textContent, /police d'intérieur inconnue/);
+  assert.strictEqual(els.get('alerte').className, 'etat erreur');
   assert.strictEqual(
     els.get('inPoliceInterieur').value,
     'Alegreya',

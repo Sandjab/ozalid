@@ -93,13 +93,13 @@ test('un prestataire à gabarit annonce que le fond perdu se relève', async () 
 
 test('rien n\'est proposé tant qu\'aucun projet n\'est ouvert', async () => {
   const { els } = await charge({ invoke: faux([LULU]) });
-  for (const s of ['secLivre', 'secManuscrit', 'secComposer']) {
+  assert.strictEqual(els.get('accueil').hidden, false);
+  for (const s of ['etapeLivre', 'etapeInterieur', 'etapeCouverture', 'etapeLivraison']) {
     assert.strictEqual(els.get(s).hidden, true, `${s} visible sans projet`);
   }
-  assert.strictEqual(els.get('btEnregistrer').disabled, true);
 });
 
-test('un projet importé remplit les champs et ouvre les sections', async () => {
+test('un projet importé remplit les champs et ouvre la première étape', async () => {
   const { els } = await charge({
     invoke: faux([LULU], { projet_importer: PROJET }),
     open: async () => '/dev/ozalid/build/LHC/livre.toml',
@@ -109,8 +109,7 @@ test('un projet importé remplit les champs et ouvre les sections', async () => 
   assert.strictEqual(els.get('inTitre').value, 'Les Heures creuses');
   assert.strictEqual(els.get('inTitrePage').value, 'Les Heures\ncreuses');
   assert.strictEqual(els.get('inChapitres').value, 64);
-  assert.strictEqual(els.get('secComposer').hidden, false);
-  assert.strictEqual(els.get('btEnregistrer').disabled, false);
+  assert.strictEqual(els.get('etapeLivre').hidden, false);
   assert.match(els.get('etatImages').textContent, /couverture\.jpg/);
 });
 
@@ -160,7 +159,12 @@ test('réimporter n\'est offert que si une source est mémorisée', async () => 
   assert.match(els.get('sourceManuscrit').textContent, /aucune source/);
 });
 
-test('un projet non enregistré le dit, et reste enregistrable', async () => {
+/**
+ * Sans chemin, il n'y a rien à réécrire : c'est l'entête qui porte cet état, et le
+ * geste d'enregistrement qui bascule sur « Enregistrer sous… » — vérifié pour sa
+ * part dans `cycle_de_vie.test.js`.
+ */
+test('un projet non enregistré le dit dans l\'entête', async () => {
   const neuf = { ...PROJET, chemin: null };
   const { els } = await charge({
     invoke: faux([LULU], { projet_importer: neuf }),
@@ -168,10 +172,7 @@ test('un projet non enregistré le dit, et reste enregistrable', async () => {
   });
   await els.get('btImporter').declenche('click');
   assert.match(els.get('cheminProjet').textContent, /non enregistré/);
-  // Enregistrable, mais pas en place : sans chemin, il n'y a rien à réécrire, et
-  // c'est « Enregistrer sous… » qui demande où poser le projet.
-  assert.strictEqual(els.get('btEnregistrer').disabled, true);
-  assert.strictEqual(els.get('btEnregistrerSous').disabled, false);
+  assert.strictEqual(els.get('etatEnregistrement').textContent, 'jamais enregistré');
 });
 
 /* ---------- composition ---------- */
@@ -250,9 +251,9 @@ test('un fichier qui n\'est pas un projet est signalé à l\'écran', async () =
     open: async () => '/x/photos.zip',
   });
   await els.get('btOuvrir').declenche('click');
-  // L'ouverture ayant échoué, l'écran est resté celui de l'accueil, où `#etat` est
-  // masqué avec sa section : le message se lit là où il reste quelque chose à lire.
-  assert.match(els.get('etatEnregistrement').textContent, /pas un projet Ozalid/);
-  assert.strictEqual(els.get('etatEnregistrement').className, 'etat erreur');
-  assert.strictEqual(els.get('secLivre').hidden, true, 'sections ouvertes sur un échec');
+  // L'entête est la seule bande que l'accueil et les étapes partagent : le message s'y
+  // lit quel que soit l'écran d'où l'ouverture est partie.
+  assert.match(els.get('alerte').textContent, /pas un projet Ozalid/);
+  assert.strictEqual(els.get('alerte').className, 'etat erreur');
+  assert.strictEqual(els.get('accueil').hidden, false, 'étapes ouvertes sur un échec');
 });

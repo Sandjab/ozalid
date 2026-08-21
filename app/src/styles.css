@@ -3,6 +3,7 @@
   --encre: #191917;
   --rouge: #c00000;
   --trait: #d8cdb4;
+  --onglets-flux: column;
   color-scheme: light;
 }
 
@@ -16,10 +17,55 @@ body {
   background: var(--papier);
 }
 
-header {
-  padding: 1.4rem 2rem 1rem;
+#entete {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1rem 2rem .8rem;
   border-bottom: 1px solid var(--trait);
 }
+
+#entete .etats { text-align: right; }
+
+/* Les onglets des étapes. La disposition tient dans le flux de la grille : un rail
+   vertical en changerait le sens, pas le balisage. */
+#etapes {
+  display: grid;
+  grid-auto-flow: var(--onglets-flux);
+  grid-auto-columns: 1fr;
+  gap: .4rem;
+  padding: .5rem 2rem 0;
+  border-bottom: 1px solid var(--trait);
+}
+
+#etapes button {
+  display: grid;
+  gap: .1rem;
+  justify-items: start;
+  padding: .4rem .7rem;
+  background: transparent;
+  color: var(--encre);
+  border-color: transparent;
+  border-bottom: 2px solid transparent;
+  border-radius: 3px 3px 0 0;
+}
+
+#etapes button[aria-selected="true"] {
+  border-bottom-color: var(--encre);
+  background: #fff;
+}
+
+#etapes button:disabled { opacity: .4; cursor: default; }
+
+#pied {
+  padding: .5rem 2rem;
+  border-top: 1px solid var(--trait);
+  color: #7a7368;
+  font-size: .85rem;
+}
+
+#pied p { margin: 0; }
 
 h1 {
   margin: 0;
@@ -28,12 +74,12 @@ h1 {
   letter-spacing: .02em;
 }
 
-.sous { margin: .2rem 0 0; color: #7a7368; font-size: .85rem; }
+main { padding: 0 2rem; }
 
-main { max-width: 46rem; padding: 0 2rem; }
+.etape, #accueil { max-width: 46rem; }
 
-section { padding: 1.2rem 0; border-bottom: 1px solid var(--trait); }
-section:last-child { border-bottom: none; }
+.bloc { padding: 1.2rem 0; border-bottom: 1px solid var(--trait); }
+.bloc:last-child { border-bottom: none; }
 
 h2 {
   margin: 0 0 .8rem;

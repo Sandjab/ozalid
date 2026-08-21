@@ -7,118 +7,145 @@
 </head>
 <body>
 
-<header>
-  <h1>Ozalid Studio</h1>
-  <p class="sous">Manuscrit, intérieur, couverture, planche et packages prestataires</p>
+<header id="entete">
+  <div class="identite">
+    <h1 id="titreLivre">Ozalid Studio</h1>
+    <p class="chemin" id="cheminProjet">aucun projet ouvert</p>
+  </div>
+  <div class="etats">
+    <p class="etat" id="etatEnregistrement"></p>
+    <p class="etat" id="alerte"></p>
+  </div>
 </header>
 
-<main>
-  <section>
-    <h2>Projet</h2>
-    <div class="ligne">
-      <button id="btNouveau" type="button">Nouveau projet</button>
-      <button id="btOuvrir" type="button">Ouvrir un .ozalid…</button>
-      <button id="btImporter" type="button">Importer un livre.toml…</button>
-      <button id="btEnregistrer" type="button" disabled>Enregistrer</button>
-      <button id="btEnregistrerSous" type="button" disabled>Enregistrer sous…</button>
-    </div>
-    <p class="chemin" id="cheminProjet">aucun projet ouvert</p>
-    <p class="etat" id="etatEnregistrement"></p>
-    <div id="recents" class="recents"></div>
-  </section>
+<!-- Les onglets sont construits par app.js depuis la table ETAPES. La nav est écrite
+     indifférente à sa disposition : passer au rail vertical ne demanderait qu'une autre
+     valeur de --coquille et un autre sens de flux, pas un autre balisage. -->
+<nav id="etapes" role="tablist" aria-label="Étapes du livre"></nav>
 
-  <section id="secLivre" hidden>
-    <h2>Livre</h2>
-    <label><span>Titre</span><input type="text" id="inTitre"></label>
-    <label><span>Titre de la page de titre</span>
-      <textarea id="inTitrePage" rows="2" placeholder="vide : le titre ci-dessus"></textarea></label>
-    <label><span>Auteur</span><input type="text" id="inAuteur"></label>
-    <label><span>Genre</span><input type="text" id="inGenre"></label>
-    <label><span>Copyright</span><textarea id="inCopyright" rows="3"></textarea></label>
-    <label><span>Chapitres attendus</span>
-      <input type="number" id="inChapitres" min="1" placeholder="facultatif — contrôle d'intégrité"></label>
-  </section>
+<main id="contenu">
 
-  <section id="secManuscrit" hidden>
-    <h2>Manuscrit</h2>
-    <p class="note" id="etatManuscrit"></p>
-    <p class="chemin" id="sourceManuscrit"></p>
-    <div class="ligne">
-      <button id="btReimporter" type="button" disabled>Réimporter le manuscrit</button>
-      <button id="btChoisirManuscrit" type="button">Choisir un autre manuscrit…</button>
+  <section id="accueil">
+    <div class="bloc">
+      <h2>Projet</h2>
+      <div class="ligne">
+        <button id="btNouveau" type="button">Nouveau projet</button>
+        <button id="btOuvrir" type="button">Ouvrir un .ozalid…</button>
+        <button id="btImporter" type="button">Importer un livre.toml…</button>
+      </div>
+      <div id="recents" class="recents"></div>
     </div>
   </section>
 
-  <section id="secInterieur" hidden>
-    <h2>Intérieur</h2>
-    <label><span>Police</span><select id="inPoliceInterieur"></select></label>
-    <p class="note">La police fixe la pagination, donc l'épaisseur du dos : en changer
-      périme le dos de la dernière composition. La planche reste sans dos tant que
-      l'intérieur n'a pas été recomposé.</p>
+  <section id="etapeLivre" class="etape" role="tabpanel" hidden>
+    <div class="bloc">
+      <h2>Livre</h2>
+      <label><span>Titre</span><input type="text" id="inTitre"></label>
+      <label><span>Titre de la page de titre</span>
+        <textarea id="inTitrePage" rows="2" placeholder="vide : le titre ci-dessus"></textarea></label>
+      <label><span>Auteur</span><input type="text" id="inAuteur"></label>
+      <label><span>Genre</span><input type="text" id="inGenre"></label>
+      <label><span>Copyright</span><textarea id="inCopyright" rows="3"></textarea></label>
+      <label><span>Chapitres attendus</span>
+        <input type="number" id="inChapitres" min="1" placeholder="facultatif — contrôle d'intégrité"></label>
+    </div>
+
+    <div class="bloc">
+      <h2>Manuscrit</h2>
+      <p class="note" id="etatManuscrit"></p>
+      <p class="chemin" id="sourceManuscrit"></p>
+      <div class="ligne">
+        <button id="btReimporter" type="button" disabled>Réimporter le manuscrit</button>
+        <button id="btChoisirManuscrit" type="button">Choisir un autre manuscrit…</button>
+      </div>
+    </div>
   </section>
 
-  <section id="secCouverture" hidden>
-    <h2>Couverture</h2>
-    <div class="ligne">
-      <span class="lab">Maquette de départ</span>
-      <span id="maquettes" class="ligne"></span>
+  <section id="etapeInterieur" class="etape" role="tabpanel" hidden>
+    <div class="bloc">
+      <h2>Intérieur</h2>
+      <label><span>Police</span><select id="inPoliceInterieur"></select></label>
+      <p class="note">La police fixe la pagination, donc l'épaisseur du dos : en changer
+        périme le dos de la dernière composition. La planche reste sans dos tant que
+        l'intérieur n'a pas été recomposé.</p>
     </div>
-    <div class="ligne">
-      <span class="lab">Photos</span>
-      <button id="btImageUne" type="button">Image de 1ère…</button>
-      <button id="btImageQuatre" type="button">Image de 4ème…</button>
+
+    <!-- Le choix du prestataire vit encore ici. Le lot 3 le remonte au pied, où il
+         devient global et cesse d'exister en double avec les cases de la Livraison. -->
+    <div class="bloc">
+      <h2>Prestataire</h2>
+      <label><span>Gabarit</span><select id="inProvider"></select></label>
+      <label><span>Papier</span><select id="inPapier"></select></label>
+      <p class="note" id="noteFormat"></p>
+      <div class="ligne">
+        <button id="btComposer" type="button">Composer l'intérieur</button>
+        <span id="etat" class="etat"></span>
+      </div>
+      <div id="resultat" class="resultat" hidden></div>
     </div>
-    <p class="note" id="etatImages"></p>
-    <p class="note" id="etatCouverture"></p>
+
+    <div class="bloc">
+      <h2>Épreuve</h2>
+      <p class="note">Le manuscrit sur A4, fer à gauche, avec les numéros de ligne et une
+        marge pour annoter. Ce n'est pas le livre : c'est de quoi le relire. Les numéros de
+        ligne ne valent que pour ce tirage-là.</p>
+      <label><span>Corps</span>
+        <input type="number" id="inEpreuveCorps" min="8" max="18" step="0.5" value="12"></label>
+      <div class="ligne">
+        <button id="btEpreuve" type="button">Tirer une épreuve</button>
+        <span id="etatEpreuve" class="etat"></span>
+      </div>
+      <p class="chemin" id="cheminEpreuve"></p>
+    </div>
+  </section>
+
+  <section id="etapeCouverture" class="etape" role="tabpanel" hidden>
+    <div class="bloc">
+      <div class="ligne">
+        <span class="lab">Maquette de départ</span>
+        <span id="maquettes" class="ligne"></span>
+      </div>
+      <div class="ligne">
+        <span class="lab">Photos</span>
+        <button id="btImageUne" type="button">Image de 1ère…</button>
+        <button id="btImageQuatre" type="button">Image de 4ème…</button>
+      </div>
+      <p class="note" id="etatImages"></p>
+      <p class="note" id="etatCouverture"></p>
+    </div>
+
     <div class="couv">
-      <div>
+      <div class="face">
         <div class="ligne onglets" id="faces"></div>
-        <img id="apercu" class="apercu" alt="Aperçu de la couverture">
+        <!-- L'aperçu est centré dans une scène qui, elle, a la hauteur disponible :
+             l'image garde ses proportions et ne pousse jamais la fenêtre. -->
+        <div class="scene"><img id="apercu" class="apercu" alt="Aperçu de la couverture"></div>
         <p class="note" id="etatApercu"></p>
       </div>
       <div id="reglages" class="reglages"></div>
     </div>
   </section>
 
-  <section id="secComposer" hidden>
-    <h2>Prestataire</h2>
-    <label><span>Gabarit</span><select id="inProvider"></select></label>
-    <label><span>Papier</span><select id="inPapier"></select></label>
-    <p class="note" id="noteFormat"></p>
-    <div class="ligne">
-      <button id="btComposer" type="button">Composer l'intérieur</button>
-      <span id="etat" class="etat"></span>
+  <section id="etapeLivraison" class="etape" role="tabpanel" hidden>
+    <div class="bloc">
+      <h2>Packages</h2>
+      <p class="note">Chaque prestataire coché compose son propre intérieur, donc sa propre
+        pagination, donc son propre dos et sa propre planche. Les fichiers sont écrits à côté
+        du <code>.ozalid</code>, dans un répertoire par prestataire.</p>
+      <div id="listePrestataires" class="prestataires"></div>
+      <div class="ligne">
+        <button id="btPackager" type="button">Générer les packages</button>
+        <span id="etatPackages" class="etat"></span>
+      </div>
+      <div id="packages" class="resultat" hidden></div>
     </div>
-    <div id="resultat" class="resultat" hidden></div>
   </section>
 
-  <section id="secPackages" hidden>
-    <h2>Packages</h2>
-    <p class="note">Chaque prestataire coché compose son propre intérieur, donc sa propre
-      pagination, donc son propre dos et sa propre planche. Les fichiers sont écrits à côté
-      du <code>.ozalid</code>, dans un répertoire par prestataire.</p>
-    <div id="listePrestataires" class="prestataires"></div>
-    <div class="ligne">
-      <button id="btPackager" type="button">Générer les packages</button>
-      <span id="etatPackages" class="etat"></span>
-    </div>
-    <div id="packages" class="resultat" hidden></div>
-  </section>
-
-  <section id="secEpreuve" hidden>
-    <h2>Épreuve</h2>
-    <p class="note">Le manuscrit sur A4, fer à gauche, avec les numéros de ligne et une
-      marge pour annoter. Ce n'est pas le livre : c'est de quoi le relire. Les numéros de
-      ligne ne valent que pour ce tirage-là.</p>
-    <label><span>Corps</span>
-      <input type="number" id="inEpreuveCorps" min="8" max="18" step="0.5" value="12"></label>
-    <div class="ligne">
-      <button id="btEpreuve" type="button">Tirer une épreuve</button>
-      <span id="etatEpreuve" class="etat"></span>
-    </div>
-    <p class="chemin" id="cheminEpreuve"></p>
-  </section>
 </main>
+
+<footer id="pied">
+  <p id="piedPrestataire"></p>
+</footer>
 
 <script src="couverture.js"></script>
 <script src="app.js"></script>

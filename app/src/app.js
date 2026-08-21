@@ -34,6 +34,77 @@ const nb = (v, d = 2) => v.toLocaleString('fr-FR', {
   minimumFractionDigits: d, maximumFractionDigits: d
 });
 
+/* ---------- coquille ---------- */
+
+/**
+ * Les quatre étapes, dans l'ordre où le livre se fait : leur clé — celle des entrées
+ * `aller.*` du menu, au préfixe près — leur libellé d'onglet, et la section montrée.
+ *
+ * La table est la seule source : les onglets, le routage du menu et le masquage des
+ * sections en sortent tous. Ajouter une étape, c'est une ligne ici, une section dans
+ * `index.html` et une entrée dans `menu.rs` — jamais trois listes à tenir d'accord.
+ */
+const ETAPES = [
+  ['livre', '1 · Livre', 'etapeLivre'],
+  ['interieur', '2 · Intérieur', 'etapeInterieur'],
+  ['couverture', '3 · Couverture', 'etapeCouverture'],
+  ['livraison', '4 · Livraison', 'etapeLivraison'],
+];
+
+/** L'étape montrée. Sans projet, aucune ne l'est : l'accueil prend leur place. */
+let etape = 'livre';
+
+function construireEtapes() {
+  for (const [cle, libelle] of ETAPES) {
+    const b = h('button', libelle);
+    b.type = 'button';
+    b.id = `onglet-${cle}`;
+    b.setAttribute('role', 'tab');
+    b.addEventListener('click', () => allerA(cle));
+    $('etapes').append(b);
+  }
+}
+
+/**
+ * Montre une étape.
+ *
+ * Sans projet, le geste ne fait rien : les onglets sont inertes, mais le menu « Aller »,
+ * lui, ne l'est pas. C'est ici que les deux chemins se rejoignent, et c'est le même
+ * partage des rôles qu'« Enregistrer » — la protection vit du côté qu'ils ont en commun.
+ */
+function allerA(cle) {
+  if (!projet) return;
+  etape = cle;
+  majEtapes();
+}
+
+/**
+ * Onglets, étapes et accueil remis d'accord avec ce qui est ouvert.
+ *
+ * Une seule étape est montrée à la fois, et aucune sans projet : l'accueil est un état
+ * de l'application, pas un écran de plus posé devant les autres.
+ */
+function majEtapes() {
+  $('accueil').hidden = !!projet;
+  for (const [cle, , section] of ETAPES) {
+    const onglet = $(`onglet-${cle}`);
+    onglet.disabled = !projet;
+    onglet.setAttribute('aria-selected', String(!!projet && cle === etape));
+    $(section).hidden = !projet || cle !== etape;
+  }
+}
+
+/**
+ * L'erreur va dans l'entête, la seule bande que toutes les étapes partagent.
+ *
+ * Une erreur de la Livraison doit se lire depuis le Livre : elle ne peut donc pas vivre
+ * dans une section que le changement d'étape emporte.
+ */
+function alerter(message) {
+  $('alerte').textContent = message;
+  $('alerte').className = message ? 'etat erreur' : 'etat';
+}
+
 /* ---------- prestataires ---------- */
 
 async function chargerProviders() {
@@ -76,17 +147,12 @@ function majPapiers() {
 
 function afficherProjet(p) {
   projet = p;
+  $('titreLivre').textContent = p.livre.titre || 'Sans titre';
   $('cheminProjet').textContent = p.chemin ?? 'projet non enregistré';
-  $('btEnregistrer').disabled = !p.chemin;
-  $('btEnregistrerSous').disabled = false;
   $('etatEnregistrement').textContent = p.modifie
     ? 'modifié'
     : (p.chemin ? 'enregistré' : 'jamais enregistré');
-  $('recents').hidden = true;
-  for (const s of ['secLivre', 'secManuscrit', 'secInterieur', 'secCouverture',
-                   'secComposer', 'secPackages', 'secEpreuve']) {
-    $(s).hidden = false;
-  }
+  majEtapes();
 
   $('inTitre').value = p.livre.titre;
   $('inTitrePage').value = p.livre.titre_page ?? '';
@@ -139,19 +205,12 @@ function afficherProjet(p) {
  */
 async function tente(fn) {
   try {
-    $('etat').textContent = '';
-    $('etat').className = 'etat';
+    alerter('');
     await fn();
   } catch (e) {
-    // Sur l'écran d'accueil, `#etat` est masqué avec la section qui le porte : un
-    // message y serait écrit sans être lu. `#etatEnregistrement` vit dans la section
-    // « Projet », la seule qui ne disparaisse jamais.
-    const cible = $('secComposer').hidden ? $('etatEnregistrement') : $('etat');
-    cible.textContent = String(e);
-    cible.className = 'etat erreur';
-    // Cette branche n'est prise que si `projet` existe, donc que `secComposer` est
-    // visible et que la cible ci-dessus était `#etat` : `afficherProjet` ne touche
-    // pas `#etat`, et le message qu'on vient d'écrire y survit.
+    alerter(String(e));
+    // `afficherProjet` ne touche pas à l'alerte : le message qu'on vient d'écrire y
+    // survit au redessin.
     if (projet) afficherProjet(projet);
   }
 }
@@ -166,6 +225,10 @@ async function tente(fn) {
  */
 function oublierLesSorties() {
   dosCompose = null;
+  // L'étape courante est une sortie comme une autre : elle appartenait au projet qu'on
+  // regardait. Rester sur la Livraison en ouvrant un autre livre donnerait à lire ses
+  // packages sous le titre du nouveau.
+  etape = 'livre';
   for (const id of ['resultat', 'packages']) {
     $(id).replaceChildren();
     $(id).hidden = true;
@@ -173,6 +236,7 @@ function oublierLesSorties() {
   $('cheminEpreuve').textContent = '';
   $('etat').textContent = '';
   $('etat').className = 'etat';
+  alerter('');
 }
 
 /**
@@ -185,14 +249,10 @@ function oublierLesSorties() {
 async function afficherAucunProjet() {
   projet = null;
   oublierLesSorties();
+  $('titreLivre').textContent = 'Ozalid Studio';
   $('cheminProjet').textContent = 'aucun projet ouvert';
   $('etatEnregistrement').textContent = '';
-  $('btEnregistrer').disabled = true;
-  $('btEnregistrerSous').disabled = true;
-  for (const s of ['secLivre', 'secManuscrit', 'secInterieur', 'secCouverture',
-                   'secComposer', 'secPackages', 'secEpreuve']) {
-    $(s).hidden = true;
-  }
+  majEtapes();
   await afficherRecents();
 }
 
@@ -209,7 +269,6 @@ async function afficherRecents() {
       box.append(b);
     }
   }
-  box.hidden = !liste.length;
 }
 
 /**
@@ -239,8 +298,7 @@ async function enregistrerQuelquePart() {
       afficherProjet(await invoke('projet_enregistrer'));
       return true;
     } catch (e) {
-      $('etat').textContent = String(e);
-      $('etat').className = 'etat erreur';
+      alerter(String(e));
       return false;
     }
   }
@@ -309,8 +367,7 @@ async function enregistrerSous() {
     afficherProjet(await invoke('projet_enregistrer_sous', { chemin: choix }));
     return true;
   } catch (e) {
-    $('etat').textContent = String(e);
-    $('etat').className = 'etat erreur';
+    alerter(String(e));
     return false;
   }
 }
@@ -764,6 +821,9 @@ const MENU = {
   'fichier.enregistrer_sous': enregistrerSous,
   'fichier.fermer': fermer,
   'fichier.quitter': quitter,
+  // Les quatre étapes viennent de la table : le menu et les onglets appellent la même
+  // fonction, et les identifiants du Rust s'en déduisent au lieu d'être recopiés.
+  ...Object.fromEntries(ETAPES.map(([cle]) => [`aller.${cle}`, () => allerA(cle)])),
 };
 
 /** Préfixe des entrées « Ouvrir un récent » ; ce qui suit est le chemin du projet. */
@@ -809,15 +869,12 @@ Promise.all([
     // Sans écouteurs, le menu et la fermeture ne mènent nulle part. Le Rust s'en
     // tire — faute de témoin, il ne retient rien et l'application reste quittable —
     // mais l'utilisateur mérite de savoir pourquoi la moitié des gestes est inerte.
-    $('etatEnregistrement').textContent = `menu inopérant : ${e}`;
-    $('etatEnregistrement').className = 'etat erreur';
+    alerter(`menu inopérant : ${e}`);
   });
 
 $('btNouveau').addEventListener('click', nouveau);
 $('btOuvrir').addEventListener('click', ouvrir);
 $('btImporter').addEventListener('click', importer);
-$('btEnregistrer').addEventListener('click', enregistrerQuelquePart);
-$('btEnregistrerSous').addEventListener('click', enregistrerSous);
 $('btReimporter').addEventListener('click', reimporter);
 $('btChoisirManuscrit').addEventListener('click', choisirManuscrit);
 $('btImageUne').addEventListener('click', () => choisirImage('une'));
@@ -835,6 +892,7 @@ $('inProvider').addEventListener('change', () => {
 // Le papier ne change ni le format ni la maquette : il ne touche que le dos, et c'est
 // pour cela seul que l'aperçu doit repartir.
 $('inPapier').addEventListener('change', demanderApercu);
+construireEtapes();
 construireFaces();
 for (const id of ['inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright', 'inChapitres']) {
   $(id).addEventListener('change', majLivre);
@@ -844,6 +902,5 @@ chargerProviders()
   .catch((e) => {
     // Sans les gabarits ni les polices, rien de ce que l'application propose n'a de
     // sens : mieux vaut le dire que d'offrir un écran d'accueil qui ne mène nulle part.
-    $('etatEnregistrement').textContent = `démarrage impossible : ${e}`;
-    $('etatEnregistrement').className = 'etat erreur';
+    alerter(`démarrage impossible : ${e}`);
   });
