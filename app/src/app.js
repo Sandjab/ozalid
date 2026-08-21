@@ -141,9 +141,15 @@ async function tente(fn) {
     $('etat').className = 'etat';
     await fn();
   } catch (e) {
-    $('etat').textContent = String(e);
-    $('etat').className = 'etat erreur';
-    // `afficherProjet` ne touche pas `#etat` : le message qu'on vient d'écrire survit.
+    // Sur l'écran d'accueil, `#etat` est masqué avec la section qui le porte : un
+    // message y serait écrit sans être lu. `#etatEnregistrement` vit dans la section
+    // « Projet », la seule qui ne disparaisse jamais.
+    const cible = $('secComposer').hidden ? $('etatEnregistrement') : $('etat');
+    cible.textContent = String(e);
+    cible.className = 'etat erreur';
+    // Cette branche n'est prise que si `projet` existe, donc que `secComposer` est
+    // visible et que la cible ci-dessus était `#etat` : `afficherProjet` ne touche
+    // pas `#etat`, et le message qu'on vient d'écrire y survit.
     if (projet) afficherProjet(projet);
   }
 }
@@ -166,6 +172,15 @@ async function afficherAucunProjet() {
                    'secComposer', 'secPackages', 'secEpreuve']) {
     $(s).hidden = true;
   }
+  // Les sorties du projet qu'on referme ne le suivent pas : leurs chiffres et leurs
+  // chemins ne vaudraient plus pour rien.
+  for (const id of ['resultat', 'packages']) {
+    $(id).replaceChildren();
+    $(id).hidden = true;
+  }
+  $('cheminEpreuve').textContent = '';
+  $('etat').textContent = '';
+  $('etat').className = 'etat';
   await afficherRecents();
 }
 
@@ -726,4 +741,11 @@ construireFaces();
 for (const id of ['inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright', 'inChapitres']) {
   $(id).addEventListener('change', majLivre);
 }
-chargerProviders().then(afficherAucunProjet);
+chargerProviders()
+  .then(afficherAucunProjet)
+  .catch((e) => {
+    // Sans les gabarits ni les polices, rien de ce que l'application propose n'a de
+    // sens : mieux vaut le dire que d'offrir un écran d'accueil qui ne mène nulle part.
+    $('etatEnregistrement').textContent = `démarrage impossible : ${e}`;
+    $('etatEnregistrement').className = 'etat erreur';
+  });
