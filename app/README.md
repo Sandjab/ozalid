@@ -18,9 +18,7 @@ request compilent, testent et paginent le témoin sur `windows-latest`, et un ta
 `v*` produit l'installeur, l'installe en silencieux pour vérifier son
 arborescence, et le dépose en release draft. Reste la vérification manuelle du
 premier lancement sur une machine Windows — aucun runner ne lance l'application
-avec sa fenêtre — et, plus immédiatement, celle du cycle de vie à l'écran : aucune
-fenêtre ne s'est créée dans l'environnement où ce lot a été développé, et c'est à
-l'utilisateur de la mener.
+avec sa fenêtre.
 
 ## Stack
 
@@ -61,6 +59,41 @@ ne demande aucun droit administrateur : elle se fait par utilisateur, dans
 `%LOCALAPPDATA%\Ozalid Studio`, où l'application trouve `typst.exe` à côté d'elle et ses
 polices dans `fonts\`. Un certificat de signature de code lèverait l'avertissement ; il
 n'a pas été pris tant que la diffusion reste confidentielle.
+
+## L'écran
+
+Quatre bandes, et la fenêtre elle-même ne défile plus : une **entête** qui nomme le
+livre ouvert, son chemin et son état d'enregistrement ; une rangée de quatre
+**onglets** — Livre, Intérieur, Couverture, Livraison — dans l'ordre où le livre se
+fait ; l'**étape** courante, seule ; un **pied** qui dit pour qui l'on regarde et ce
+que vaut le dos. Ce qui ne tient pas se règle par la mise en page ; le panneau de
+réglages de la couverture garde son propre ascenseur — sa longueur est irréductible
+— et l'étape Livraison le sien, le temps que la liste des prestataires soit réduite
+aux seuls destinataires du livre.
+
+Chaque onglet porte un sous-libellé qui énonce où en est son étape — le nombre de
+chapitres, la police, la maquette — et un témoin rouge quand elle réclame :
+manuscrit qui ne correspond plus au contrôle d'intégrité (Livre), dos que la
+dernière composition ne vaut plus (Intérieur, parce que c'est là qu'on le
+recompose), couverture sans maquette (Couverture). Trois témoins et pas un de plus :
+un manuscrit absent est un état, pas une anomalie.
+
+Sans projet ouvert, les onglets sont inertes et un **accueil** prend la place de
+l'étape : Nouveau projet, Ouvrir un `.ozalid`, Importer un `livre.toml`, et les
+projets récents. L'accueil est un état de l'application, pas un écran de plus posé
+devant les autres.
+
+Ce qui **refuse une saisie** monte à l'entête, la seule bande que toutes les étapes
+partagent : le geste est fini, et le message doit survivre au changement d'étape.
+Ce qui rend compte d'un **travail long** — composer, tirer une épreuve, générer les
+packages — reste à côté du bouton qui l'a lancé : on attend là où l'on a cliqué, et
+un compte rendu qui migre en haut de l'écran se lit comme une panne.
+
+**Enregistrer n'est plus qu'un geste de menu** (⌘S, ⇧⌘S) : les deux boutons ont
+quitté l'écran, comme dans tout éditeur de document macOS. Le sous-menu **« Aller »**
+navigue entre les quatre étapes (⌘1 à ⌘4) ; sans projet ouvert, il ne mène nulle
+part sans rien casser — la garde est du côté que les onglets et le menu ont en
+commun.
 
 ## Modules
 
