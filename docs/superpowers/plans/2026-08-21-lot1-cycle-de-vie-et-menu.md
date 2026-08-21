@@ -58,6 +58,31 @@ cd app && node --test "tests/*.test.js"
 
 ## Écarts assumés en cours d'exécution
 
+**Défaut du plan lui-même : ⌘Q traversait la garde (découvert à la revue de la tâche 6).**
+Le plan prescrivait l'entrée prédéfinie `quit` en tâche 5 et posait la garde sur
+`CloseRequested` en tâche 6, sans jamais rapprocher les deux. Or l'item prédéfini de muda
+envoie `terminate:` (`muda-0.19.3/src/platform_impl/macos/mod.rs:994`), et `CloseRequested`
+ne naît que de `windowShouldClose:` (`tao-0.35.3/src/platform_impl/macos/window_delegate.rs:328`),
+que `terminate:` ne consulte pas. Ni tao ni Tauri n'implémentent `applicationShouldTerminate:`.
+**Le geste le plus courant pour quitter sous macOS perdait donc le travail sans rien demander.**
+`RunEvent::ExitRequested` ne le rattrape pas non plus : il n'est émis qu'à la destruction de
+la dernière fenêtre ou sur `AppHandle::exit()`.
+
+Corrigé après la tâche 6 : « Quitter Ozalid Studio » devient une entrée ordinaire d'identifiant
+`fichier.quitter`, qui demande comme toutes les autres. Comme l'interface devient dès lors
+nécessaire pour quitter, un témoin `Interface::prete` — levé par une commande
+`interface_prete` que le front appelle après avoir posé ses écouteurs — évite qu'un front
+mort ne rende l'application inquittable : tant qu'il n'est pas levé, la fermeture n'est pas
+retenue et `fichier.quitter` appelle `app.exit(0)`.
+
+**Limite assumée, non comblée :** le « Quitter » du menu contextuel du Dock et l'extinction
+de la session macOS envoient `terminate:` directement. Les couvrir exigerait un
+`applicationShouldTerminate:` que ni tao ni Tauri 2.11 n'exposent.
+
+**Permission retirée :** `core:event:allow-listen` était redondante — `core:default` la
+comprend déjà (`tauri-2.11.5/build.rs:34-41`, `("listen", true)`). Seule
+`core:window:allow-destroy` est nécessaire.
+
 **Renommage de la paire d'enregistrement (décidé après la tâche 3).** La revue de qualité a
 relevé un nommage à contre-sens : `projet_enregistrer(chemin)` était en réalité
 « Enregistrer sous… », tandis que `projet_enregistrer_courant()` était le « Enregistrer »
@@ -1084,7 +1109,6 @@ Remplacer `app/src-tauri/capabilities/default.json` par :
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "core:event:allow-listen",
     "core:window:allow-destroy",
     "dialog:allow-open",
     "dialog:allow-save"
@@ -1092,7 +1116,7 @@ Remplacer `app/src-tauri/capabilities/default.json` par :
 }
 ```
 
-`core:window:allow-destroy` est ce qui permet à l'interface de refermer la fenêtre une fois la garde franchie ; `core:event:allow-listen` lui permet d'écouter les événements du menu et de la fermeture.
+`core:window:allow-destroy` est ce qui permet à l'interface de refermer la fenêtre une fois la garde franchie. L'écoute des événements, elle, n'a rien à déclarer : `core:default` comprend déjà `core:event:allow-listen` (`tauri-2.11.5/build.rs:34-41`).
 
 - [ ] **Step 4 : Vérifier**
 
@@ -1102,7 +1126,9 @@ cd app/src-tauri && cargo test --lib && cargo clippy --all-targets && cargo fmt 
 
 Attendu : tout passe. Le comportement se vérifiera à l'écran en Task 8, quand l'interface écoutera.
 
-Attention : à ce stade, la fenêtre **refuse de se fermer** (la fermeture est retenue et personne ne l'écoute encore). Pour arrêter `cargo tauri dev`, utiliser ⌘Q ou interrompre le terminal. C'est temporaire et réglé en Task 8.
+Attention : à ce stade, la fenêtre **refuse de se fermer** — la fermeture est retenue et personne ne l'écoute encore. Interrompre le terminal pour arrêter `cargo tauri dev`. C'est temporaire et réglé en Task 8.
+
+Ne pas se rabattre sur ⌘Q : c'est précisément parce qu'il fonctionne ici, en traversant la garde sans la voir, qu'il fallait le corriger (voir « Écarts assumés » en tête de ce plan). Après le correctif, ⌘Q passe par l'interface comme le reste, et le témoin `Interface::prete` évite qu'une interface non démarrée ne rende l'application inquittable.
 
 - [ ] **Step 5 : Commit**
 
@@ -1692,7 +1718,18 @@ const MENU = {
   'fichier.enregistrer': enregistrerQuelquePart,
   'fichier.enregistrer_sous': enregistrerSous,
   'fichier.fermer': fermer,
+  'fichier.quitter': quitter,
 };
+
+/**
+ * Quitter, c'est fermer la fenêtre : l'application n'en a qu'une.
+ *
+ * `destroy` et surtout pas `close` — `close` repasserait par `CloseRequested`, que le
+ * Rust retient pour nous poser cette question même, et la fenêtre tournerait en rond.
+ */
+async function quitter() {
+  if (await garde()) getCurrentWindow().destroy();
+}
 
 /** Préfixe des entrées « Ouvrir un récent » ; ce qui suit est le chemin du projet. */
 const RECENT = 'fichier.recent:';
@@ -1715,10 +1752,17 @@ listen('menu', (ev) => routerMenu(ev.payload));
  * ne peut pas s'en charger — répondre « Enregistrer » demande un sélecteur de
  * fichiers, que seule l'interface possède.
  */
-listen('fermeture-demandee', async () => {
-  if (await garde()) getCurrentWindow().destroy();
-});
+listen('fermeture-demandee', quitter);
+
+// Les écouteurs sont posés : le Rust peut désormais compter sur nous pour répondre.
+// Tant qu'il ne l'a pas su, il laisse la fenêtre se fermer sans rien demander — une
+// interface qui n'a jamais démarré n'a rien à perdre, et une application qu'on ne
+// peut plus quitter serait pire que la question qu'on aurait manqué de poser.
+invoke('interface_prete');
 ```
+
+Ces trois lignes doivent venir **après** l'enregistrement des deux `listen`, et rien de
+faillible ne doit s'intercaler : c'est tout l'objet du témoin.
 
 Le menu « Aller » n'a pas d'entrée dans `MENU` : les quatre étapes n'existent pas encore. `MENU[id]?.()` les ignore sans erreur, et le lot 2 les branchera.
 
@@ -1757,6 +1801,7 @@ cd app/src-tauri && cargo tauri dev
 - « Ouvrir un récent » liste les projets enregistrés, et l'un d'eux s'ouvre ;
 - fermer la fenêtre avec un projet modifié pose la boîte ; « Annuler » laisse la fenêtre ouverte, « Ne pas enregistrer » la ferme, « Enregistrer » écrit puis ferme ;
 - fermer la fenêtre sans modification ferme sans rien demander ;
+- **⌘Q et « Quitter Ozalid Studio » posent la même boîte** — c'est le trou que le correctif de la tâche 6 a bouché, et la seule façon de vérifier qu'il l'est ;
 - ⌘C et ⌘V fonctionnent toujours dans le champ « Titre ».
 
 - [ ] **Step 8 : Commit**
