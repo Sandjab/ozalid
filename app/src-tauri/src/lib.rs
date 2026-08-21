@@ -37,6 +37,10 @@ pub fn run() {
                 .prete
                 .load(std::sync::atomic::Ordering::Relaxed);
             if ev.id().as_ref() == "fichier.quitter" && !prete {
+                // Ce contournement délibéré de la garde n'est légitime que sous
+                // `!prete` — le même invariant que documenté sur `Interface` : sans
+                // front démarré, il n'y a rien à perdre. Ce n'est pas une sortie de
+                // secours à réutiliser ailleurs.
                 app.exit(0);
                 return;
             }

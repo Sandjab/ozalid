@@ -290,6 +290,14 @@ fn reponse_garde(r: tauri_plugin_dialog::MessageDialogResult) -> &'static str {
 /// Tant qu'elle ne l'a pas fait, retenir la fermeture rendrait l'application
 /// inquittable : personne n'écouterait la demande. Un front qui n'a jamais démarré
 /// n'a rien à perdre non plus — on le laisse donc partir sans question.
+///
+/// Ce que ce filet suppose, et qui le rend sûr : le seul chemin vers
+/// `modifie = true` passe par `vue_modifiee`, elle-même appelée uniquement par des
+/// commandes qui exigent un projet déjà ouvert — et un projet ne s'ouvre que par une
+/// commande du front. `Atelier` naît vide (`Default`), donc tant que l'interface n'a
+/// pas tourné, il n'y a rien à perdre. **Si un jour `setup()` restaure ou reprend un
+/// projet automatiquement, cet invariant casse** : le filet laisserait alors partir
+/// un projet modifié sans le demander.
 #[derive(Default)]
 pub struct Interface {
     pub prete: std::sync::atomic::AtomicBool,
@@ -298,6 +306,9 @@ pub struct Interface {
 /// L'interface annonce qu'elle écoute. Appelée une fois, au chargement.
 #[tauri::command]
 pub fn interface_prete(interface: State<Interface>) {
+    // `Relaxed` suffit : ce drapeau ne publie rien d'autre que lui-même — l'état
+    // partagé qui compte, `Atelier.ouvert`, a son propre `Mutex`. Les lecteurs ne
+    // font que décider d'émettre ou non, jamais lire une valeur posée à côté.
     interface
         .prete
         .store(true, std::sync::atomic::Ordering::Relaxed);
