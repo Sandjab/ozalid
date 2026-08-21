@@ -822,6 +822,127 @@ pub fn packager(atelier: State<Atelier>) -> Result<Vec<Resultat>, String> {
     Ok(sorties)
 }
 
+/* ---------- envois ---------- */
+
+/// Ce qu'un envoi produit, du point de vue de l'interface.
+#[derive(Serialize)]
+pub struct ResultatEnvoi {
+    pub dedicataire: String,
+    /// Nom du répertoire écrit sous `envois/` — assaini, donc pas toujours celui du
+    /// dédicataire. C'est celui-là qu'il faut ouvrir, et donc celui-là qu'on montre.
+    pub dossier: String,
+    pub package: package::Package,
+    pub vignette: Option<String>,
+}
+
+/// Remplace la liste des envois et la main du livre.
+///
+/// Comme `livre_modifier`, la commande reçoit **l'objet entier** : ce que le front
+/// n'envoie pas est effacé. C'est le même piège que la dédicace, et il se garde du
+/// même côté.
+#[tauri::command]
+pub fn envois_modifier(
+    envois: crate::envoi::Envois,
+    atelier: State<Atelier>,
+) -> Result<ProjetVue, String> {
+    envois.verifie()?;
+    let mut garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_mut().ok_or_else(aucun_projet)?;
+    o.projet.meta.envois = envois;
+    vue_modifiee(o)
+}
+
+/// Les mains offertes par l'application.
+#[tauri::command]
+pub fn mains_liste() -> Vec<&'static str> {
+    crate::envoi::MAINS.to_vec()
+}
+
+/// La page de titre d'un envoi, telle qu'elle sera imprimée.
+///
+/// La source est celle de l'intérieur **privée de ses chapitres** : la page de titre ne
+/// dépend pas du corps, et composer trois cents pages pour en regarder une seule ferait
+/// de l'aperçu quelque chose qu'on n'ouvre jamais. La gouttière prise est la première
+/// tranche du gabarit — elle ne déplace que la marge intérieure, et cet aperçu n'est
+/// pas ce qui part à l'imprimeur : le PDF l'est.
+#[tauri::command]
+pub fn envoi_apercu(index: usize, atelier: State<Atelier>) -> Result<String, String> {
+    let garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_ref().ok_or_else(aucun_projet)?;
+    let (pr, _, _) = vise(o)?;
+    let envois = &o.projet.meta.envois;
+    envois.verifie()?;
+    let e = envois
+        .liste
+        .get(index)
+        .ok_or("envoi introuvable : la liste a changé.")?;
+    let crate::envoi::Main::Police { police } = &envois.main;
+
+    let int = &o.projet.meta.interieur;
+    int.verifie()?;
+    let dossier = sorties_racine(o)?.join("envois");
+    std::fs::create_dir_all(&dossier)
+        .map_err(|err| format!("répertoire inutilisable ({}) : {err}", dossier.display()))?;
+    let src = dossier.join("apercu.typ");
+    ecrire(
+        &src,
+        &interieur::source(
+            &o.projet.meta.livre,
+            int,
+            pr,
+            &Reglage {
+                gouttiere: pr.gouttieres[0].2,
+                blanche: false,
+            },
+            &[],
+            Some(interieur::Trace {
+                police,
+                texte: &e.contenu,
+            }),
+        ),
+    )?;
+    let png = dossier.join("apercu.png");
+    typst()?.apercu(&src, &png, 3, 110)?;
+    donnee_png(&png)
+}
+
+/// Compose un package par envoi, chez le prestataire visé.
+///
+/// Geste distinct de `packager` : l'un prépare le tirage, l'autre prépare des cadeaux,
+/// et les déclencher ensemble composerait des exemplaires que personne n'a demandés.
+#[tauri::command]
+pub fn envoyer(atelier: State<Atelier>) -> Result<Vec<ResultatEnvoi>, String> {
+    let garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_ref().ok_or_else(aucun_projet)?;
+    let (pr, papier, d) = vise(o)?;
+    let typst = typst()?;
+    let racine = sorties_racine(o)?.join("envois");
+
+    let sorties = package::assembler_envois(
+        &o.projet,
+        pr,
+        papier,
+        planche::Releve {
+            dos: d.dos_mm,
+            fond_perdu: d.fond_perdu_mm,
+        },
+        &racine,
+        &typst,
+    )?;
+
+    Ok(sorties
+        .into_iter()
+        .zip(o.projet.meta.envois.liste.iter())
+        .map(|((dossier, p), e)| ResultatEnvoi {
+            dedicataire: e.dedicataire.clone(),
+            dossier,
+            // La vignette manquante ne perd pas le package : les PDF sont écrits.
+            vignette: donnee_png(Path::new(&p.vignette)).ok(),
+            package: p,
+        })
+        .collect())
+}
+
 fn papier(pr: &'static Provider, cle: Option<&str>) -> Result<&'static providers::Papier, String> {
     match cle {
         Some(c) => pr

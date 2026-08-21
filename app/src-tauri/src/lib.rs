@@ -101,6 +101,10 @@ pub fn run() {
             commands::destinataire_regler,
             commands::destinataire_viser,
             commands::packager,
+            commands::envois_modifier,
+            commands::mains_liste,
+            commands::envoi_apercu,
+            commands::envoyer,
             commands::recents_liste,
             commands::garde_modifications,
             commands::interface_prete
