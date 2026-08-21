@@ -126,6 +126,48 @@ pub fn projet_importer(livre_toml: String, atelier: State<Atelier>) -> Result<Pr
     poser(&atelier, None, projet, true)
 }
 
+/// Un projet vide, à remplir.
+///
+/// Ni assistant ni sélecteur de fichiers : c'est un document neuf, comme dans un
+/// traitement de texte. Le manuscrit se choisit quand on veut, l'enregistrement se
+/// fait quand on veut. Le projet n'est pas « modifié » : il n'y a encore rien à
+/// perdre, et le premier champ saisi lèvera le drapeau.
+#[tauri::command]
+pub fn projet_nouveau(atelier: State<Atelier>) -> Result<ProjetVue, String> {
+    poser(
+        &atelier,
+        None,
+        Projet::nouveau(Livre::vide(), String::new()),
+        false,
+    )
+}
+
+/// Referme le projet sans rien écrire.
+///
+/// La garde des modifications appartient à l'appelant : cette commande ne demande
+/// rien, elle exécute. Les séparer permet à l'interface de poser la même question
+/// avant Nouveau, Ouvrir, Importer et la fermeture de la fenêtre.
+#[tauri::command]
+pub fn projet_fermer(atelier: State<Atelier>) {
+    *atelier.ouvert.lock().unwrap() = None;
+}
+
+/// Réécrit le projet là où il a déjà été enregistré.
+///
+/// Sans chemin mémorisé, l'interface bascule sur « Enregistrer sous… » : elle seule
+/// possède le sélecteur de fichiers.
+#[tauri::command]
+pub fn projet_enregistrer_courant(atelier: State<Atelier>) -> Result<ProjetVue, String> {
+    let mut garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_mut().ok_or_else(aucun_projet)?;
+    let chemin = o
+        .chemin
+        .clone()
+        .ok_or_else(|| "projet jamais enregistré : choisir où le poser.".to_string())?;
+    o.projet.enregistrer(&chemin)?;
+    vue_enregistree(o)
+}
+
 #[tauri::command]
 pub fn projet_ouvrir(chemin: String, atelier: State<Atelier>) -> Result<ProjetVue, String> {
     let c = PathBuf::from(&chemin);
