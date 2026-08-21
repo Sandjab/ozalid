@@ -152,6 +152,38 @@ côté tests.
   `disabled`, `hidden` et `value`, et l'étendre pour un attribut ferait payer à soixante-dix
   tests le prix d'un seul.
 
+**Trous trouvés par mutation, comblés hors plan (tâches 4 et 5).**
+
+4. *Le pied levait après un démarrage raté.* `providerCourant()` rend `undefined` quand la
+   table des gabarits n'a pas pu être lue, et `majPied()` était le **premier** appel à en
+   déréférencer le résultat dans `afficherProjet` : l'application passait d'« utilisable en
+   mode dégradé » à « cassée au premier geste », l'exception s'échappant même de `tente()`.
+   Garde `!p` posée. Commit `e32f010`.
+5. *« dos non composé » mentait chez un prestataire à dos relevé.* Chez un CoolLibri
+   (`dos_publie: false`), après une composition **réussie** affichant 262 pages, le pied
+   disait toujours « dos non composé » : `composer` rend `dos: null` chez ces
+   prestataires-là — le dos ne se calcule pas, il se relève sur le gabarit. Défaut du plan,
+   pas de l'exécution. Troisième état ajouté : « dos relevé sur le gabarit ». Commit `2a46875`.
+6. *Une police **refusée** allumait « dos périmé » sur un dos intact.* `majEtapes()` était
+   appelée huit lignes avant qu'`afficherProjet` ne repose le `select` de police :
+   `dosCourant()` comparait le dos mesuré à une saisie que le refus venait d'annuler.
+   L'utilisateur lisait une erreur **et** un témoin l'envoyant recomposer un livre juste.
+   `majEtapes()` déplacée à la fin d'`afficherProjet`. Commit `6978a40`.
+
+**Deux pièges de spécificité rouverts par le plan (tâche 6).**
+
+Le plan prescrivait `#etapeCouverture { display: grid }`. Un sélecteur d'identifiant (1-0-0)
+l'emporte sur `[hidden] { display: none }` (0-1-0) : **l'étape Couverture restait affichée en
+permanence**, et cliquer sur l'onglet Livraison sélectionnait l'onglet mais servait la
+Couverture. Aucun test ne pouvait l'attraper — ils vérifient l'attribut `hidden`, jamais le
+`display` calculé. C'est exactement le piège que la dernière règle du fichier documentait.
+
+La cascade mesurée dans un navigateur sur les seize éléments que le JS masque en a révélé un
+second, dormant : `.releve .petit` (0-2-0) que le lot 3 armera en masquant les relevés selon
+le prestataire. La classe entière est fermée par `[hidden] { display: none !important; }` —
+la règle cesse de dépendre de sa position et de la spécificité des autres — et les trois
+`:not([hidden])` posés entre-temps sont retirés, devenus des précautions trompeuses.
+
 **Versé à la suite du chantier, non fait ici.**
 
 - *Le pattern d'onglets est incomplet* : pas d'`aria-controls` sur les onglets, pas
@@ -160,6 +192,27 @@ côté tests.
   lot 4, la passe visuelle.
 - *`#etapes button:disabled` est redondant* avec la règle globale `button:disabled`.
   Gardé par fidélité au Step 4 ; à revoir quand la tâche 5 posera les témoins.
+- *Le bloc de résultat de composition est trop haut* : cinq lignes de chiffres et le chemin
+  du PDF sur deux lignes. L'étape Intérieur composée déborde encore à 900 × 640 — décision
+  de l'utilisateur, le filet la rattrape. Le resserrer touche au balisage, donc au lot 4.
+- *L'ombre de l'aperçu* : `.scene` réserve `.9rem` là où l'ombre porte jusqu'à ~20 px. Sa
+  partie dense est couverte, son dernier voile reste coupé. `1.25rem` serait exact.
+- *`--onglets-flux` se lit à l'envers du bon sens* : `column` produit une barre horizontale,
+  `row` produirait le rail vertical. Le nom décrit le mécanisme, pas le résultat.
+- *`libelleMode()` reconstruit tout le schéma à chaque clic d'onglet* (`groupes()` remappe
+  `SCHEMA` en entier pour un libellé qui ne change jamais). Coût négligeable, chemin chaud.
+
+**Deux leçons de méthode, payées trois fois chacune.**
+
+*Un commentaire au présent pour un état futur égare autant qu'un commentaire au passé.* Le
+lot s'y est fait prendre trois fois : `--coquille` annoncée comme en place avant la tâche 6,
+« le Rust offre ses quatre entrées » écrit alors que `menu.rs` les grisait encore, et la
+doctrine de `[hidden]` qui exigeait une position devenue sans objet. La règle vaut dans les
+deux sens.
+
+*« Mes mutations n'ont rien trouvé » n'est pas « il n'y a rien ».* Un compte rendu a conclu
+« aucune ligne n'est orpheline » sur vingt mutations ; trois lignes défensives non sondées
+survivaient. Elles sont légitimes et restent — c'est la conclusion qui dépassait la mesure.
 
 ---
 
@@ -1884,7 +1937,11 @@ Sur un projet réel, avec un vrai manuscrit :
 - [ ] ⌘C et ⌘V dans un champ de saisie (le menu Édition survit) ;
 - [ ] ⌘S et ⇧⌘S, seuls chemins vers l'enregistrement désormais ;
 - [ ] la garde à la fermeture et ses trois boutons ;
-- [ ] une erreur de composition se lit depuis l'étape Livre ;
+- [ ] une erreur qui **refuse une saisie** se lit depuis n'importe quelle étape — elle
+      monte à l'entête et survit au changement d'étape. *(Cette case disait d'abord « une
+      erreur de composition se lit depuis l'étape Livre » : c'était faux, et c'est la case
+      qui avait tort. Une erreur de composition reste dans `#etat`, à côté du bouton qui
+      l'a lancée — c'est la règle des deux canaux, écrite au-dessus d'`alerter()`.)*
 - [ ] le témoin du Livre s'allume sur un manuscrit périmé, celui de la Couverture sans
       maquette, celui de l'Intérieur après un changement de gabarit ;
 - [ ] le pied nomme le prestataire et le dos ;
