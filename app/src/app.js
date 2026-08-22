@@ -238,10 +238,10 @@ function majEtapes() {
  * Tout ne monte pas ici, et c'est voulu : ce qui refuse une saisie monte, parce que le
  * geste est fini avant qu'on ait bougé et que le message doit survivre au changement
  * d'étape. Ce qui rend compte d'un travail long — composer, tirer une épreuve, générer
- * les packages — reste dans `#etat`, `#etatEpreuve`, `#etatPackages`, à côté du bouton
- * qui l'a lancé : on attend là où l'on a cliqué, et un compte rendu qui migre en haut
- * de l'écran se lit comme une panne. Faire remonter le reste ici par symétrie ferait
- * perdre cette différence.
+ * les packages ou les ebooks — reste dans `#etat`, `#etatEpreuve`, `#etatPackages`,
+ * `#etatEbooks`, à côté du bouton qui l'a lancé : on attend là où l'on a cliqué, et un
+ * compte rendu qui migre en haut de l'écran se lit comme une panne. Faire remonter le
+ * reste ici par symétrie ferait perdre cette différence.
  *
  * Reste `#etatApercu`, qui n'entre dans aucun des deux : personne ne l'a demandé. La
  * composition part d'elle-même à chaque réglage, et son échec est un fait sur l'image
@@ -434,7 +434,7 @@ async function tente(fn) {
  */
 function oublierLaComposition() {
   dosCompose = null;
-  for (const id of ['resultat', 'packages', 'resultatEnvois']) {
+  for (const id of ['resultat', 'packages', 'ebooks', 'resultatEnvois']) {
     $(id).replaceChildren();
     $(id).hidden = true;
   }
@@ -443,7 +443,7 @@ function oublierLaComposition() {
   // un message rouge appartient au texte qui l'a provoqué autant que le chiffre qu'il
   // commente. Effacer le chemin de l'épreuve en laissant l'erreur qui disait pourquoi
   // elle avait échoué donnerait à lire l'échec de l'ancien texte sous le nouveau.
-  for (const id of ['etat', 'etatEpreuve', 'etatPackages', 'etatEnvois']) {
+  for (const id of ['etat', 'etatEpreuve', 'etatPackages', 'etatEbooks', 'etatEnvois']) {
     $(id).textContent = '';
     $(id).className = 'etat';
   }
@@ -847,6 +847,7 @@ $('btImageUne').addEventListener('click', () => choisirImage('une'));
 $('btImageQuatre').addEventListener('click', () => choisirImage('quatre'));
 $('btComposer').addEventListener('click', composer);
 $('btPackager').addEventListener('click', packager);
+$('btEbooks').addEventListener('click', ebooks);
 $('btEpreuve').addEventListener('click', epreuve);
 $('inPoliceInterieur').addEventListener('change', majInterieur);
 // Changer de destinataire déplace le format de l'aperçu et l'épaisseur du dos : c'est

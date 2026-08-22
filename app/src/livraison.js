@@ -198,3 +198,55 @@ async function packager() {
   }
 }
 
+/** Une taille de fichier, en unités qu'on lit d'un coup d'œil. */
+function poids(octets) {
+  return octets >= 1024 * 1024
+    ? `${nb(octets / (1024 * 1024), 1)} Mo`
+    : `${Math.round(octets / 1024)} Ko`;
+}
+
+/**
+ * Le compte rendu des ebooks : les deux chemins, leur poids, et ce qui s'est passé de
+ * travers sans faire échouer la génération.
+ *
+ * La police non embarquée n'est pas une erreur : le livre reste juste, seul son œil
+ * change. Elle se lit donc dans le compte rendu, à côté des chemins, et non en rouge à
+ * la place d'un résultat qui existe.
+ */
+function afficherEbooks(r) {
+  const box = $('ebooks');
+  box.replaceChildren();
+  for (const [chemin, octets] of [[r.pdf, r.octets_pdf], [r.epub, r.octets_epub]]) {
+    box.append(h('p', `${chemin}   (${poids(octets)})`, 'chemin'));
+  }
+  if (r.police_non_embarquee) {
+    box.append(h('p', `Police « ${r.police_non_embarquee} » introuvable : l'EPUB est `
+      + `dans l'écriture du lecteur. Le texte, lui, est celui du livre.`, 'note'));
+  }
+  // Celle-ci, en revanche, touche le PDF : c'est le fichier qu'on lira, et il ne suit
+  // pas la maquette.
+  if (r.polices_introuvables.length) {
+    box.append(h('p', 'Police introuvable, composé dans une écriture de repli : '
+      + `${r.polices_introuvables.join(', ')}. Le PDF ne suit pas la maquette.`,
+    'note alerte'));
+  }
+  box.hidden = false;
+}
+
+async function ebooks() {
+  const bt = $('btEbooks');
+  bt.disabled = true;
+  $('ebooks').hidden = true;
+  $('etatEbooks').className = 'etat';
+  $('etatEbooks').textContent = 'composition du PDF et de l’EPUB…';
+  try {
+    afficherEbooks(await invoke('ebook_generer'));
+    $('etatEbooks').textContent = '';
+  } catch (e) {
+    $('etatEbooks').textContent = String(e);
+    $('etatEbooks').className = 'etat erreur';
+  } finally {
+    bt.disabled = false;
+  }
+}
+
