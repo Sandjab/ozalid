@@ -18,7 +18,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::image::{self, Cadrage, Geometrie};
-use crate::manuscrit::echappe;
+use crate::manuscrit::{echappe, echappe_chaine};
 use crate::projet::Livre;
 
 /// Familles embarquées avec l'application (`app/outils/polices.sh`).
@@ -570,8 +570,14 @@ fn cale(b: Boite, (fw, fh): (f64, f64), contenu: &str) -> String {
 }
 
 /// Image posée dans une zone, découpée à ses bords.
+///
+/// Le nom du fichier est cité, donc échappé : `image_choisir` le fabrique, mais
+/// l'ouverture d'un `.ozalid` prend celui que l'archive porte, et un guillemet droit y
+/// refermerait la chaîne. C'est le seul chemin d'image dans ce cas — celui d'un envoi
+/// est assaini par `envoi::nom_image`.
 pub fn bloc_image(zone: (f64, f64, f64, f64), g: &Geometrie, fichier: &str) -> String {
     let (x, y, w, h) = zone;
+    let fichier = echappe_chaine(fichier);
     format!(
         "#place(top + left, dx: {}, dy: {}, box(width: {}, height: {}, clip: true,\n  \
          place(top + left, dx: {}, dy: {}, image(\"{}\", width: {}, height: {}, fit: \"stretch\"))))\n",
@@ -1004,6 +1010,26 @@ mod tests {
             largeur: 1200,
             hauteur: 1980,
         }
+    }
+
+    /// Le nom de l'image entre dans une chaîne Typst, et il ne vient pas toujours de
+    /// l'application : `image_choisir` le fabrique — `couverture.jpg` — mais l'ouverture
+    /// d'un `.ozalid` prend celui que l'archive porte, quel qu'il soit. Un guillemet
+    /// droit y referme la chaîne et la couverture ne compose plus, sur un fichier que
+    /// l'utilisateur n'a pas écrit lui-même.
+    #[test]
+    fn un_nom_d_image_a_guillemets_ne_referme_pas_la_chaine() {
+        let g = Geometrie {
+            gauche: 0.0,
+            haut: 0.0,
+            largeur: 100.0,
+            hauteur: 150.0,
+        };
+        let s = bloc_image((0.0, 0.0, 100.0, 150.0), &g, r#"ma "photo".jpg"#);
+        assert!(
+            s.contains(r#"image("ma \"photo\".jpg""#),
+            "nom d'image non échappé : {s}"
+        );
     }
 
     /// Une maquette est portable d'un format à l'autre : c'est la promesse des
