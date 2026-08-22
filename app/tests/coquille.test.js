@@ -447,6 +447,7 @@ test('un démarrage en échec laisse les onglets éteints, jamais indéterminés
 const COMPOSITION = {
   pages: 262, chapitres: 12, gouttiere: 25, blanche: true,
   dos: 16.513, pdf: '/livres/LHC/lulu/interieur-lulu.pdf',
+  polices_introuvables: [],
 };
 
 /** Ce que le pied donne à lire : le destinataire choisi, puis l'état de son dos. */

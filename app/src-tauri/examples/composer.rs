@@ -70,7 +70,7 @@ fn main() -> Result<(), String> {
     )
     .map_err(|e| e.to_string())?;
     let pdf = dossier.join(format!("interieur-{}.pdf", pr.cle));
-    typst.compile(&src, &pdf)?;
+    let replis = typst.compile(&src, &pdf)?;
 
     let papier = pr.papier_defaut();
     let dos = match papier.dos.mm(r.pages) {
@@ -92,5 +92,13 @@ fn main() -> Result<(), String> {
         passes,
         if passes > 1 { "s" } else { "" },
     );
+    // Le piège que le commentaire du haut décrit, rendu visible : une police
+    // introuvable ne fait pas échouer Typst, elle fausse le témoin en silence.
+    if !replis.is_empty() {
+        println!(
+            "polices introuvables, composées en repli : {}",
+            replis.join(", ")
+        );
+    }
     Ok(())
 }

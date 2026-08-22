@@ -77,6 +77,7 @@ function faux(providers, sur = {}) {
 const COMPOSITION = {
   pages: 262, chapitres: 64, gouttiere: 25, blanche: true,
   dos: 16.513, pdf: '/livres/LHC/lulu/interieur-lulu.pdf',
+  polices_introuvables: [],
 };
 
 /* ---------- destinataires ---------- */
@@ -234,6 +235,38 @@ test('le dos calculé est affiché avec le compte de pages qui le produit', asyn
   assert.deepStrictEqual(res.textes('dd'), [
     '262', '64', '25,00 mm', 'ajoutée (parité)', '16,51 mm',
   ]);
+});
+
+/**
+ * Typst peut réussir en remplaçant une police introuvable par une écriture de repli :
+ * le PDF existe, les chiffres sont justes, mais le rendu n'est pas celui de la
+ * maquette. Le warning part sur un stderr qu'aucune fenêtre ne montre — ce compte
+ * rendu est le seul endroit où la substitution peut se lire.
+ */
+test('une police composée par repli est signalée dans le compte rendu', async () => {
+  const { els } = await charge({
+    invoke: faux([LULU], {
+      projet_ouvrir: PROJET,
+      composer: { ...COMPOSITION, polices_introuvables: ['bodoni moda'] },
+    }),
+    open: async () => '/livres/LHC.ozalid',
+  });
+  await els.get('btOuvrir').declenche('click');
+  await els.get('btComposer').declenche('click');
+
+  const res = els.get('resultat').textContent;
+  assert.match(res, /bodoni moda/);
+  assert.match(res, /repli/);
+});
+
+test('une composition sans substitution n\'affiche aucune alerte de police', async () => {
+  const { els } = await charge({
+    invoke: faux([LULU], { projet_ouvrir: PROJET, composer: COMPOSITION }),
+    open: async () => '/livres/LHC.ozalid',
+  });
+  await els.get('btOuvrir').declenche('click');
+  await els.get('btComposer').declenche('click');
+  assert.doesNotMatch(els.get('resultat').textContent, /repli/);
 });
 
 /**

@@ -926,6 +926,14 @@ function afficher(c) {
   const dl = h('dl');
   for (const [k, v] of lignes) dl.append(h('dt', k), h('dd', v));
   box.append(dl);
+  // Typst peut réussir en remplaçant une police introuvable par une écriture de
+  // repli : les chiffres ci-dessus sont justes, mais le rendu n'est pas celui de la
+  // maquette — et son warning part sur un stderr qu'aucune fenêtre ne montre.
+  if (c.polices_introuvables.length) {
+    box.append(h('p', 'Police introuvable, composé dans une écriture de repli : '
+      + `${c.polices_introuvables.join(', ')}. Le PDF ne suit pas la maquette.`,
+    'note alerte'));
+  }
   box.append(h('p', c.pdf, 'chemin'));
   box.hidden = false;
 }

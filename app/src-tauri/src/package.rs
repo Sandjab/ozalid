@@ -39,6 +39,9 @@ pub struct Package {
     /// place hors de `chemins` : c'est de quoi vérifier d'un coup d'œil que la planche
     /// tient, pour ce prestataire-là, avec le dos qu'il a réellement mesuré.
     pub vignette: String,
+    /// Familles que Typst n'a pas trouvées et a remplacées par une écriture de repli
+    /// — sans échouer, donc sans que rien d'autre ne le dise. Vide, tout va bien.
+    pub polices_introuvables: Vec<String>,
 }
 
 /// Nom de fichier des sorties d'un prestataire. Le nom porte la clé du prestataire :
@@ -93,7 +96,7 @@ pub fn assembler(
         &interieur::source(livre, int, pr, &reglage, &chapitres, None),
     )?;
     let pdf_int = dossier.join(nom(pr, "interieur", "pdf"));
-    typst.compile(&src_int, &pdf_int)?;
+    let mut polices_introuvables = typst.compile(&src_int, &pdf_int)?;
 
     // 2. Le dos découle de cette pagination-là, jamais d'une saisie.
     let g = Gabarit::pour(pr, papier, r.pages, releve)?;
@@ -112,7 +115,13 @@ pub fn assembler(
         &planche::source(livre, cv, &g, une.as_ref(), quatre.as_ref())?,
     )?;
     let pdf_pl = dossier.join(nom(pr, "couverture", "pdf"));
-    typst.compile(&src_pl, &pdf_pl)?;
+    // La planche a ses propres polices : ses substitutions s'ajoutent à celles de
+    // l'intérieur, chaque famille une fois.
+    for f in typst.compile(&src_pl, &pdf_pl)? {
+        if !polices_introuvables.contains(&f) {
+            polices_introuvables.push(f);
+        }
+    }
 
     // 4. La même planche en vignette, depuis la même source : ce qu'on regarde est ce
     // qui part à l'impression, et non une approximation qu'on espère fidèle. 72 ppp
@@ -132,6 +141,7 @@ pub fn assembler(
         planche: (g.largeur(), g.hauteur()),
         chemins: vec![affiche(&pdf_int), affiche(&pdf_pl)],
         vignette: affiche(&png_pl),
+        polices_introuvables,
     })
 }
 
@@ -239,10 +249,17 @@ pub fn assembler_envois(
             &interieur::source(livre, int, pr, &reglage, &chapitres, Some(t)),
         )?;
         let pdf = dossier.join(nom(pr, "interieur", "pdf"));
-        typst.compile(&src, &pdf)?;
+        // L'envoi peut composer dans une main que la référence n'emploie pas : ses
+        // substitutions à lui s'ajoutent à celles du package de référence.
+        let replis = typst.compile(&src, &pdf)?;
 
         // La planche ne dépend pas de l'envoi : elle est recopiée, pas recomposée.
         let mut p = base.clone();
+        for f in replis {
+            if !p.polices_introuvables.contains(&f) {
+                p.polices_introuvables.push(f);
+            }
+        }
         p.chemins = vec![
             affiche(&pdf),
             copier(&reference, &dossier, &nom(pr, "couverture", "pdf"))?,

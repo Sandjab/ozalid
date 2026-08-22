@@ -155,6 +155,13 @@ function afficherPackages(resultats) {
       // celle de sa planche au lieu d'en être la somme.
       const infos = h('div', undefined, 'infos');
       infos.append(dl);
+      // Une police que Typst a remplacée sans échouer : ce PDF-là part chez
+      // l'imprimeur, l'alerte se lit donc sur le package qu'elle a traversé.
+      if (p.polices_introuvables.length) {
+        infos.append(h('p', 'Police introuvable, composé dans une écriture de repli : '
+          + `${p.polices_introuvables.join(', ')}. Le PDF ne suit pas la maquette.`,
+        'note alerte'));
+      }
       for (const c of cheminsGroupes(p.chemins)) infos.append(h('p', c, 'chemin'));
       bloc.append(infos);
       // La planche telle qu'elle part à l'impression, avec le dos mesuré de ce

@@ -49,6 +49,7 @@ const PROJET = {
 const COMPOSITION = {
   pages: 262, chapitres: 64, gouttiere: 25, blanche: true,
   dos: 16.513, pdf: '/livres/LHC/lulu/interieur-lulu.pdf',
+  polices_introuvables: [],
 };
 
 function paquet(sur = {}) {
@@ -64,6 +65,7 @@ function paquet(sur = {}) {
     planche: [238.863, 181.35],
     chemins: ['/livres/LHC/lulu/interieur-lulu.pdf', '/livres/LHC/lulu/couverture-lulu.pdf'],
     vignette: '/livres/LHC/lulu/couverture-lulu.png',
+    polices_introuvables: [],
     ...sur,
   };
 }
@@ -290,6 +292,33 @@ test('un prestataire en échec est signalé sans masquer ceux qui ont abouti', a
   assert.deepStrictEqual(box.textes('h3'), ['Lulu', 'Amazon KDP']);
   assert.match(box.textContent, /16,51 mm/, 'dos du package abouti absent');
   assert.match(box.textContent, /tranche de gouttière absente/);
+});
+
+/**
+ * Même promesse que pour la composition : une police que Typst a remplacée sans
+ * échouer doit se lire sur le package qu'elle a traversé — c'est ce PDF-là qui part
+ * chez l'imprimeur.
+ */
+test('un package composé par repli porte l\'alerte de police', async () => {
+  const { els } = await ouvre([LULU], {
+    packager: () => [{
+      provider: 'lulu', libelle: 'Lulu', erreur: null,
+      package: paquet({ polices_introuvables: ['plume ivan'] }),
+    }],
+  });
+  await els.get('btPackager').declenche('click');
+
+  const t = els.get('packages').textContent;
+  assert.match(t, /plume ivan/);
+  assert.match(t, /repli/);
+});
+
+test('un package sans substitution n\'affiche aucune alerte de police', async () => {
+  const { els } = await ouvre([LULU], {
+    packager: () => [{ provider: 'lulu', libelle: 'Lulu', package: paquet(), erreur: null }],
+  });
+  await els.get('btPackager').declenche('click');
+  assert.doesNotMatch(els.get('packages').textContent, /repli/);
 });
 
 test('un package affiche le dos, la planche et les fichiers produits', async () => {

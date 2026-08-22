@@ -43,7 +43,7 @@ impl Typst {
     /// Compte de pages final de la source, sans produire de PDF.
     /// La source doit se terminer par [`MARQUEUR`].
     pub fn pages(&self, source: &Path) -> Result<u32, String> {
-        let sortie = self.lance(&[
+        let (sortie, _) = self.lance(&[
             "eval",
             "query(<pages>).map(it => it.value)",
             "--in",
@@ -61,9 +61,13 @@ impl Typst {
             })
     }
 
-    pub fn compile(&self, source: &Path, sortie: &Path) -> Result<(), String> {
+    /// Compile la source en PDF, et rend les familles de police que Typst n'a pas
+    /// trouvées — celles qu'il a remplacées par une écriture de repli, en sortant
+    /// quand même en succès. Vide, tout va bien ; sinon, le PDF existe mais ne
+    /// ressemble pas à la maquette, et le taire enverrait ce rendu-là à l'impression.
+    pub fn compile(&self, source: &Path, sortie: &Path) -> Result<Vec<String>, String> {
         self.lance(&["compile", &chemin(source)?, &chemin(sortie)?])
-            .map(|_| ())
+            .map(|(_, stderr)| familles_introuvables(&stderr))
     }
 
     /// Rendu d'aperçu d'une page en PNG.
@@ -82,7 +86,10 @@ impl Typst {
         .map(|_| ())
     }
 
-    fn lance(&self, args: &[&str]) -> Result<String, String> {
+    /// Rend `(stdout, stderr)` d'une invocation réussie : Typst peut réussir en
+    /// avertissant — la substitution de police, notamment — et une application
+    /// graphique n'a pas de console où ce `stderr` se lirait tout seul.
+    fn lance(&self, args: &[&str]) -> Result<(String, String), String> {
         let mut cmd = Command::new(&self.binaire);
         cmd.args(args);
         if !self.polices.is_empty() {
@@ -103,8 +110,27 @@ impl Typst {
             // Le message de Typst est le seul indice exploitable : le remonter entier.
             return Err(String::from_utf8_lossy(&r.stderr).trim().to_string());
         }
-        Ok(String::from_utf8_lossy(&r.stdout).to_string())
+        Ok((
+            String::from_utf8_lossy(&r.stdout).to_string(),
+            String::from_utf8_lossy(&r.stderr).to_string(),
+        ))
     }
+}
+
+/// Familles que Typst a remplacées sans échouer, relevées sur son `stderr` :
+/// « warning: unknown font family: plume fantome », répété à chaque endroit de la
+/// source qui demande la famille — d'où le dédoublonnage, dans l'ordre d'apparition.
+fn familles_introuvables(stderr: &str) -> Vec<String> {
+    let mut familles: Vec<String> = Vec::new();
+    for ligne in stderr.lines() {
+        if let Some(famille) = ligne.strip_prefix("warning: unknown font family: ") {
+            let famille = famille.trim();
+            if !familles.iter().any(|f| f == famille) {
+                familles.push(famille.to_string());
+            }
+        }
+    }
+    familles
 }
 
 fn chemin(p: &Path) -> Result<String, String> {
@@ -124,5 +150,37 @@ mod tests {
         let t = Typst::new("/nexistepas/typst");
         let err = t.pages(Path::new("/tmp/x.typ")).unwrap_err();
         assert!(err.contains("/nexistepas/typst"), "{err}");
+    }
+
+    /// Le `stderr` ci-dessous est celui du sidecar, relevé tel quel : quand une famille
+    /// manque, Typst compose dans une écriture de repli, sort en code 0 et ne le dit
+    /// que là. Chaque famille doit être relevée une fois — elle est répétée à chaque
+    /// endroit de la source qui la demande — et le cadre du warning (`┌─`, `│`) ne
+    /// doit pas passer pour une famille.
+    #[test]
+    fn les_familles_composees_par_repli_sont_relevees_sur_stderr() {
+        let stderr = "\
+warning: unknown font family: plume fantome
+  ┌─ repli.typ:1:16
+  │
+1 │ #set text(font: \"Plume Fantome\")
+  │                 ^^^^^^^^^^^^^^^
+
+warning: unknown font family: autre absente
+  ┌─ repli.typ:3:12
+
+warning: unknown font family: plume fantome
+  ┌─ repli.typ:5:16
+";
+        assert_eq!(
+            familles_introuvables(stderr),
+            vec!["plume fantome", "autre absente"]
+        );
+    }
+
+    /// Un `stderr` vide — le cas de toutes les compositions saines — ne relève rien.
+    #[test]
+    fn un_stderr_sain_ne_releve_aucune_famille() {
+        assert!(familles_introuvables("").is_empty());
     }
 }

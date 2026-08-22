@@ -125,6 +125,9 @@ pub struct Composition {
     /// valeur qui alimentera la planche : elle n'est jamais ressaisie.
     pub dos: Option<f64>,
     pub pdf: String,
+    /// Familles que Typst n'a pas trouvées et a remplacées par une écriture de repli
+    /// — sans échouer, donc sans que rien d'autre ne le dise. Vide, tout va bien.
+    pub polices_introuvables: Vec<String>,
 }
 
 #[tauri::command]
@@ -538,7 +541,7 @@ pub fn composer(atelier: State<Atelier>) -> Result<Composition, String> {
         &interieur::source(livre, int, pr, &reglage, &chapitres, None),
     )?;
     let pdf = dossier.join(format!("interieur-{}.pdf", pr.cle));
-    typst.compile(&src, &pdf)?;
+    let polices_introuvables = typst.compile(&src, &pdf)?;
 
     Ok(Composition {
         pages: r.pages,
@@ -547,6 +550,7 @@ pub fn composer(atelier: State<Atelier>) -> Result<Composition, String> {
         chapitres: chapitres.len() as u32,
         dos: papier.dos.mm(r.pages),
         pdf: pdf.to_string_lossy().into_owned(),
+        polices_introuvables,
     })
 }
 
@@ -572,6 +576,9 @@ pub fn epreuve_tirer(corps_pt: f64, atelier: State<Atelier>) -> Result<String, S
     let src = dossier.join("epreuve.typ");
     ecrire(&src, &epreuve::source(livre, int, &chapitres, corps_pt))?;
     let pdf = dossier.join("epreuve.pdf");
+    // Les substitutions de police ne sont pas remontées ici : l'épreuve se lit pour
+    // son texte, et composer l'intérieur — qui emploie les mêmes polices — les
+    // signale déjà dans son compte rendu.
     typst()?.compile(&src, &pdf)?;
     Ok(pdf.to_string_lossy().into_owned())
 }
