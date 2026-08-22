@@ -50,10 +50,6 @@ C'est cette contrainte qui explique une forme du code qui paraîtrait sinon tord
 
 **Un chemin de fichier à guillemet droit casserait la couverture.** `couverture.rs` interpole les chemins d'images dans `image("…")` sans échappement de chaîne — le même défaut que celui corrigé pour le titre, sur une valeur que l'application fabrique elle-même. Jamais rencontré, et hors du chemin où l'utilisateur écrit : `manuscrit::echappe_chaine` est là si on décide de le fermer.
 
-**Le vocabulaire partagé entre le Rust et le JavaScript n'est vérifié par rien.** Trois réponses de garde (`enregistrer`, `ignorer`, `annuler`), deux noms d'événements (`menu`, `fermeture-demandee`), sept identifiants d'entrées de menu et le préfixe des récents sont écrits en double, dans `commands.rs`/`menu.rs` d'un côté et dans `app.js` de l'autre, sans aucun test qui les lie. Le risque est aujourd'hui contenu : une divergence sur les identifiants ou les événements rend le menu inerte au premier essai, panne bruyante qui ne survit pas à une minute d'usage ; et le défaut de `garde()` a été inversé pour qu'une divergence de vocabulaire y devienne inoffensive — l'inconnu vaut « annuler », comme côté Rust. Le patron d'une garde existe si on la veut un jour : `dom_shim.js` lit déjà le vrai `index.html` à l'expression régulière pour que les tests partent du même état que l'application.
-
-**Le menu « Aller » porte quatre entrées désactivées** (`aller.livre`, `aller.interieur`, `aller.couverture`, `aller.livraison`, dans `app/src-tauri/src/menu.rs`). Elles attendent les étapes du lot 2 ; grisées, elles annoncent un chantier au lieu de ressembler à une panne. À réactiver quand elles mèneront quelque part.
-
 ---
 
 ## 5. Points d'attention juridiques
