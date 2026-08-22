@@ -650,6 +650,23 @@ async function majInterieur() {
  * `.ozalid` comme le manuscrit, et le chemin d'où elle vient n'a plus à exister pour
  * que la couverture se compose.
  */
+/**
+ * Choisit l'image écrite à la main d'un envoi.
+ *
+ * Elle est copiée dans le `.ozalid` sous `envois/`, à part de celles de la couverture :
+ * là-bas, une image dont le nom ne commence pas par `quatrieme` **devient** la première
+ * de couverture, et le mot manuscrit d'un lecteur remplacerait la couverture du livre.
+ */
+async function choisirImageEnvoi(index) {
+  const chemin = await open({
+    multiple: false,
+    filters: [{ name: 'Mot écrit à la main', extensions: ['jpg', 'jpeg', 'png'] }],
+  });
+  if (!chemin) return;
+  await tente(async () =>
+    afficherProjet(await invoke('envoi_image_choisir', { index, chemin })));
+}
+
 async function choisirImage(face) {
   const chemin = await open({
     multiple: false,
@@ -1048,13 +1065,15 @@ $('btPolice').addEventListener('click', async () => {
 $('btPoliceRetirer').addEventListener('click', () => tente(async () =>
   afficherProjet(await invoke('police_retirer'))));
 // La main appartient au livre : la changer réécrit tous ses envois d'un coup.
-$('inMain').addEventListener('change', () => tente(async () =>
+$('inMain').addEventListener('change', () => tente(async () => {
+  const choix = $('inMain').value;
+  const main = choix.startsWith('police:')
+    ? { mode: 'police', police: choix.slice('police:'.length) }
+    : { mode: choix };
   afficherProjet(await invoke('envois_modifier', {
-    envois: {
-      main: { mode: 'police', police: $('inMain').value },
-      liste: projet.envois.liste,
-    },
-  }))));
+    envois: { main, liste: projet.envois.liste },
+  }));
+}));
 construireEtapes();
 construireFaces();
 for (const id of ['inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright',

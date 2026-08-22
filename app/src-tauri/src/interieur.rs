@@ -128,13 +128,16 @@ pub fn converge(
 
 /// Ce qu'un envoi dépose sur la page de titre.
 ///
-/// `interieur` ne connaît pas la main du livre : il reçoit ce qu'elle a décidé. Les
-/// lots suivants y ajouteront l'image ; la structure deviendra alors une énumération,
-/// et ce module n'aura toujours pas à savoir d'où l'image vient.
+/// `interieur` ne connaît pas la main du livre : il reçoit ce qu'elle a décidé. Une
+/// image écrite à la main et une image produite par un modèle de diffusion arrivent
+/// ici de la même façon — ce module n'a pas à savoir d'où l'image vient, seulement
+/// qu'elle est posée à côté de la source.
 #[derive(Debug, Clone, Copy)]
-pub struct Trace<'a> {
-    pub police: &'a str,
-    pub texte: &'a str,
+pub enum Trace<'a> {
+    /// Un texte, composé dans la main du livre.
+    Texte { police: &'a str, texte: &'a str },
+    /// Une image, déjà écrite à côté de la source, désignée par son seul nom.
+    Image { fichier: &'a str },
 }
 
 /// Source Typst complète de l'intérieur.
@@ -256,17 +259,23 @@ fn liminaires(livre: &Livre, envoi: Option<Trace>) -> String {
     // bas. `#place` ne consomme pas le flux : il lui est impossible de créer une page,
     // et c'est là-dessus que repose la promesse — la pagination, le dos et la planche
     // sont les mêmes pour tous les envois du livre.
-    if let Some(t) = envoi {
-        s.push_str(&format!(
+    match envoi {
+        Some(Trace::Texte { police, texte }) => s.push_str(&format!(
             r#"#place(bottom + center, dy: -28mm, block(width: 70%)[
   #set par(justify: false, first-line-indent: 0pt, leading: 0.9em)
-  #text(font: "{}", size: 14pt, hyphenate: false)[{}]
+  #text(font: "{police}", size: 14pt, hyphenate: false)[{}]
 ])
 "#,
             // La main est validée en amont par `Envois::verifie` : pas d'échappement.
-            t.police,
-            echappe(t.texte).replace('\n', r" \ ")
-        ));
+            echappe(texte).replace('\n', r" \ ")
+        )),
+        // Le nom du fichier est fabriqué par `envoi::nom_image` : assaini, il ne porte
+        // ni guillemet qui refermerait la chaîne, ni séparateur qui la ferait sortir du
+        // répertoire où l'image vient d'être écrite.
+        Some(Trace::Image { fichier }) => s.push_str(&format!(
+            "#place(bottom + center, dy: -28mm, image(\"{fichier}\", width: 70%))\n"
+        )),
+        None => {}
     }
     s.push_str("#pagebreak()\n\n");
 
@@ -655,7 +664,7 @@ mod tests {
     }
 
     fn trace() -> Trace<'static> {
-        Trace {
+        Trace::Texte {
             police: "Caveat",
             texte: "À Léa, qui a lu la première version.",
         }
@@ -749,11 +758,60 @@ mod tests {
         assert!(s.contains("hyphenate: false"), "envoi césuré : {s}");
     }
 
+    /// L'image se pose par le même `#place` que le texte, et pour la même raison : elle
+    /// ne consomme pas le flux, donc elle ne peut pas créer de page. Une image écrite à
+    /// la main est bien plus haute qu'un mot de deux lignes — si elle poussait quoi que
+    /// ce soit, la pagination du livre entier suivrait, et le dos avec.
+    #[test]
+    fn une_image_d_envoi_ne_cree_aucune_page_non_plus() {
+        let sans = liminaires(&livre(), None);
+        let avec = liminaires(
+            &livre(),
+            Some(Trace::Image {
+                fichier: "Léa.png"
+            }),
+        );
+
+        assert_eq!(
+            avec.matches("#pagebreak()").count(),
+            sans.matches("#pagebreak()").count(),
+            "l'image a déplacé une page"
+        );
+        assert_eq!(
+            avec.matches("#place(").count(),
+            sans.matches("#place(").count() + 1,
+            "l'image ne se pose pas par #place : {avec}"
+        );
+        assert_eq!(
+            avec.matches("#v(").count(),
+            sans.matches("#v(").count(),
+            "l'image pousse le flux au lieu de se poser dessus : {avec}"
+        );
+        assert!(
+            avec.contains(r#"image("Léa.png", width: 70%)"#),
+            "l'image n'est pas posée : {avec}"
+        );
+    }
+
+    /// Une image ne s'écrit pas dans une police : lui en imposer une reviendrait à
+    /// composer du texte là où il n'y en a pas, et le mot manuscrit passerait au
+    /// travers.
+    #[test]
+    fn une_image_d_envoi_n_emporte_aucune_police() {
+        let s = liminaires(
+            &livre(),
+            Some(Trace::Image {
+                fichier: "Léa.png"
+            }),
+        );
+        assert!(!s.contains("font:"), "une police s'est glissée : {s}");
+    }
+
     /// Même piège que le titre de page et que la dédicace : le markup Typst doit être
     /// échappé, les sauts de ligne voulus doivent survivre.
     #[test]
     fn un_envoi_est_echappe_et_garde_ses_sauts_de_ligne() {
-        let t = Trace {
+        let t = Trace::Texte {
             police: "Caveat",
             texte: "À #Léa,\navec mon amitié.",
         };

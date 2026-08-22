@@ -927,7 +927,7 @@ test('le menu des mains se pose sur la main du livre', async () => {
   const { els } = await charge({ invoke: a.invoke });
   await els.get('btNouveau').declenche('click');
 
-  assert.equal(els.get('inMain').value, 'Dancing Script');
+  assert.equal(els.get('inMain').value, 'police:Dancing Script');
 });
 
 /**
@@ -949,8 +949,9 @@ test('la police personnelle s\'ajoute aux mains de la maison', async () => {
   await els.get('btNouveau').declenche('click');
 
   const offertes = [...els.get('inMain').children].map((o) => o.value);
-  assert.deepEqual(offertes, ['Caveat', 'Dancing Script', 'Ma Main']);
-  assert.equal(els.get('inMain').value, 'Ma Main');
+  assert.deepEqual(offertes,
+    ['police:Caveat', 'police:Dancing Script', 'police:Ma Main', 'image']);
+  assert.equal(els.get('inMain').value, 'police:Ma Main');
   assert.equal(els.get('btPoliceRetirer').disabled, false,
     'une police est embarquée et rien ne la retire');
 });
@@ -992,4 +993,47 @@ test('choisir une police envoie son chemin, et l\'annuler n\'envoie rien', async
   await els.get('btPolice').declenche('click');
   assert.equal(a.appels.filter(([c]) => c === 'police_choisir').length, 1,
     'un dialogue annulé a quand même envoyé un chemin');
+});
+
+/**
+ * La main est une forme autant qu'une écriture : le menu porte les deux, et le mode
+ * choisi doit repartir tel quel. Envoyer une police là où l'on a choisi une image ferait
+ * composer un texte vide sur toutes les pages de titre.
+ */
+test('choisir l\'image comme main envoie le mode, pas une police', async () => {
+  const a = atelier();
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  els.get('inMain').value = 'image';
+  await els.get('inMain').declenche('change');
+
+  const envoi = a.appels.findLast(([c]) => c === 'envois_modifier');
+  assert.deepEqual(envoi[1].envois.main, { mode: 'image' });
+});
+
+/**
+ * Sous une main en images, la ligne d'un envoi ne porte plus de texte à écrire mais une
+ * image à choisir. Laisser le champ de texte donnerait à croire qu'on peut encore y
+ * écrire, alors que rien de ce qu'on y taperait ne serait imprimé.
+ */
+test('la ligne d\'un envoi suit la main du livre', async () => {
+  const en_images = {
+    main: { mode: 'image' },
+    liste: [{ dedicataire: 'Léa', contenu: '', image: 'Léa.png' }],
+  };
+  const a = atelier({ sur: { envois: en_images } });
+  const { els } = await charge({ invoke: a.invoke, open: async () => '/photos/mot.png' });
+  await els.get('btNouveau').declenche('click');
+
+  const ligne = els.get('envois').enfants[0];
+  const tags = ligne.enfants.map((c) => c.tagName);
+  assert.ok(!tags.includes('TEXTAREA'), 'un champ de texte sous une main en images');
+  assert.equal(els.get('envoi-image-0').textContent, 'Image : Léa.png',
+    'le nom de l\'image dans l\'archive n\'est pas montré');
+
+  await els.get('envoi-image-0').declenche('click');
+  const choix = a.appels.findLast(([c]) => c === 'envoi_image_choisir');
+  assert.ok(choix, 'aucun envoi_image_choisir : le bouton n\'a pas d\'écouteur');
+  assert.deepEqual(choix[1], { index: 0, chemin: '/photos/mot.png' });
 });

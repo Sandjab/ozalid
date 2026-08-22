@@ -24,9 +24,12 @@ pub const MAINS: &[&str] = &["Caveat", "Dancing Script", "Petit Formal Script"];
 pub enum Main {
     /// Police manuscrite : embarquée avec l'application, ou fournie par l'auteur et
     /// embarquée dans le `.ozalid`. Une seule variante pour ces deux sources — seule la
-    /// provenance du fichier diffère, la composition est la même. Les lots suivants y
-    /// ajouteront l'image écrite à la main et l'image générée.
+    /// provenance du fichier diffère, la composition est la même. Le lot suivant y
+    /// ajoutera l'image générée.
     Police { police: String },
+    /// Une image écrite à la main, une par envoi : l'auteur écrit son mot sur une
+    /// feuille, le photographie, et c'est cette image-là qui s'imprime.
+    Image,
 }
 
 impl Default for Main {
@@ -41,9 +44,14 @@ impl Default for Main {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Envoi {
     pub dedicataire: String,
-    /// Ce que la main réclame : ici, le texte à composer.
+    /// Ce que la main réclame : le texte à composer. Vide quand la main est une image.
     #[serde(default)]
     pub contenu: String,
+    /// Nom, sous `envois/` dans l'archive, de l'image de cet envoi. Deux champs pour
+    /// trois formes plutôt qu'un champ par forme : la ligne d'envoi change de nature
+    /// avec la main, elle ne s'encombre pas de ce que la main ne réclame pas.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
 }
 
 /// La main du livre et ses envois.
@@ -72,7 +80,12 @@ impl Envois {
     /// pas une substitution par le défaut du binaire. C'est le contrôle
     /// d'`Interieur::verifie`, pour la même raison.
     pub fn verifie(&self) -> Result<(), String> {
-        let Main::Police { police } = &self.main;
+        // Une image n'a pas de nom de police à trouver : elle se pose telle quelle.
+        // Ce qui lui manque — l'image d'un envoi qui n'en a pas — se refuse à la
+        // composition, pas ici : on écrit la liste avant de choisir les images.
+        let Main::Police { police } = &self.main else {
+            return Ok(());
+        };
         if MAINS.contains(&police.as_str()) || self.personnelle.as_deref() == Some(police) {
             return Ok(());
         }
@@ -134,6 +147,27 @@ pub fn assaini(dedicataire: &str) -> String {
     }
 }
 
+/// Nom de l'image d'un envoi dans l'archive, sous `envois/`.
+///
+/// Le nom est tiré du dédicataire, assaini comme un répertoire : il entre dans un `zip`,
+/// puis dans une chaîne Typst, et un chemin déguisé en nom de personne n'a rien à faire
+/// ni dans l'un ni dans l'autre. Le suffixe est posé **avant** l'extension : Typst
+/// reconnaît le format d'une image à son extension, et « Léa.png-2 » ne serait plus une
+/// image du tout.
+pub fn nom_image(dedicataire: &str, ext: &str, pris: &[String]) -> String {
+    let base = assaini(dedicataire);
+    (1..)
+        .map(|n| {
+            if n < 2 {
+                format!("{base}.{ext}")
+            } else {
+                format!("{base}-{n}.{ext}")
+            }
+        })
+        .find(|c| !pris.iter().any(|p| p == c))
+        .expect("la suite des entiers ne s'épuise pas")
+}
+
 /// Rend `nom` unique parmi `pris`, en le suffixant.
 ///
 /// Deux dédicataires qui se réduisent au même répertoire écraseraient l'un l'autre :
@@ -177,12 +211,46 @@ mod tests {
         assert_eq!(vus, ["Marie-Léa", "Marie-Léa-2", "Marie-Léa-3"]);
     }
 
+    /// L'image d'un envoi entre dans l'archive, puis dans une chaîne Typst : son nom ne
+    /// peut donc être ni un chemin, ni celui d'un autre envoi. Deux dédicataires
+    /// homonymes recevraient sinon la même image — celle du premier.
+    #[test]
+    fn deux_images_d_envoi_ne_se_confondent_pas_et_gardent_leur_extension() {
+        let mut pris: Vec<String> = Vec::new();
+        for qui in ["Marie/Léa", "Marie-Léa", "Marie:Léa"] {
+            let n = nom_image(qui, "png", &pris);
+            pris.push(n);
+        }
+        assert_eq!(
+            pris,
+            ["Marie-Léa.png", "Marie-Léa-2.png", "Marie-Léa-3.png"]
+        );
+        assert_eq!(nom_image("..", "jpg", &pris), "envoi.jpg");
+    }
+
+    /// Une main qui pose une image n'a aucun nom de police à trouver : la refuser
+    /// interdirait le mode entier. Ce qui lui manque — l'image d'un envoi qui n'en a pas
+    /// — se refuse à la composition, là où on peut encore le corriger.
+    #[test]
+    fn une_main_en_image_n_a_pas_de_police_a_verifier() {
+        let e = Envois {
+            main: Main::Image,
+            personnelle: None,
+            liste: vec![],
+        };
+        assert!(e.verifie().is_ok());
+    }
+
     /// Un livre neuf sait écrire sans qu'on lui règle quoi que ce soit, comme il sait
     /// déjà composer son intérieur en EB Garamond.
     #[test]
     fn un_livre_neuf_a_deja_une_main() {
-        let Main::Police { police } = Envois::default().main;
-        assert_eq!(police, MAINS[0]);
+        assert_eq!(
+            Envois::default().main,
+            Main::Police {
+                police: MAINS[0].into()
+            }
+        );
     }
 
     /// Une main hors liste est refusée, jamais substituée : même contrôle que

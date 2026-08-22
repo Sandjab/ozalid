@@ -8,7 +8,13 @@
 //! manuscrit.md
 //! images/         photos source de la 1ère et de la 4ème
 //! polices/        la police personnelle de l'auteur, quand il en fournit une
+//! envois/         les images des envois, une par dédicataire
 //! ```
+//!
+//! Les images d'envoi sont sous `envois/`, et **pas** avec celles de la couverture :
+//! `package::ecrire_images` donne un rôle aux images du projet par leur seul nom, et
+//! tout ce qui ne commence pas par `quatrieme` y devient la première de couverture. Une
+//! image d'envoi versée dans ce tas remplacerait la couverture, en silence.
 //!
 //! `projet.toml` garde la forme et l'esprit du `livre.toml` historique : dézippée,
 //! l'archive reste lisible et diffable.
@@ -33,6 +39,7 @@ const PROJET_TOML: &str = "projet.toml";
 const MANUSCRIT_MD: &str = "manuscrit.md";
 const IMAGES: &str = "images/";
 const POLICES: &str = "polices/";
+const ENVOIS: &str = "envois/";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Livre {
@@ -236,6 +243,10 @@ pub struct Projet {
     /// Nom de fichier (sans `polices/`) → contenu. Une seule police y vit à la fois :
     /// c'est celle de l'auteur, et un livre n'a qu'une main.
     pub polices: BTreeMap<String, Vec<u8>>,
+    /// Nom de fichier (sans `envois/`) → contenu. Une image par envoi, désignée par
+    /// `Envoi::image` : c'est ce lien-là, et non l'ordre de la liste, qui garantit
+    /// qu'un exemplaire ne part pas avec le mot d'un autre.
+    pub images_envois: BTreeMap<String, Vec<u8>>,
 }
 
 impl Projet {
@@ -253,7 +264,59 @@ impl Projet {
             texte,
             images: BTreeMap::new(),
             polices: BTreeMap::new(),
+            images_envois: BTreeMap::new(),
         }
+    }
+
+    /// Reprend la liste des envois saisie par l'interface, et jette ce qu'elle abandonne.
+    ///
+    /// Un envoi retiré emporte son image : sans cet élagage, l'archive garderait le mot
+    /// manuscrit d'une personne à qui l'on n'envoie plus rien, et le `.ozalid` grossirait
+    /// d'un fichier que plus rien ne nomme.
+    pub fn regler_envois(&mut self, saisie: crate::envoi::Envois) -> Result<(), String> {
+        self.meta.envois = self.meta.envois.reprend(saisie)?;
+        self.elaguer_images_envois();
+        Ok(())
+    }
+
+    /// Ne garde sous `envois/` que les images qu'un envoi nomme encore.
+    fn elaguer_images_envois(&mut self) {
+        let vives: Vec<String> = self
+            .meta
+            .envois
+            .liste
+            .iter()
+            .filter_map(|e| e.image.clone())
+            .collect();
+        self.images_envois.retain(|n, _| vives.contains(n));
+    }
+
+    /// Embarque l'image d'un envoi, sous le nom que l'archive lui donnera.
+    ///
+    /// Le nom vient du dédicataire, pas du fichier choisi : deux photos venues du même
+    /// appareil s'appellent souvent pareil, et l'une écraserait l'autre — le second
+    /// exemplaire partirait avec le mot du premier.
+    pub fn poser_image_envoi(
+        &mut self,
+        index: usize,
+        ext: &str,
+        octets: Vec<u8>,
+    ) -> Result<(), String> {
+        crate::image::dimensions(&octets)
+            .ok_or("image refusée : seuls le JPEG et le PNG se composent.")?;
+        let e = self
+            .meta
+            .envois
+            .liste
+            .get(index)
+            .ok_or("envoi introuvable : la liste a changé.")?;
+        let pris: Vec<String> = self.images_envois.keys().cloned().collect();
+        let nom = crate::envoi::nom_image(&e.dedicataire, ext, &pris);
+        self.meta.envois.liste[index].image = Some(nom.clone());
+        self.images_envois.insert(nom, octets);
+        // L'image que cet envoi portait avant n'est plus nommée par personne.
+        self.elaguer_images_envois();
+        Ok(())
     }
 
     /// La famille que déclare la police embarquée, relevée dans le fichier.
@@ -333,9 +396,14 @@ impl Projet {
 
         let mut images = BTreeMap::new();
         let mut polices = BTreeMap::new();
+        let mut images_envois = BTreeMap::new();
         let noms: Vec<String> = zip.file_names().map(str::to_owned).collect();
         for nom in noms {
-            for (prefixe, cible) in [(IMAGES, &mut images), (POLICES, &mut polices)] {
+            for (prefixe, cible) in [
+                (IMAGES, &mut images),
+                (POLICES, &mut polices),
+                (ENVOIS, &mut images_envois),
+            ] {
                 let Some(court) = nom.strip_prefix(prefixe) else {
                     continue;
                 };
@@ -353,6 +421,7 @@ impl Projet {
             texte,
             images,
             polices,
+            images_envois,
         };
         // La famille de la police personnelle est relevée dans le fichier embarqué, et
         // non lue dans le TOML : un `.ozalid` dont on aurait retiré la police, ou dont
@@ -377,6 +446,9 @@ impl Projet {
         ajoute(&mut zip, MANUSCRIT_MD, self.texte.as_bytes(), texte_opts)?;
         for (nom, oct) in &self.images {
             ajoute(&mut zip, &format!("{IMAGES}{nom}"), oct, brut_opts)?;
+        }
+        for (nom, oct) in &self.images_envois {
+            ajoute(&mut zip, &format!("{ENVOIS}{nom}"), oct, brut_opts)?;
         }
         // Une police, elle, se dégonfle de moitié : elle est faite de tables et de
         // courbes, pas d'un flux déjà compressé.
@@ -693,6 +765,7 @@ auteur = "Ivan Pjig"
         p.meta.envois.liste = vec![crate::envoi::Envoi {
             dedicataire: "Léa".into(),
             contenu: "À Léa, qui a lu la première version.".into(),
+            image: None,
         }];
 
         let r = aller_retour(&p);
@@ -797,6 +870,127 @@ auteur = "Ivan Pjig"
         assert!(err.is_err());
         assert!(p.polices.is_empty(), "l'archive a gardé le faux fichier");
         assert_eq!(p.meta.envois.main, avant);
+    }
+
+    /// Un PNG réduit à ce que `image::dimensions` sait lire : sa signature et son IHDR.
+    fn png(largeur: u32) -> Vec<u8> {
+        let mut p = b"\x89PNG\r\n\x1a\n".to_vec();
+        p.extend(13u32.to_be_bytes());
+        p.extend(b"IHDR");
+        p.extend(largeur.to_be_bytes());
+        p.extend(400u32.to_be_bytes());
+        p.extend([8, 6, 0, 0, 0]);
+        p
+    }
+
+    fn avec_envois(qui: &[&str]) -> Projet {
+        let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
+        p.meta.envois.main = crate::envoi::Main::Image;
+        p.meta.envois.liste = qui
+            .iter()
+            .map(|d| crate::envoi::Envoi {
+                dedicataire: (*d).into(),
+                contenu: String::new(),
+                image: None,
+            })
+            .collect();
+        p
+    }
+
+    /// L'image écrite à la main est une source au même titre que le manuscrit : elle
+    /// voyage dans l'archive, et le nom qu'elle y prend est celui que la source Typst
+    /// écrira. Le perdre, c'est un envoi qui ne compose plus.
+    #[test]
+    fn une_image_d_envoi_voyage_dans_l_archive() {
+        let mut p = avec_envois(&["Léa"]);
+        p.poser_image_envoi(0, "png", png(300)).unwrap();
+
+        let r = aller_retour(&p);
+        assert_eq!(r.meta.envois.liste[0].image.as_deref(), Some("Léa.png"));
+        assert_eq!(r.images_envois["Léa.png"], png(300));
+    }
+
+    /// Le nom vient du dédicataire, jamais du fichier choisi : deux photos du même
+    /// appareil s'appellent pareil, et la seconde écraserait la première — le second
+    /// exemplaire partirait avec le mot du premier.
+    #[test]
+    fn deux_envois_ne_partagent_jamais_leur_image() {
+        // Deux personnes du même prénom : le cas où le nom seul ne suffit pas.
+        let mut p = avec_envois(&["Léa", "Léa"]);
+        p.poser_image_envoi(0, "png", png(300)).unwrap();
+        p.poser_image_envoi(1, "png", png(500)).unwrap();
+
+        assert_eq!(p.meta.envois.liste[0].image.as_deref(), Some("Léa.png"));
+        assert_eq!(p.meta.envois.liste[1].image.as_deref(), Some("Léa-2.png"));
+        assert_eq!(p.images_envois["Léa.png"], png(300), "images échangées");
+        assert_eq!(p.images_envois["Léa-2.png"], png(500));
+    }
+
+    /// Une image remplacée ne laisse rien derrière elle : l'archive garderait sinon des
+    /// mots que plus aucun envoi ne nomme, et grossirait d'une photo par essai.
+    #[test]
+    fn une_image_remplacee_ne_laisse_rien_dans_l_archive() {
+        let mut p = avec_envois(&["Léa"]);
+        p.poser_image_envoi(0, "png", png(300)).unwrap();
+        p.poser_image_envoi(0, "jpg", png(500)).unwrap();
+
+        assert_eq!(p.images_envois.len(), 1, "l'ancienne image est restée");
+        assert_eq!(p.meta.envois.liste[0].image.as_deref(), Some("Léa.jpg"));
+    }
+
+    /// Un envoi retiré emporte son image : c'est le mot écrit pour quelqu'un à qui l'on
+    /// n'envoie plus rien.
+    #[test]
+    fn un_envoi_retire_emporte_son_image() {
+        let mut p = avec_envois(&["Léa", "Marie"]);
+        p.poser_image_envoi(0, "png", png(300)).unwrap();
+        p.poser_image_envoi(1, "png", png(500)).unwrap();
+
+        let restants = crate::envoi::Envois {
+            liste: vec![p.meta.envois.liste[1].clone()],
+            ..p.meta.envois.clone()
+        };
+        p.regler_envois(restants).unwrap();
+
+        assert_eq!(p.images_envois.keys().collect::<Vec<_>>(), ["Marie.png"]);
+    }
+
+    /// Ni PNG ni JPEG, Typst ne saurait pas la poser : le refus est au moment du choix,
+    /// seul endroit où il peut encore être corrigé.
+    #[test]
+    fn une_image_d_envoi_illisible_est_refusee() {
+        let mut p = avec_envois(&["Léa"]);
+        assert!(p
+            .poser_image_envoi(0, "png", b"pas une image".to_vec())
+            .is_err());
+        assert!(p.images_envois.is_empty());
+        assert_eq!(p.meta.envois.liste[0].image, None);
+    }
+
+    /// Les images d'envoi ne rejoignent pas celles de la couverture : là-bas, tout ce
+    /// qui ne s'appelle pas `quatrieme…` **devient** la première de couverture. Un mot
+    /// manuscrit versé dans ce tas remplacerait la couverture du livre, en silence.
+    #[test]
+    fn les_images_d_envoi_ne_se_melent_pas_a_celles_de_la_couverture() {
+        let mut p = avec_envois(&["Léa"]);
+        p.images
+            .insert("couverture.jpg".into(), vec![0xFF, 0xD8, 0xFF]);
+        p.poser_image_envoi(0, "png", png(300)).unwrap();
+
+        let mut buf = Vec::new();
+        p.ecrire(Cursor::new(&mut buf)).unwrap();
+        let zip = ZipArchive::new(Cursor::new(buf)).unwrap();
+        let mut noms: Vec<&str> = zip.file_names().collect();
+        noms.sort_unstable();
+        assert_eq!(
+            noms,
+            vec![
+                "envois/Léa.png",
+                "images/couverture.jpg",
+                "manuscrit.md",
+                "projet.toml"
+            ]
+        );
     }
 
     /// Une dédicace faite d'espaces ne doit pas coûter deux pages et du dos : c'est

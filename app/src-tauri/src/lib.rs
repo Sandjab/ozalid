@@ -106,6 +106,7 @@ pub fn run() {
             commands::mains_liste,
             commands::police_choisir,
             commands::police_retirer,
+            commands::envoi_image_choisir,
             commands::envoi_apercu,
             commands::envoyer,
             commands::recents_liste,

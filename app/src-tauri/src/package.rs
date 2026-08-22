@@ -148,6 +148,42 @@ fn dossiers_d_envoi(envois: &[crate::envoi::Envoi]) -> Vec<String> {
     pris
 }
 
+/// Ce qu'un envoi dépose sur la page de titre, l'image écrite au passage à côté de la
+/// source qui la nommera.
+///
+/// Écrire l'image ici, et non dans un balayage préalable, garantit qu'aucune image ne
+/// se retrouve dans le répertoire d'un autre dédicataire : elle est déposée là où sa
+/// source est composée, et elle n'est nommée que par elle.
+pub fn trace<'a>(
+    projet: &'a Projet,
+    e: &'a crate::envoi::Envoi,
+    dossier: &Path,
+) -> Result<interieur::Trace<'a>, String> {
+    let qui = if e.dedicataire.trim().is_empty() {
+        "cet envoi"
+    } else {
+        &e.dedicataire
+    };
+    match &projet.meta.envois.main {
+        crate::envoi::Main::Police { police } => Ok(interieur::Trace::Texte {
+            police,
+            texte: &e.contenu,
+        }),
+        crate::envoi::Main::Image => {
+            let fichier = e
+                .image
+                .as_deref()
+                .ok_or_else(|| format!("{qui} n'a pas d'image : en choisir une."))?;
+            let octets = projet.images_envois.get(fichier).ok_or_else(|| {
+                format!("{qui} : l'image « {fichier} » ne figure pas dans le projet.")
+            })?;
+            std::fs::write(dossier.join(fichier), octets)
+                .map_err(|err| format!("{fichier} : écriture impossible : {err}"))?;
+            Ok(interieur::Trace::Image { fichier })
+        }
+    }
+}
+
 /// Compose un package par envoi, tous chez le même prestataire.
 ///
 /// **La convergence n'a lieu qu'une fois.** L'envoi se pose par `#place`, qui ne peut
@@ -188,8 +224,6 @@ pub fn assembler_envois(
         gouttiere: base.gouttiere,
         blanche: base.blanche,
     };
-    let crate::envoi::Main::Police { police } = &envois.main;
-
     let mut sorties = Vec::with_capacity(envois.liste.len());
     for (e, nom_dossier) in envois.liste.iter().zip(dossiers_d_envoi(&envois.liste)) {
         let dossier = racine.join(&nom_dossier);
@@ -197,19 +231,10 @@ pub fn assembler_envois(
             .map_err(|err| format!("répertoire inutilisable ({}) : {err}", dossier.display()))?;
 
         let src = dossier.join(nom(pr, "interieur", "typ"));
+        let t = trace(projet, e, &dossier)?;
         ecrire(
             &src,
-            &interieur::source(
-                livre,
-                int,
-                pr,
-                &reglage,
-                &chapitres,
-                Some(interieur::Trace {
-                    police,
-                    texte: &e.contenu,
-                }),
-            ),
+            &interieur::source(livre, int, pr, &reglage, &chapitres, Some(t)),
         )?;
         let pdf = dossier.join(nom(pr, "interieur", "pdf"));
         typst.compile(&src, &pdf)?;
@@ -306,20 +331,69 @@ mod tests {
             crate::envoi::Envoi {
                 dedicataire: "Marie/Léa".into(),
                 contenu: "A.".into(),
+                image: None,
             },
             crate::envoi::Envoi {
                 dedicataire: "Marie-Léa".into(),
                 contenu: "B.".into(),
+                image: None,
             },
             crate::envoi::Envoi {
                 dedicataire: "..".into(),
                 contenu: "C.".into(),
+                image: None,
             },
         ];
         assert_eq!(
             dossiers_d_envoi(&envois),
             vec!["Marie-Léa", "Marie-Léa-2", "envoi"]
         );
+    }
+
+    fn projet_en_images(image: Option<&str>) -> Projet {
+        let mut p = Projet::nouveau(crate::projet::Livre::vide(), "## 01\n\nA.\n".into());
+        p.meta.envois.main = crate::envoi::Main::Image;
+        p.meta.envois.liste = vec![crate::envoi::Envoi {
+            dedicataire: "Léa".into(),
+            contenu: String::new(),
+            image: image.map(str::to_string),
+        }];
+        if let Some(n) = image {
+            p.images_envois.insert(n.into(), b"\x89PNG".to_vec());
+        }
+        p
+    }
+
+    /// L'image part avec la source qui la nomme, dans le répertoire de son dédicataire :
+    /// c'est ce qui garantit qu'aucune image ne se retrouve dans l'exemplaire d'un autre.
+    #[test]
+    fn l_image_d_un_envoi_est_ecrite_a_cote_de_sa_source() {
+        let p = projet_en_images(Some("Léa.png"));
+        let dir = tempfile::tempdir().unwrap();
+        let t = trace(&p, &p.meta.envois.liste[0], dir.path()).unwrap();
+
+        assert!(matches!(
+            t,
+            interieur::Trace::Image {
+                fichier: "Léa.png"
+            }
+        ));
+        assert_eq!(
+            std::fs::read(dir.path().join("Léa.png")).unwrap(),
+            b"\x89PNG"
+        );
+    }
+
+    /// Un envoi sans image ne compose pas, et l'erreur nomme la personne : la liste peut
+    /// en porter dix, et « il manque une image » n'aiderait pas à savoir laquelle. Ce
+    /// refus est ici, à la composition, et non à la saisie — on écrit la liste avant de
+    /// choisir les images.
+    #[test]
+    fn un_envoi_sans_image_refuse_de_composer_en_nommant_le_dedicataire() {
+        let p = projet_en_images(None);
+        let dir = tempfile::tempdir().unwrap();
+        let err = trace(&p, &p.meta.envois.liste[0], dir.path()).unwrap_err();
+        assert!(err.contains("Léa"), "{err}");
     }
 
     /// Les deux sorties d'un package portent la clé du prestataire : dans un répertoire

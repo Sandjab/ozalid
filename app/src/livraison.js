@@ -192,6 +192,11 @@ async function packager() {
 
 /* ---------- envois ---------- */
 
+/** D'où vient l'écriture des envois de ce livre : `police` ou `image`. */
+function main() {
+  return projet.envois.main.mode;
+}
+
 /**
  * Le choix de la main : les trois écritures de la maison, et celle de l'auteur.
  *
@@ -204,9 +209,13 @@ function afficherMain() {
   const sel = $('inMain');
   const perso = projet.envois.personnelle;
   sel.replaceChildren();
-  for (const m of mains) sel.append(new Option(m, m));
-  if (perso) sel.append(new Option(`${perso} (votre police)`, perso));
-  sel.value = projet.envois.main.police;
+  // Les écritures et les formes dans une seule liste, préfixées : la question posée est
+  // « d'où vient l'écriture », et elle n'a qu'une réponse à la fois. Sans préfixe, une
+  // police qui s'appellerait « image » désignerait l'autre forme.
+  for (const m of mains) sel.append(new Option(m, `police:${m}`));
+  if (perso) sel.append(new Option(`${perso} (votre police)`, `police:${perso}`));
+  sel.append(new Option('Image écrite à la main', 'image'));
+  sel.value = main() === 'image' ? 'image' : `police:${projet.envois.main.police}`;
   $('etatPolice').textContent = perso
     ? `Police personnelle embarquée : ${perso}.`
     : 'Aucune police personnelle : les envois s\'écrivent dans une main de la maison.';
@@ -232,11 +241,10 @@ function afficherEnvois() {
     qui.setAttribute('aria-label', `Dédicataire ${i + 1}`);
     qui.addEventListener('change', () => reglerEnvoi(i, { dedicataire: qui.value }));
 
-    const mot = document.createElement('textarea');
-    mot.rows = 2;
-    mot.value = e.contenu;
-    mot.setAttribute('aria-label', `Mot pour ${e.dedicataire || 'ce dédicataire'}`);
-    mot.addEventListener('change', () => reglerEnvoi(i, { contenu: mot.value }));
+    // Le mot change de nature avec la main : un texte à composer, ou une image à
+    // choisir. La ligne ne porte que ce que la main réclame — un champ de texte grisé
+    // sous une main en images donnerait à croire qu'on peut encore y écrire.
+    const mot = main() === 'image' ? imageEnvoi(i, e) : motEnvoi(i, e);
 
     const voir = h('button', 'Voir la page');
     voir.type = 'button';
@@ -251,6 +259,35 @@ function afficherEnvois() {
     box.append(ligne);
   }
   $('btEnvoyer').disabled = projet.envois.liste.length === 0;
+}
+
+/**
+ * Le mot d'un envoi, en toutes lettres.
+ *
+ * Un `textarea` : un envoi tient en deux ou trois lignes, et un `input` en cacherait la
+ * fin — or c'est précisément ce qui sera imprimé.
+ */
+function motEnvoi(i, e) {
+  const mot = document.createElement('textarea');
+  mot.rows = 2;
+  mot.value = e.contenu;
+  mot.setAttribute('aria-label', `Mot pour ${e.dedicataire || 'ce dédicataire'}`);
+  mot.addEventListener('change', () => reglerEnvoi(i, { contenu: mot.value }));
+  return mot;
+}
+
+/**
+ * L'image d'un envoi : le bouton qui la choisit, et le nom qu'elle porte dans l'archive.
+ *
+ * Ce nom-là et pas celui du fichier d'origine : c'est celui que la source Typst écrit,
+ * et le seul qui dise laquelle des images est partie avec quel exemplaire.
+ */
+function imageEnvoi(i, e) {
+  const bt = h('button', e.image ? `Image : ${e.image}` : 'Choisir une image…');
+  bt.type = 'button';
+  bt.id = `envoi-image-${i}`;
+  bt.addEventListener('click', () => choisirImageEnvoi(i));
+  return bt;
 }
 
 /** Remplace un envoi par lui-même modifié. */

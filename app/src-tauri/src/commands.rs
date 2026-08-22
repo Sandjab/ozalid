@@ -850,7 +850,7 @@ pub fn envois_modifier(
 ) -> Result<ProjetVue, String> {
     let mut garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_mut().ok_or_else(aucun_projet)?;
-    o.projet.meta.envois = o.projet.meta.envois.reprend(envois)?;
+    o.projet.regler_envois(envois)?;
     vue_modifiee(o)
 }
 
@@ -891,6 +891,31 @@ pub fn police_choisir(chemin: String, atelier: State<Atelier>) -> Result<ProjetV
     vue_modifiee(o)
 }
 
+/// Embarque l'image écrite à la main pour un envoi.
+///
+/// Elle entre dans le `.ozalid` sous `envois/`, et non avec les photos de couverture :
+/// là-bas, une image dont le nom ne commence pas par `quatrieme` devient la première de
+/// couverture — le mot manuscrit d'un lecteur remplacerait la couverture du livre.
+#[tauri::command]
+pub fn envoi_image_choisir(
+    index: usize,
+    chemin: String,
+    atelier: State<Atelier>,
+) -> Result<ProjetVue, String> {
+    let source = Path::new(&chemin);
+    let ext = source
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .filter(|e| matches!(e.as_str(), "jpg" | "jpeg" | "png"))
+        .ok_or("image refusée : seuls le JPEG et le PNG se composent.")?;
+    let octets = std::fs::read(source).map_err(|e| format!("image illisible : {e}"))?;
+
+    let mut garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_mut().ok_or_else(aucun_projet)?;
+    o.projet.poser_image_envoi(index, &ext, octets)?;
+    vue_modifiee(o)
+}
+
 /// Retire la police de l'auteur du projet.
 #[tauri::command]
 pub fn police_retirer(atelier: State<Atelier>) -> Result<ProjetVue, String> {
@@ -918,7 +943,6 @@ pub fn envoi_apercu(index: usize, atelier: State<Atelier>) -> Result<String, Str
         .liste
         .get(index)
         .ok_or("envoi introuvable : la liste a changé.")?;
-    let crate::envoi::Main::Police { police } = &envois.main;
 
     let int = &o.projet.meta.interieur;
     int.verifie()?;
@@ -937,10 +961,7 @@ pub fn envoi_apercu(index: usize, atelier: State<Atelier>) -> Result<String, Str
                 blanche: false,
             },
             &[],
-            Some(interieur::Trace {
-                police,
-                texte: &e.contenu,
-            }),
+            Some(package::trace(&o.projet, e, &dossier)?),
         ),
     )?;
     let png = dossier.join("apercu.png");
