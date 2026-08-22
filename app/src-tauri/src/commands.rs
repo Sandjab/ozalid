@@ -11,6 +11,7 @@ use tauri::Manager;
 use tauri::State;
 
 use crate::couverture::{self, Couverture, Ressource};
+use crate::ebook;
 use crate::epreuve;
 use crate::import;
 use crate::interieur::{self, Interieur, Reglage};
@@ -849,6 +850,20 @@ pub fn packager(atelier: State<Atelier>) -> Result<Vec<Resultat>, String> {
         });
     }
     Ok(sorties)
+}
+
+/// Génère les ebooks locaux dans `<projet>/ebook/`.
+///
+/// Une livraison, mais locale : elle ne vise aucun prestataire, elle emprunte seulement
+/// le gabarit de celui qui est visé — c'est de là que viennent le format, le corps et
+/// l'interligne, faute d'un format d'écran qui voudrait dire quelque chose.
+#[tauri::command]
+pub fn ebook_generer(atelier: State<Atelier>) -> Result<ebook::Ebooks, String> {
+    let garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_ref().ok_or_else(aucun_projet)?;
+    let (pr, _, d) = vise(o)?;
+    let dossier = sorties_racine(o)?.join("ebook");
+    ebook::generer(&o.projet, pr, d.dos_mm, &dossier, &typst()?)
 }
 
 /* ---------- envois ---------- */

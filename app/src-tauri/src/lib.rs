@@ -105,6 +105,7 @@ pub fn run() {
             commands::destinataire_regler,
             commands::destinataire_viser,
             commands::packager,
+            commands::ebook_generer,
             commands::envois_modifier,
             commands::mains_liste,
             commands::police_choisir,
