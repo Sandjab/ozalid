@@ -3,6 +3,7 @@ pub mod couverture;
 pub mod diffusion;
 pub mod envoi;
 pub mod epreuve;
+pub mod epub;
 pub mod image;
 pub mod import;
 pub mod interieur;
