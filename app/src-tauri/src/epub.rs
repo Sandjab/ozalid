@@ -724,16 +724,6 @@ pub fn archive(
 /// traitement de texte avait posé sans rien montrer. `ebook::generer` les pose donc en
 /// tête, et `archive` continue de les poser aussi : un module qui ne peut produire une
 /// archive invalide que si son appelant a oublié de vérifier n'est pas une garde.
-/// Où une faute a été trouvée, dit comme l'auteur nomme la pièce dans son manuscrit :
-/// c'est ce nom-là qu'il ira chercher pour corriger.
-fn ou_dans_le_livre(p: &Piece) -> String {
-    match &p.sorte {
-        Sorte::Chapitre(n) => format!("chapitre {n}"),
-        Sorte::Partie(r) => format!("partie {r}"),
-        Sorte::Liminaire | Sorte::Annexe => p.titre.to_lowercase(),
-    }
-}
-
 pub fn verifie(livre: &Livre, pieces: &[Piece]) -> Result<(), String> {
     if pieces.is_empty() {
         return Err("aucun chapitre : il n'y a pas de livre à mettre en EPUB.".into());
@@ -757,7 +747,7 @@ pub fn verifie(livre: &Livre, pieces: &[Piece]) -> Result<(), String> {
         verifie_xml(d, "la dédicace")?;
     }
     for p in pieces {
-        let ou = ou_dans_le_livre(p);
+        let ou = manuscrit::designation(p);
         verifie_xml(&p.titre, &ou)?;
         for b in &p.blocs {
             if let Bloc::Paragraphe(t) = b {

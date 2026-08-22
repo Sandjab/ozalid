@@ -240,13 +240,7 @@ fn assemble(
                     "#page(footer: none)[\n#v(22mm)\n\
                      #align(center, text(size: 13pt)[{r}])\n"
                 ));
-                if !p.titre.is_empty() {
-                    s.push_str(&format!(
-                        "#v(3.5mm)\n\
-                         #align(center, text(size: 10pt, tracking: 0.14em)[{}])\n",
-                        majuscules(&p.titre)
-                    ));
-                }
+                s.push_str(&titre_sous_numero(&p.titre));
                 s.push_str("]\n#page(footer: none)[]\n");
                 apres_page = true;
             }
@@ -259,13 +253,7 @@ fn assemble(
                 s.push_str(&format!(
                     "#v(22mm)\n#align(center, text(size: 13pt)[{numero}])\n"
                 ));
-                if !p.titre.is_empty() {
-                    s.push_str(&format!(
-                        "#v(3.5mm)\n\
-                         #align(center, text(size: 10pt, tracking: 0.14em)[{}])\n",
-                        majuscules(&p.titre)
-                    ));
-                }
+                s.push_str(&titre_sous_numero(&p.titre));
                 s.push_str("#v(11mm)\n");
                 s.push_str(&blocs_typst(&p.blocs));
                 apres_page = false;
@@ -454,6 +442,19 @@ fn majuscules(s: &str) -> String {
 fn ouverture_piece(titre: &str) -> String {
     format!(
         "#v(22mm)\n#align(center, text(size: 10pt, tracking: 0.14em)[{}])\n#v(14.5mm)\n",
+        majuscules(titre)
+    )
+}
+
+/// Le titre sous le numéro d'une partie ou d'un chapitre — même casse, même espacement
+/// que l'un ou l'autre, puisque c'est le même gabarit qui les compose. Absent si la
+/// pièce n'a pas de titre : c'est le cas admis par le format (`## 7`, `## Partie I`).
+fn titre_sous_numero(titre: &str) -> String {
+    if titre.is_empty() {
+        return String::new();
+    }
+    format!(
+        "#v(3.5mm)\n#align(center, text(size: 10pt, tracking: 0.14em)[{}])\n",
         majuscules(titre)
     )
 }

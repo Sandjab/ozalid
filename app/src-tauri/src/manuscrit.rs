@@ -69,6 +69,17 @@ impl Piece {
     }
 }
 
+/// Où une faute a été trouvée, dit comme l'auteur nomme la pièce dans son manuscrit :
+/// c'est ce nom-là qu'il ira chercher pour corriger, sans qu'on lui invente un numéro
+/// qu'il n'a pas écrit.
+pub fn designation(p: &Piece) -> String {
+    match &p.sorte {
+        Sorte::Chapitre(n) => format!("chapitre {n}"),
+        Sorte::Partie(r) => format!("partie {r}"),
+        Sorte::Liminaire | Sorte::Annexe => p.titre.to_lowercase(),
+    }
+}
+
 /// Caractères qui ouvrent une syntaxe Typst dans du texte brut. Tout ce qui vient du
 /// manuscrit ou du projet passe par là : un titre contenant `#` ne doit pas devenir
 /// une expression Typst.
@@ -308,7 +319,7 @@ pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Piece>, String> {
                 Sorte::Liminaire if vu_corps || vu_annexe => {
                     return Err(format!(
                         "ligne {no} : « {} » est une pièce liminaire, elle ne peut pas \
-                         suivre un chapitre.",
+                         suivre le corps du livre.",
                         piece.titre
                     ));
                 }
@@ -326,23 +337,30 @@ pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Piece>, String> {
                     // `entete` a déjà refusé ce qui n'est pas un romain canonique.
                     let n = romain(r).expect("romain validé par entete");
                     if n != derniere_partie + 1 {
-                        return Err(format!(
-                            "ligne {no} : partie {r} après la partie {}, attendu {}.",
-                            en_romain(derniere_partie),
-                            en_romain(derniere_partie + 1)
-                        ));
+                        let err = if derniere_partie == 0 {
+                            format!(
+                                "ligne {no} : le livre ouvre sur la partie {r}, attendu {}.",
+                                en_romain(1)
+                            )
+                        } else {
+                            format!(
+                                "ligne {no} : partie {r} après la partie {}, attendu {}.",
+                                en_romain(derniere_partie),
+                                en_romain(derniere_partie + 1)
+                            )
+                        };
+                        return Err(err);
                     }
                     derniere_partie = n;
                     vu_corps = true;
                 }
-                _ if vu_annexe => {
+                Sorte::Chapitre(_) if vu_annexe => {
                     return Err(format!(
-                        "ligne {no} : « {} » vient après une pièce annexe, qui ferme le \
-                         livre.",
-                        piece.titre
+                        "ligne {no} : {} vient après une pièce annexe, qui ferme le livre.",
+                        designation(&piece)
                     ));
                 }
-                _ => vu_corps = true,
+                Sorte::Chapitre(_) => vu_corps = true,
             }
             pieces.push(piece);
         } else if t == "---" {
@@ -398,7 +416,13 @@ fn entete(reste: &str, no: usize) -> Result<Piece, String> {
             blocs: Vec::new(),
         });
     }
-    if let Some(apres) = reste.strip_prefix("Partie ") {
+    // Insensible à la casse comme les mots-clés : comparé octet à octet sur les sept
+    // caractères ASCII de « Partie », `get` rend `None` si la frontière tombe au milieu
+    // d'un caractère multi-octets plutôt que de paniquer.
+    let est_partie = reste
+        .get(..7)
+        .is_some_and(|p| p.eq_ignore_ascii_case("Partie "));
+    if let Some(apres) = est_partie.then(|| &reste[7..]) {
         let (num, titre) = match apres.split_once('-') {
             Some((n, t)) => (n.trim(), t.trim()),
             None => (apres.trim(), ""),
@@ -669,6 +693,22 @@ mod tests {
         assert_eq!(p[0].titre, "Avant-propos");
     }
 
+    /// Un chapitre sans titre est admis par le format : le message qui le refuse hors de
+    /// sa zone doit donc le désigner par son numéro, pas par des guillemets vides.
+    #[test]
+    fn un_chapitre_sans_titre_hors_zone_est_designe_par_son_numero() {
+        let err = decoupe(
+            "## 01 - Un\n\nA.\n\n## Postface\n\nB.\n\n## 7\n\nC.\n",
+            None,
+        )
+        .unwrap_err();
+        assert!(err.contains("ligne 9"), "{err}");
+        assert!(
+            err.contains("7"),
+            "le chapitre fautif n'est pas nommé : {err}"
+        );
+    }
+
     /// La position découle du mot **et** doit être tenue : pas de réordonnancement
     /// silencieux d'un manuscrit dont l'auteur a mis la préface au milieu.
     #[test]
@@ -768,6 +808,16 @@ mod tests {
         assert_eq!(p[0].titre, "");
     }
 
+    /// La casse tapée ne décide de rien : « partie » vaut « Partie », comme « préface »
+    /// vaut « Préface ». Sans quoi la faute tomberait dans le message générique des
+    /// titres mal formés, qui n'oriente pas vers la vraie erreur.
+    #[test]
+    fn le_marqueur_de_partie_est_insensible_a_la_casse() {
+        let p = decoupe("## partie I - Un\n\n## 01 - Un\n\nA.\n", None).unwrap();
+        assert_eq!(p[0].sorte, Sorte::Partie("I".into()));
+        assert_eq!(p[0].titre, "Un");
+    }
+
     /// Une partie sautée est une partie perdue en route, et elle ne se verrait qu'au
     /// tirage.
     #[test]
@@ -785,6 +835,16 @@ mod tests {
 
         let err = decoupe("## Partie X - Dix\n\n## 01 - Un\n\nA.\n", None).unwrap_err();
         assert!(err.contains("ligne 1"), "{err}");
+    }
+
+    /// Un livre qui ouvre sur « Partie II » n'a pas de partie précédente à nommer : le
+    /// message ne doit pas laisser un trou là où il citerait un romain.
+    #[test]
+    fn une_premiere_partie_mal_numerotee_est_refusee_sans_trou() {
+        let err = decoupe("## Partie II - Deux\n\n## 01 - Un\n\nA.\n", None).unwrap_err();
+        assert!(err.contains("ligne 1"), "{err}");
+        assert!(err.contains("I"), "{err}");
+        assert!(!err.contains("la partie ,"), "trou dans le message : {err}");
     }
 
     /// Une page de partie ne porte que son titre : un paragraphe écrit là serait
