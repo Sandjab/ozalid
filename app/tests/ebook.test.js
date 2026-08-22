@@ -74,6 +74,11 @@ const EBOOKS = {
  * Les deux fichiers sont la seule chose qu'on ait à emporter : c'est leur chemin qu'on
  * copie pour les ouvrir, et un compte rendu qui ne les nomme pas laisse chercher dans un
  * répertoire qu'on ne connaît pas.
+ *
+ * Leur poids est le seul chiffre du compte rendu, et c'est à lui qu'on juge si l'envoi
+ * passera par courriel : une inversion Ko/Mo afficherait « 2400 Mo » pour un roman sans
+ * que rien ne tombe. Les deux témoins sont au-dessus du mégaoctet, l'un de peu — 1,05 Mo
+ * — pour que le seuil lui-même soit éprouvé.
  */
 test('le bouton Ebooks appelle le Rust et affiche les deux chemins', async () => {
   let appels = 0;
@@ -94,6 +99,8 @@ test('le bouton Ebooks appelle le Rust et affiche les deux chemins', async () =>
   const rendu = els.get('ebooks').textContent;
   assert.match(rendu, /Les Heures creuses\.pdf/);
   assert.match(rendu, /Les Heures creuses\.epub/);
+  assert.match(rendu, /2,3 Mo/, `${EBOOKS.octets_pdf} octets ne se lisent pas en Mo : ${rendu}`);
+  assert.match(rendu, /1,0 Mo/, `${EBOOKS.octets_epub} octets ne se lisent pas en Mo : ${rendu}`);
   assert.strictEqual(els.get('ebooks').hidden, false);
   assert.strictEqual(els.get('etatEbooks').textContent, '');
 });

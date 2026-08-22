@@ -270,7 +270,10 @@ du bouton. Un travail long rend compte là où on a cliqué.
 
 ## 6. Les refus
 
-Tous existent déjà ; aucun n'est inventé pour l'occasion.
+### Ceux dont la chaîne dispose déjà
+
+Repris tels quels, avec leur message : le même défaut ne doit pas se dire de deux façons
+selon qu'on tire un package ou un ebook.
 
 | Cause | Message |
 |---|---|
@@ -278,6 +281,20 @@ Tous existent déjà ; aucun n'est inventé pour l'occasion.
 | Projet non enregistré | celui des packages : pas d'endroit où écrire |
 | Police d'intérieur hors liste | `Interieur::verifie` |
 | Manuscrit non composable | `manuscrit::decoupe`, avec son numéro de ligne |
+
+### Ceux que l'EPUB ajoute
+
+Trois, relevés par EPUBCheck sur les premières archives et sans équivalent dans la
+chaîne d'impression — le papier compose sans broncher ce que l'archive ne sait pas
+porter. Ils vivent dans `epub::verifie`, appelée par `epub::archive` et, avant elle, par
+`ebook::generer` : ces trois-là ne dépendent que du projet, ils sont donc connus avant
+la première écriture et n'ont pas à se payer vingt secondes de composition.
+
+| Cause | Ce qu'elle empêche |
+|---|---|
+| Aucun chapitre | une archive réduite à une couverture et deux pages liminaires, qu'on ne découvrirait vide qu'en l'ouvrant |
+| Titre vide | `dc:title` sans caractère : EPUBCheck le dit `ERROR`, l'ingestion s'arrête là — et des blancs passeraient en laissant une ligne muette dans la bibliothèque du lecteur |
+| Caractère interdit en XML | un chapitre que la liseuse n'ouvre pas du tout (`FATAL`) : le saut de page manuel d'un traitement de texte, U+000C, qu'XML ne sait écrire ni nu ni en entité. Le message nomme le chapitre et le caractère, sinon il n'y a rien à aller corriger dans le manuscrit |
 
 Et un seul avertissement, qui n'arrête rien : la police absente de `fonts/`.
 

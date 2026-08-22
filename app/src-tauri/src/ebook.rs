@@ -68,11 +68,32 @@ pub fn generer(
         .as_ref()
         .ok_or("aucune maquette de couverture : en choisir une avant de générer les ebooks.")?;
     let chapitres = manuscrit::decoupe(&projet.texte, livre.chapitres)?;
+    let livre_epub = epub::Livre {
+        titre: &livre.titre,
+        titre_page: livre.titre_page(),
+        auteur: &livre.auteur,
+        genre: &livre.genre,
+        copyright: &livre.copyright,
+        dedicace: livre.dedicace(),
+    };
+    // Les refus de l'archive ne dépendent que du projet : les poser ici, c'est les
+    // rendre avant la composition plutôt qu'après. `epub::archive` les repose de toute
+    // façon — voir `epub::verifie`.
+    epub::verifie(&livre_epub, &chapitres)?;
+
     std::fs::create_dir_all(dossier)
         .map_err(|e| format!("répertoire inutilisable ({}) : {e}", dossier.display()))?;
 
-    let (une, _) = package::ecrire_images(projet, dossier)?;
+    // Les deux livrables de la génération précédente s'en vont avant qu'on écrive le
+    // premier octet de celle-ci : une panne en cours de route laisse alors un manque,
+    // qui se voit, au lieu d'un PDF neuf à côté d'un EPUB périmé, qui ne se voit pas.
     let base = nom_de_fichier(&livre.titre);
+    let pdf = dossier.join(format!("{base}.pdf"));
+    let fichier_epub = dossier.join(format!("{base}.epub"));
+    efface(&pdf)?;
+    efface(&fichier_epub)?;
+
+    let (une, _) = package::ecrire_images(projet, dossier)?;
 
     // 1. Le PDF : la couverture en page 1, puis l'intérieur sans son imposition.
     let src = dossier.join("ebook.typ");
@@ -81,7 +102,6 @@ pub fn generer(
         &src,
         &interieur::source_ebook(livre, int, pr, &chapitres, &page),
     )?;
-    let pdf = dossier.join(format!("{base}.pdf"));
     let polices_introuvables = typst.compile(&src, &pdf)?;
 
     // 2. La couverture seule, en PNG, pour l'EPUB. Même source que la page du PDF :
@@ -102,20 +122,12 @@ pub fn generer(
 
     // 4. L'archive.
     let arch = epub::archive(
-        &epub::Livre {
-            titre: &livre.titre,
-            titre_page: livre.titre_page(),
-            auteur: &livre.auteur,
-            genre: &livre.genre,
-            copyright: &livre.copyright,
-            dedicace: livre.dedicace(),
-        },
+        &livre_epub,
         &chapitres,
         &octets_png,
         polices.as_ref(),
         &epub::horodatage(std::time::SystemTime::now()),
     )?;
-    let fichier_epub = dossier.join(format!("{base}.epub"));
     std::fs::write(&fichier_epub, &arch)
         .map_err(|e| format!("écriture impossible ({}) : {e}", fichier_epub.display()))?;
 
@@ -134,8 +146,14 @@ pub fn generer(
 /// `None` si la famille n'y est pas : l'EPUB se fait alors dans l'écriture du lecteur,
 /// et le compte rendu le dit. Ce n'est pas une erreur — contrairement à la composition,
 /// où une police absente donnerait un livre imprimé faux.
+///
+/// Les octets retenus sont **ceux qu'on vient de lire**, jamais relus. Relire, c'était
+/// ouvrir deux fois les 10 Mo et 32 fichiers de `fonts/` à chaque génération, et surtout
+/// se donner deux échecs muets : une seconde lecture ratée sur l'italique le faisait
+/// disparaître de l'EPUB en laissant le compte rendu dire que tout allait bien, et sur le
+/// romain elle annonçait « famille introuvable » alors qu'elle venait d'être trouvée.
 fn polices_du_livre(famille: &str, dossiers: &[std::path::PathBuf]) -> Option<epub::Polices> {
-    let mut trouves: Vec<(String, std::path::PathBuf)> = Vec::new();
+    let mut trouves: Vec<(String, Vec<u8>)> = Vec::new();
     for d in dossiers {
         let Ok(entrees) = std::fs::read_dir(d) else {
             continue;
@@ -153,25 +171,44 @@ fn polices_du_livre(famille: &str, dossiers: &[std::path::PathBuf]) -> Option<ep
             };
             if p.famille == famille {
                 if let Some(nom) = chemin.file_name().and_then(|n| n.to_str()) {
-                    trouves.push((nom.to_string(), chemin.clone()));
+                    trouves.push((nom.to_string(), octets));
                 }
             }
         }
     }
     let noms: Vec<String> = trouves.iter().map(|(n, _)| n.clone()).collect();
     let faces = epub::faces(&noms)?;
-    let lire = |nom: &str| -> Option<epub::Face> {
-        let (_, chemin) = trouves.iter().find(|(n, _)| n == nom)?;
+    let prendre = |nom: &str| -> Option<epub::Face> {
+        let (_, octets) = trouves.iter().find(|(n, _)| n == nom)?;
         Some(epub::Face {
             nom: nom.to_string(),
-            octets: std::fs::read(chemin).ok()?,
+            octets: octets.clone(),
         })
     };
     Some(epub::Polices {
         famille: famille.to_string(),
-        romain: lire(&faces.romain)?,
-        italique: faces.italique.as_deref().and_then(lire),
+        romain: prendre(&faces.romain)?,
+        italique: faces.italique.as_deref().and_then(prendre),
     })
+}
+
+/// Retire un livrable de la génération précédente.
+///
+/// L'absence n'est pas une erreur : c'est le cas ordinaire, celui de la première
+/// génération, et refuser là remplacerait un problème par un autre. Tout autre échec, en
+/// revanche, refuse — plutôt que de passer outre en silence. Un fichier qui résiste à la
+/// suppression est exactement celui qu'une panne laisserait en place, périmé, sous le nom
+/// du livre : le couple dépareillé que cette suppression existe pour empêcher. Il
+/// résisterait au demeurant tout autant à l'écriture, mais vingt secondes plus tard et
+/// sous un message qui ne dirait pas d'où vient le blocage.
+fn efface(chemin: &Path) -> Result<(), String> {
+    match std::fs::remove_file(chemin) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!(
+            "le livrable précédent ne s'efface pas ({}) : {e}",
+            chemin.display()
+        )),
+        _ => Ok(()),
+    }
 }
 
 fn ecrire(chemin: &Path, contenu: &str) -> Result<(), String> {
@@ -188,6 +225,83 @@ fn taille(chemin: &Path) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::projet::{Livre, Projet};
+    use crate::providers::provider;
+
+    /// Un projet qui passe tous les refus : une maquette, la police de labeur par
+    /// défaut, un manuscrit d'un chapitre. Les tests ci-dessous le cassent chacun d'un
+    /// endroit, pour éprouver un refus à la fois.
+    fn projet_temoin() -> Projet {
+        let mut p = Projet::nouveau(
+            Livre {
+                titre: "Les Heures creuses".into(),
+                auteur: "Ivan Pjig".into(),
+                ..Livre::vide()
+            },
+            "## 1 - Le seuil\n\nPremier.\n".into(),
+        );
+        p.meta.couverture.maquette = crate::maquettes::par_cle("folio");
+        p
+    }
+
+    /// Toute panne entre l'écriture du PDF et celle de l'EPUB laissait le PDF de la
+    /// génération courante à côté de l'EPUB de la précédente : deux fichiers au bon nom,
+    /// rien pour les distinguer, et c'est le périmé qu'on enverrait à un lecteur. Les
+    /// deux cibles sont donc retirées avant la première écriture — une panne laisse alors
+    /// un manque, qui se voit.
+    #[test]
+    fn une_panne_ne_laisse_pas_le_livrable_de_la_fois_d_avant() {
+        let d = tempfile::tempdir().unwrap();
+        let pdf = d.path().join("Les Heures creuses.pdf");
+        let epub = d.path().join("Les Heures creuses.epub");
+        std::fs::write(&pdf, b"le PDF d'avant").unwrap();
+        std::fs::write(&epub, b"l'EPUB d'avant").unwrap();
+
+        // Une image dont les dimensions sont illisibles fait échouer
+        // `package::ecrire_images`, juste après la suppression : c'est la panne la plus
+        // précoce qu'on puisse provoquer sans lancer Typst.
+        let mut p = projet_temoin();
+        p.images
+            .insert("couverture.png".into(), b"pas une image".to_vec());
+
+        let err = generer(
+            &p,
+            provider("lulu").unwrap(),
+            None,
+            d.path(),
+            &Typst::new("typst-qui-n-existe-pas"),
+        )
+        .unwrap_err();
+        assert!(err.contains("couverture.png"), "{err}");
+        assert!(!pdf.exists(), "le PDF de la fois d'avant est resté");
+        assert!(!epub.exists(), "l'EPUB de la fois d'avant est resté");
+    }
+
+    /// Les trois refus de l'archive ne dépendent que du projet. Les laisser tomber dans
+    /// `epub::archive` faisait payer la composition entière — vingt secondes et un PDF
+    /// neuf sous un message d'échec — pour un défaut connu avant la première écriture.
+    #[test]
+    fn un_manuscrit_que_l_epub_refuse_est_refuse_avant_toute_ecriture() {
+        let d = tempfile::tempdir().unwrap();
+        let sortie = d.path().join("ebook");
+        let mut p = projet_temoin();
+        p.texte = "## 1 - Le seuil\n\nUn saut\u{c} de page.\n".into();
+
+        let err = generer(
+            &p,
+            provider("lulu").unwrap(),
+            None,
+            &sortie,
+            // Un binaire qui n'existe pas : le refus doit tomber avant qu'on l'appelle.
+            &Typst::new("typst-qui-n-existe-pas"),
+        )
+        .unwrap_err();
+        assert!(err.contains("U+000C"), "{err}");
+        assert!(
+            !sortie.exists(),
+            "le répertoire de sortie a été créé malgré le refus"
+        );
+    }
 
     /// Les deux fichiers portent le nom du livre, assaini comme un répertoire d'envoi :
     /// c'est la fonction du projet qui décide ce qu'un titre devient sur un disque, et

@@ -676,6 +676,45 @@ pub fn archive(
     polices: Option<&Polices>,
     modifie: &str,
 ) -> Result<Vec<u8>, String> {
+    verifie(livre, chapitres)?;
+    let entrees = contenu(livre, chapitres, couverture_png, polices);
+    let opf = opf(livre, &entrees, modifie);
+
+    let mut buf = Vec::new();
+    {
+        let mut zip = ZipWriter::new(Cursor::new(&mut buf));
+        let stocke = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+        let deflate = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+        // L'ordre des trois premières entrées n'est pas un style : la spec veut
+        // `mimetype` en tête, non compressé, et `META-INF/container.xml` est le seul
+        // chemin qu'une liseuse cherche sans qu'on le lui dise.
+        pose(&mut zip, "mimetype", MIMETYPE.as_bytes(), stocke)?;
+        pose(
+            &mut zip,
+            "META-INF/container.xml",
+            CONTAINER.as_bytes(),
+            deflate,
+        )?;
+        pose(&mut zip, "OEBPS/content.opf", opf.as_bytes(), deflate)?;
+        for e in &entrees {
+            let opts = if e.compresse { deflate } else { stocke };
+            pose(&mut zip, &format!("OEBPS/{}", e.nom), &e.octets, opts)?;
+        }
+        zip.finish()
+            .map_err(|e| format!("clôture de l'EPUB : {e}"))?;
+    }
+    Ok(buf)
+}
+
+/// Tout ce que l'archive refuse, et qui ne dépend que du projet.
+///
+/// Séparée d'[`archive`] parce que ces trois refus sont connus **avant** la première
+/// écriture sur le disque : les laisser tomber à la fin faisait payer à l'auteur la
+/// composition entière — vingt secondes et un PDF neuf — pour un caractère qu'un
+/// traitement de texte avait posé sans rien montrer. `ebook::generer` les pose donc en
+/// tête, et `archive` continue de les poser aussi : un module qui ne peut produire une
+/// archive invalide que si son appelant a oublié de vérifier n'est pas une garde.
+pub fn verifie(livre: &Livre, chapitres: &[Chapitre]) -> Result<(), String> {
     if chapitres.is_empty() {
         return Err("aucun chapitre : il n'y a pas de livre à mettre en EPUB.".into());
     }
@@ -706,33 +745,7 @@ pub fn archive(
             }
         }
     }
-    let entrees = contenu(livre, chapitres, couverture_png, polices);
-    let opf = opf(livre, &entrees, modifie);
-
-    let mut buf = Vec::new();
-    {
-        let mut zip = ZipWriter::new(Cursor::new(&mut buf));
-        let stocke = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
-        let deflate = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
-        // L'ordre des trois premières entrées n'est pas un style : la spec veut
-        // `mimetype` en tête, non compressé, et `META-INF/container.xml` est le seul
-        // chemin qu'une liseuse cherche sans qu'on le lui dise.
-        pose(&mut zip, "mimetype", MIMETYPE.as_bytes(), stocke)?;
-        pose(
-            &mut zip,
-            "META-INF/container.xml",
-            CONTAINER.as_bytes(),
-            deflate,
-        )?;
-        pose(&mut zip, "OEBPS/content.opf", opf.as_bytes(), deflate)?;
-        for e in &entrees {
-            let opts = if e.compresse { deflate } else { stocke };
-            pose(&mut zip, &format!("OEBPS/{}", e.nom), &e.octets, opts)?;
-        }
-        zip.finish()
-            .map_err(|e| format!("clôture de l'EPUB : {e}"))?;
-    }
-    Ok(buf)
+    Ok(())
 }
 
 fn pose<W: Write + std::io::Seek>(
@@ -867,6 +880,51 @@ mod tests {
             _ => &[],
         };
         l.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// Les noms qu'`app/outils/polices.sh` va réellement chercher pour une famille.
+    ///
+    /// Le script est versionné, `fonts/` ne l'est pas : c'est donc lui qui fait foi, et
+    /// il se lit sans le répertoire — donc en intégration continue. Ses chemins sont
+    /// écrits en clair, un par ligne, entre guillemets, sous le répertoire OFL de Google
+    /// Fonts — qui est le nom de la famille en minuscules et sans espace, pour les sept.
+    fn poses_par_le_script(famille: &str) -> Vec<String> {
+        let script = include_str!("../../outils/polices.sh");
+        let repertoire = format!("{}/", famille.to_lowercase().replace(' ', ""));
+        script
+            .lines()
+            .filter_map(|l| l.trim().strip_prefix('"'))
+            .filter_map(|l| l.strip_suffix('"'))
+            .filter_map(|l| l.strip_prefix(&repertoire))
+            .map(str::to_string)
+            .collect()
+    }
+
+    /// [`fichiers`] est une **copie** de la réalité, prise à un instant. Google Fonts
+    /// renomme — le jour où `polices.sh` livrera `EBGaramond-Regular[wght].ttf`, `faces`
+    /// choisirait mal ou ne choisirait rien, tous les EPUB perdraient leur police sans un
+    /// mot, le compte rendu dirait « famille introuvable » — le message d'une autre cause
+    /// — et la suite de tests resterait verte de bout en bout. Ce test est ce qui ferme
+    /// le trou.
+    #[test]
+    fn la_liste_des_fichiers_suit_le_script_qui_les_pose() {
+        for famille in crate::interieur::POLICES_TEXTE {
+            let mut poses = poses_par_le_script(famille);
+            let mut copie = fichiers(famille);
+            poses.sort();
+            copie.sort();
+            assert!(
+                !poses.is_empty(),
+                "{famille} : `app/outils/polices.sh` ne pose plus aucun fichier sous ce \
+                 répertoire OFL. Le tableau de `fichiers` doit suivre le script."
+            );
+            assert_eq!(
+                copie, poses,
+                "{famille} : le tableau de `fichiers` ne dit plus ce que \
+                 `app/outils/polices.sh` pose dans `fonts/`. C'est au tableau de suivre \
+                 le script, jamais l'inverse."
+            );
+        }
     }
 
     /// Chacune des sept polices de labeur doit donner un romain et un italique. Une
@@ -1509,6 +1567,29 @@ mod tests {
             "2026-08-22T10:00:00Z"
         )
         .is_ok());
+    }
+
+    /// Le refus s'obtient sans bâtir l'archive : c'est ce qui permet à `ebook::generer`
+    /// de le rendre avant vingt secondes de composition, sur le seul projet. Le message
+    /// doit être le même que par `archive` — c'est le même code, et le lecteur du message
+    /// n'a pas à savoir par où il est passé.
+    #[test]
+    fn la_verification_seule_refuse_ce_que_l_archive_refuserait() {
+        let mut ch = chapitres_temoins();
+        ch[1].blocs = vec![Bloc::Paragraphe("Un saut\u{c} de page".into())];
+        let err = verifie(&livre_temoin(), &ch).unwrap_err();
+        assert!(err.contains("U+000C"), "{err}");
+        assert!(err.contains("chapitre 2"), "{err}");
+
+        let par_l_archive = archive(
+            &livre_temoin(),
+            &ch,
+            b"\x89PNG",
+            None,
+            "2026-08-22T10:00:00Z",
+        )
+        .unwrap_err();
+        assert_eq!(err, par_l_archive);
     }
 
     /// Un livre sans chapitre ne produit pas d'archive : ce serait une couverture et deux
