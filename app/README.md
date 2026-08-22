@@ -10,15 +10,15 @@ le produit, la couverture le consomme, et le dos suit le manuscrit sans ressaisi
 
 **État : jalon 5** — projet `.ozalid`, import d'un livre existant, composition de
 l'intérieur, moteur de couverture, assemblage de la planche, packages
-multi-prestataires, épreuve de relecture, cycle de vie du document — créer,
-enregistrer, enregistrer sous, fermer, avec une garde avant tout ce qui perdrait
-du travail —, menu natif et ses raccourcis, écran d'accueil et projets récents, et
-vérification Windows par intégration continue : chaque push et chaque pull
-request compilent, testent et paginent le témoin sur `windows-latest`, et un tag
-`v*` produit l'installeur, l'installe en silencieux pour vérifier son
-arborescence, et le dépose en release draft. Reste la vérification manuelle du
-premier lancement sur une machine Windows — aucun runner ne lance l'application
-avec sa fenêtre.
+multi-prestataires, ebooks locaux en PDF et en EPUB, épreuve de relecture, cycle
+de vie du document — créer, enregistrer, enregistrer sous, fermer, avec une garde
+avant tout ce qui perdrait du travail —, menu natif et ses raccourcis, écran
+d'accueil et projets récents, et vérification Windows par intégration continue :
+chaque push et chaque pull request compilent, testent et paginent le témoin sur
+`windows-latest`, et un tag `v*` produit l'installeur, l'installe en silencieux
+pour vérifier son arborescence, et le dépose en release draft. Reste la
+vérification manuelle du premier lancement sur une machine Windows — aucun runner
+ne lance l'application avec sa fenêtre.
 
 ## Stack
 
@@ -159,6 +159,8 @@ résultats. Tout le reste est testable sans fenêtre.
 | `epreuve` | Source Typst de l'épreuve de relecture : A4, numéros de ligne, marge d'annotation |
 | `planche` | Assemblage 4ème \| dos \| 1ère au gabarit, et dos composé élément par élément |
 | `package` | Un prestataire, un intérieur, une planche, dans son répertoire |
+| `epub` | Chapitres, couverture et police → une archive EPUB 3 reflowable, sans disque ni Typst |
+| `ebook` | Le PDF et l'EPUB du livre entier, à côté du projet : le pendant local de `package` |
 | `preferences` | Le `preferences.toml` : projets récents, et ce qui ne tient pas dans un livre |
 | `menu` | Le menu natif : il demande, il n'agit pas — l'interface exécute |
 | `commands` | Frontière avec l'interface, et projet ouvert |
@@ -207,7 +209,9 @@ Les **sorties ne sont pas dans l'archive** : elles vont à côté, dans
 `<nom-du-projet>/<prestataire>/`. Un projet non enregistré ne peut donc pas
 composer, faute d'endroit où écrire. Seule l'épreuve de relecture reste à la racine,
 en `epreuve.pdf` : elle ne vise aucun prestataire, elle n'a rien à faire dans leurs
-répertoires.
+répertoires. Les ebooks n'en visent pas davantage, et ils ont pourtant leur
+répertoire, `ebook/`, frère de ceux des prestataires : ils sont deux fichiers et non
+un, et les poser à la racine mêlerait le livre du lecteur à l'épreuve du relecteur.
 
 ## Le cycle de vie d'un projet
 
@@ -274,6 +278,7 @@ cargo run --example composer -- <projet.ozalid> lulu <sortie>
 cargo run --example maquette -- <projet.ozalid> lulu <sortie>
 cargo run --example packager -- <projet.ozalid> <sortie> lulu tbe-110x170 bookvault-127x203
 cargo run --example epreuve -- <projet.ozalid> <epreuve.pdf>
+cargo run --example ebook -- <projet.ozalid> <sortie>
 ```
 
 `packager` traverse la chaîne entière sans interface : intérieur composé, pagination
@@ -287,6 +292,15 @@ regarder après toute modification du moteur de couverture.
 `epreuve` tire l'épreuve de relecture sans interface. Elle se regarde de la même
 façon : les numéros de ligne repartent-ils de 1 à chaque page, la marge d'annotation
 est-elle libre, un chapitre commence-t-il bien en tête de page.
+
+`ebook` écrit le PDF et l'EPUB sans interface, et l'un et l'autre se regardent. Le
+PDF est le livre qu'on ne reliera pas : la couverture ouvre-t-elle le fichier, les
+marges d'une page paire et d'une page impaire sont-elles symétriques — la gouttière
+est revenue à l'extérieur —, aucune page vide ne traîne-t-elle à la fin, faute de
+blanche de parité à combler. L'EPUB, lui, se juge dans une liseuse : la vignette
+paraît-elle à l'ouverture, la table des matières mène-t-elle au bon chapitre, les
+italiques sont-elles là, et le texte est-il dans la police du livre plutôt que dans
+celle du lecteur.
 
 `temoin` diffère des exercices ci-dessus : lui seul porte sa propre valeur attendue, et
 il échoue au lieu d'afficher un résultat à interpréter.
@@ -313,6 +327,12 @@ tout ce qui se voit se vérifie dans l'application.
 - **Le manuscrit n'admet qu'un sous-ensemble de Markdown.** Tout le reste est
   refusé avec son numéro de ligne — un aplatissement silencieux donnerait un
   livre faux, découvert après tirage.
+- **Un saut de page de traitement de texte (U+000C) traverse la composition sans
+  broncher.** Typst le compose sans une erreur ; le XML, lui, ne sait pas
+  l'écrire, et la liseuse n'ouvre alors pas le chapitre. La génération de l'EPUB
+  le refuse en le nommant, plutôt que de le retirer : un nettoyage silencieux
+  donnerait un livre que personne n'a écrit, et laisserait le défaut dans le
+  manuscrit pour la fois suivante.
 - **La police de l'intérieur est un réglage du projet, et elle repagine.** Sept serifs
   de labeur sont admis, EB Garamond par défaut ; le compte de pages, donc le dos, en
   dépend. Une police hors liste est refusée au lieu d'être substituée : Typst, lui,
@@ -321,6 +341,14 @@ tout ce qui se voit se vérifie dans l'application.
 - **Georgia et Helvetica ne sont pas reprises.** Elles appartiennent au système, ne
   sont pas redistribuables, et Helvetica n'existe pas sous Windows. Une maquette
   importée qui les utilise est refusée avec la liste des familles embarquées.
+- **Dans un EPUB, une police se nomme par une URL, et la plage de graisses qu'elle
+  annonce est crue sur parole.** Les familles variables de Google Fonts portent leur
+  bloc d'axes entre crochets — `EBGaramond[wght].ttf` —, interdits dans un segment
+  d'URL : l'archive les renomme, sans quoi EPUBCheck la refuse en entier et une
+  liseuse indulgente retombe sans un mot sur l'écriture du lecteur. Et une face
+  annoncée sur toute la plage alors qu'elle ne la couvre pas ne fait pas
+  synthétiser le gras : la liseuse sert le romain à sa place, et le livre perd son
+  gras en silence.
 - **Le prolongement panoramique dépend de la pagination.** L'image y est cadrée sur
   la planche entière — deux couvertures et le dos — et non sur la seule 1ère :
   le composer sans compte de pages est refusé, pas approximé. C'est un écart
