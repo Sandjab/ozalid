@@ -92,13 +92,16 @@ faces.
 
 ### Un seul élément pour les deux effets
 
-Un enfant du cadre, `.coupe`, en `pointer-events: none` :
+Un enfant du cadre, `.coupe`, posé sur toute l'image, en `pointer-events: none` :
 
-- `inset: calc(var(--coupe-y) * 100%) calc(var(--coupe-x) * 100%)` le pose exactement
-  sur le rectangle rogné ;
-- `border: 1px dashed` trace la ligne de coupe ;
-- un `box-shadow` étalé le déborde d'un voile clair, que l'`overflow: hidden` du cadre
-  ramène aux bords de l'image : tout ce qui est au-delà de la coupe passe dessous.
+- **le voile** est fait de quatre fonds — haut, bas, gauche, droite — dimensionnés en
+  pourcentage depuis les deux fractions. Pas d'ombre étalée sous un `overflow: hidden`,
+  qui aurait été plus courte à écrire : ce découpage emporterait l'ombre portée de
+  l'aperçu, et la couverture paraîtrait posée à plat. Les bandes latérales s'arrêtent
+  au-dessus et au-dessous des horizontales, sans quoi deux voiles se superposeraient
+  aux quatre coins — et ces coins-là sont justement ce qu'on regarde.
+- **la ligne de coupe** est un `::after` en `inset` sur le rectangle rogné, bordé d'un
+  `1px dashed`. En pseudo-élément : elle n'a rien à dire au balisage.
 
 Les deux variables sont posées par le JS depuis la `coupe` reçue. La visibilité de
 `.coupe` tient à un `hidden` : pas de `coupe`, ou bascule éteinte, il disparaît.
