@@ -9,7 +9,7 @@
 //! enfin. Inverser reviendrait à ressaisir un nombre de pages à la main, ce que
 //! l'application existe pour supprimer.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
@@ -173,6 +173,14 @@ pub fn assembler_envois(
     let reference = racine.join(".reference");
     let base = assembler(projet, pr, papier, releve, &reference, typst)?;
 
+    // La police de l'auteur n'entre en scène qu'ici : le package de référence ne porte
+    // aucun envoi, donc aucune écriture manuscrite. Elle est dépliée une fois pour tous
+    // les envois, et Typst la cherchera là.
+    let typst = &match ecrire_polices(projet, racine)? {
+        Some(dossier) => typst.clone().avec_polices(dossier),
+        None => typst.clone(),
+    };
+
     let livre = &projet.meta.livre;
     let int = &projet.meta.interieur;
     let chapitres = manuscrit::decoupe(&projet.texte, livre.chapitres)?;
@@ -234,6 +242,26 @@ fn copier(depuis: &Path, vers: &Path, fichier: &str) -> Result<String, String> {
 /// l'application.
 pub fn sert_la_quatrieme(nom: &str) -> bool {
     nom.starts_with("quatrieme")
+}
+
+/// Déplie la police personnelle du projet, et rend le répertoire où Typst la trouvera.
+///
+/// Typst ne lit ses polices que dans des répertoires : l'écriture de l'auteur vit dans
+/// le `.ozalid`, elle doit donc atterrir sur le disque avant qu'on puisse composer. Un
+/// répertoire à part, et non celui des sorties : `--font-path` est fouillé
+/// récursivement, et lui donner le répertoire des envois lui ferait ouvrir un à un tous
+/// les PDF qu'on vient d'y écrire.
+pub fn ecrire_polices(projet: &Projet, dossier: &Path) -> Result<Option<PathBuf>, String> {
+    if projet.polices.is_empty() {
+        return Ok(None);
+    }
+    let cible = dossier.join(".polices");
+    std::fs::create_dir_all(&cible)
+        .map_err(|e| format!("répertoire inutilisable ({}) : {e}", cible.display()))?;
+    for (nom, octets) in &projet.polices {
+        std::fs::write(cible.join(nom), octets).map_err(|e| format!("{nom} : {e}"))?;
+    }
+    Ok(Some(cible))
 }
 
 /// Écrit les images du projet à côté des sources, et rend leurs descriptions.

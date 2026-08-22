@@ -17,22 +17,26 @@ pub const MARQUEUR: &str = "#context [#metadata(counter(page).final().first()) <
 #[derive(Debug, Clone)]
 pub struct Typst {
     binaire: PathBuf,
-    /// Répertoire des polices embarquées. Sans lui, Typst n'a que les polices du
-    /// système : une maquette rendrait différemment d'une machine à l'autre, ou
-    /// serait substituée en silence.
-    polices: Option<PathBuf>,
+    /// Répertoires de polices. Sans eux, Typst n'a que les polices du système : une
+    /// maquette rendrait différemment d'une machine à l'autre, ou serait substituée en
+    /// silence.
+    ///
+    /// Plusieurs, parce qu'un livre peut composer ses envois dans l'écriture de son
+    /// auteur : celle-là vit dans le `.ozalid`, pas dans le binaire, et elle est
+    /// dépliée à côté des sources au moment de composer.
+    polices: Vec<PathBuf>,
 }
 
 impl Typst {
     pub fn new(binaire: impl Into<PathBuf>) -> Self {
         Self {
             binaire: binaire.into(),
-            polices: None,
+            polices: Vec::new(),
         }
     }
 
     pub fn avec_polices(mut self, dossier: impl Into<PathBuf>) -> Self {
-        self.polices = Some(dossier.into());
+        self.polices.push(dossier.into());
         self
     }
 
@@ -81,10 +85,13 @@ impl Typst {
     fn lance(&self, args: &[&str]) -> Result<String, String> {
         let mut cmd = Command::new(&self.binaire);
         cmd.args(args);
-        if let Some(p) = &self.polices {
+        if !self.polices.is_empty() {
+            for p in &self.polices {
+                cmd.arg("--font-path").arg(p);
+            }
             // `--ignore-system-fonts` : sans lui, une police du poste pourrait se
             // substituer à une police embarquée et le rendu dépendrait de la machine.
-            cmd.arg("--font-path").arg(p).arg("--ignore-system-fonts");
+            cmd.arg("--ignore-system-fonts");
         }
         let r = cmd.output().map_err(|e| {
             format!(

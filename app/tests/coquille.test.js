@@ -914,3 +914,82 @@ test('le bouton des envois s\'allume dès qu\'un mot est écrit', async () => {
   assert.equal(b.els.get('btEnvoyer').disabled, true,
     'la liste est vide et le bouton reste allumé');
 });
+
+/**
+ * Le menu des mains doit montrer celle qui compose. Rempli une fois au démarrage, il se
+ * posait sur la première écriture de la liste pendant que le livre en composait une
+ * autre — et le premier réglage de l'écran l'aurait imposée à tous les exemplaires.
+ */
+test('le menu des mains se pose sur la main du livre', async () => {
+  const a = atelier({
+    sur: { envois: { main: { mode: 'police', police: 'Dancing Script' }, liste: [] } },
+  });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  assert.equal(els.get('inMain').value, 'Dancing Script');
+});
+
+/**
+ * La police de l'auteur appartient au livre ouvert, pas à l'application : elle s'ajoute
+ * aux mains de la maison quand le projet en porte une, et disparaît avec lui. Sans elle
+ * dans le menu, la main du livre ne serait désignable par rien.
+ */
+test('la police personnelle s\'ajoute aux mains de la maison', async () => {
+  const a = atelier({
+    sur: {
+      envois: {
+        main: { mode: 'police', police: 'Ma Main' },
+        personnelle: 'Ma Main',
+        liste: [],
+      },
+    },
+  });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  const offertes = [...els.get('inMain').children].map((o) => o.value);
+  assert.deepEqual(offertes, ['Caveat', 'Dancing Script', 'Ma Main']);
+  assert.equal(els.get('inMain').value, 'Ma Main');
+  assert.equal(els.get('btPoliceRetirer').disabled, false,
+    'une police est embarquée et rien ne la retire');
+});
+
+/**
+ * Sans police personnelle, il n'y a rien à retirer. Le bouton l'est déjà dans le HTML :
+ * ce que ce test garde, c'est qu'il le redevienne en ouvrant un livre qui n'en porte
+ * pas, après un livre qui en portait une.
+ */
+test('le retrait de police s\'éteint avec le livre qui portait la police', async () => {
+  const avec = { main: { mode: 'police', police: 'Ma Main' }, personnelle: 'Ma Main', liste: [] };
+  const a = atelier({ sur: { envois: avec } });
+  const { els, contexte } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  assert.equal(els.get('btPoliceRetirer').disabled, false);
+
+  contexte.afficherProjet(projet());
+  assert.equal(els.get('btPoliceRetirer').disabled, true,
+    'le livre suivant n\'a pas de police et le bouton reste allumé');
+});
+
+/**
+ * Le fichier est copié dans le `.ozalid` : c'est le Rust qui le lit, à partir du chemin
+ * choisi. Un dialogue annulé ne doit rien envoyer — sans quoi la commande partirait avec
+ * un chemin vide et l'erreur remonterait à l'écran pour un geste que personne n'a fait.
+ */
+test('choisir une police envoie son chemin, et l\'annuler n\'envoie rien', async () => {
+  const a = atelier();
+  let repond = '/polices/ma-main.ttf';
+  const { els } = await charge({ invoke: a.invoke, open: async () => repond });
+  await els.get('btNouveau').declenche('click');
+
+  await els.get('btPolice').declenche('click');
+  const choix = a.appels.findLast(([c]) => c === 'police_choisir');
+  assert.ok(choix, 'aucun police_choisir : le bouton n\'a pas d\'écouteur');
+  assert.equal(choix[1].chemin, '/polices/ma-main.ttf');
+
+  repond = null;
+  await els.get('btPolice').declenche('click');
+  assert.equal(a.appels.filter(([c]) => c === 'police_choisir').length, 1,
+    'un dialogue annulé a quand même envoyé un chemin');
+});

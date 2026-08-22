@@ -848,17 +848,56 @@ pub fn envois_modifier(
     envois: crate::envoi::Envois,
     atelier: State<Atelier>,
 ) -> Result<ProjetVue, String> {
-    envois.verifie()?;
     let mut garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_mut().ok_or_else(aucun_projet)?;
-    o.projet.meta.envois = envois;
+    o.projet.meta.envois = o.projet.meta.envois.reprend(envois)?;
     vue_modifiee(o)
 }
 
 /// Les mains offertes par l'application.
+///
+/// La police personnelle n'y est pas : elle appartient au livre ouvert, pas à
+/// l'application, et le front la lit dans `envois.personnelle`.
 #[tauri::command]
 pub fn mains_liste() -> Vec<&'static str> {
     crate::envoi::MAINS.to_vec()
+}
+
+/// Embarque la police manuscrite de l'auteur dans le projet, et en fait sa main.
+///
+/// Le fichier est copié dans le `.ozalid`, comme le manuscrit et les photos : le projet
+/// doit composer à l'identique sur une machine où cette écriture n'est installée nulle
+/// part. C'est aussi pourquoi la famille est relevée dans le fichier plutôt que déduite
+/// de son nom.
+#[tauri::command]
+pub fn police_choisir(chemin: String, atelier: State<Atelier>) -> Result<ProjetVue, String> {
+    let source = Path::new(&chemin);
+    // Typst ne charge d'un répertoire de polices que les fichiers dont l'extension le
+    // dit. Une écriture rangée sous un autre nom n'y serait jamais lue, et l'envoi
+    // partirait dans la police de repli sans qu'aucun message ne le signale.
+    let nom = source
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .filter(|n| {
+            let bas = n.to_lowercase();
+            bas.ends_with(".ttf") || bas.ends_with(".otf")
+        })
+        .ok_or("police refusée : seuls les fichiers .ttf et .otf se composent.")?;
+    let octets = std::fs::read(source).map_err(|e| format!("police illisible : {e}"))?;
+
+    let mut garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_mut().ok_or_else(aucun_projet)?;
+    o.projet.poser_police(&nom, octets)?;
+    vue_modifiee(o)
+}
+
+/// Retire la police de l'auteur du projet.
+#[tauri::command]
+pub fn police_retirer(atelier: State<Atelier>) -> Result<ProjetVue, String> {
+    let mut garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_mut().ok_or_else(aucun_projet)?;
+    o.projet.retirer_police();
+    vue_modifiee(o)
 }
 
 /// La page de titre d'un envoi, telle qu'elle sera imprimée.
@@ -905,7 +944,14 @@ pub fn envoi_apercu(index: usize, atelier: State<Atelier>) -> Result<String, Str
         ),
     )?;
     let png = dossier.join("apercu.png");
-    typst()?.apercu(&src, &png, 3, 110)?;
+    // L'écriture de l'auteur vit dans le `.ozalid` : sans ce dépliage, l'aperçu
+    // composerait dans la police de repli, et ce serait un aperçu d'autre chose.
+    let typst = typst()?;
+    let typst = match package::ecrire_polices(&o.projet, &dossier)? {
+        Some(d) => typst.avec_polices(d),
+        None => typst,
+    };
+    typst.apercu(&src, &png, 3, 110)?;
     donnee_png(&png)
 }
 

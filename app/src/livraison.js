@@ -193,12 +193,34 @@ async function packager() {
 /* ---------- envois ---------- */
 
 /**
+ * Le choix de la main : les trois écritures de la maison, et celle de l'auteur.
+ *
+ * Le `select` est refait à chaque projet plutôt que rempli une fois au démarrage : la
+ * police personnelle appartient au livre ouvert, elle entre et sort avec lui. Sa valeur
+ * est reposée depuis le projet — sans quoi le menu montrerait la première main pendant
+ * que le livre en compose une autre, et le premier réglage de l'écran l'imposerait.
+ */
+function afficherMain() {
+  const sel = $('inMain');
+  const perso = projet.envois.personnelle;
+  sel.replaceChildren();
+  for (const m of mains) sel.append(new Option(m, m));
+  if (perso) sel.append(new Option(`${perso} (votre police)`, perso));
+  sel.value = projet.envois.main.police;
+  $('etatPolice').textContent = perso
+    ? `Police personnelle embarquée : ${perso}.`
+    : 'Aucune police personnelle : les envois s\'écrivent dans une main de la maison.';
+  $('btPoliceRetirer').disabled = !perso;
+}
+
+/**
  * La liste des envois : un dédicataire, son mot, et de quoi le voir ou le retirer.
  *
  * Le mot est un `textarea` : un envoi tient en deux ou trois lignes, et un `input` en
  * cacherait la fin — or c'est précisément ce qui sera imprimé.
  */
 function afficherEnvois() {
+  afficherMain();
   const box = $('envois');
   box.textContent = '';
   for (const [i, e] of projet.envois.liste.entries()) {

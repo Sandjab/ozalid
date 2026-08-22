@@ -7,6 +7,7 @@
 //! projet.toml     identité du livre, réglages de couverture, chemin source du manuscrit
 //! manuscrit.md
 //! images/         photos source de la 1ère et de la 4ème
+//! polices/        la police personnelle de l'auteur, quand il en fournit une
 //! ```
 //!
 //! `projet.toml` garde la forme et l'esprit du `livre.toml` historique : dézippée,
@@ -31,6 +32,7 @@ pub const VERSION: u32 = 2;
 const PROJET_TOML: &str = "projet.toml";
 const MANUSCRIT_MD: &str = "manuscrit.md";
 const IMAGES: &str = "images/";
+const POLICES: &str = "polices/";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Livre {
@@ -224,13 +226,16 @@ pub struct Metadonnees {
     pub envois: crate::envoi::Envois,
 }
 
-/// Un projet ouvert : les métadonnées, le texte du manuscrit, les images.
+/// Un projet ouvert : les métadonnées, le texte du manuscrit, les images, les polices.
 #[derive(Debug, Clone)]
 pub struct Projet {
     pub meta: Metadonnees,
     pub texte: String,
     /// Nom de fichier (sans `images/`) → contenu.
     pub images: BTreeMap<String, Vec<u8>>,
+    /// Nom de fichier (sans `polices/`) → contenu. Une seule police y vit à la fois :
+    /// c'est celle de l'auteur, et un livre n'a qu'une main.
+    pub polices: BTreeMap<String, Vec<u8>>,
 }
 
 impl Projet {
@@ -247,6 +252,48 @@ impl Projet {
             },
             texte,
             images: BTreeMap::new(),
+            polices: BTreeMap::new(),
+        }
+    }
+
+    /// La famille que déclare la police embarquée, relevée dans le fichier.
+    ///
+    /// Le `.ozalid` peut annoncer ce qu'il veut dans son TOML : c'est le fichier qui
+    /// compose. Relever la famille à chaque ouverture est ce qui empêche un nom recopié
+    /// à la main de désigner une police que Typst ne trouverait pas.
+    pub fn police_personnelle(&self) -> Option<String> {
+        self.polices
+            .values()
+            .next()
+            .and_then(|o| crate::police::examine(o).ok())
+            .map(|p| p.famille)
+    }
+
+    /// Embarque la police de l'auteur, et en fait la main du livre.
+    ///
+    /// Une seule à la fois : la précédente s'en va, comme la photo d'une face s'en va
+    /// quand on en choisit une autre. Faire du livre sa main dans le même geste est ce
+    /// qu'on vient de demander — importer une écriture pour ne pas s'en servir n'a pas
+    /// d'usage, et l'oublier laisserait le livre dans son écriture d'avant.
+    pub fn poser_police(&mut self, nom: &str, octets: Vec<u8>) -> Result<(), String> {
+        let famille = crate::police::examine(&octets)?.famille;
+        self.polices.clear();
+        self.polices.insert(nom.to_string(), octets);
+        self.meta.envois.personnelle = Some(famille.clone());
+        self.meta.envois.main = crate::envoi::Main::Police { police: famille };
+        Ok(())
+    }
+
+    /// Retire la police de l'auteur, et rend au livre une main qu'il sait composer.
+    ///
+    /// Laisser la main sur une police qui vient de partir ferait refuser la composition :
+    /// exact, mais inutilement — c'est le geste de l'utilisateur qui l'a retirée, et il
+    /// n'a pas demandé un livre qui ne compose plus.
+    pub fn retirer_police(&mut self) {
+        self.polices.clear();
+        self.meta.envois.personnelle = None;
+        if self.meta.envois.verifie().is_err() {
+            self.meta.envois.main = crate::envoi::Main::default();
         }
     }
 
@@ -285,23 +332,35 @@ impl Projet {
             .map_err(|_| format!("{MANUSCRIT_MD} n'est pas de l'UTF-8."))?;
 
         let mut images = BTreeMap::new();
+        let mut polices = BTreeMap::new();
         let noms: Vec<String> = zip.file_names().map(str::to_owned).collect();
         for nom in noms {
-            if let Some(court) = nom.strip_prefix(IMAGES) {
+            for (prefixe, cible) in [(IMAGES, &mut images), (POLICES, &mut polices)] {
+                let Some(court) = nom.strip_prefix(prefixe) else {
+                    continue;
+                };
                 if court.is_empty() {
                     continue;
                 }
                 if let Some(oct) = fichier(&mut zip, &nom)? {
-                    images.insert(court.to_string(), oct);
+                    cible.insert(court.to_string(), oct);
                 }
             }
         }
 
-        Ok(Self {
+        let mut p = Self {
             meta,
             texte,
             images,
-        })
+            polices,
+        };
+        // La famille de la police personnelle est relevée dans le fichier embarqué, et
+        // non lue dans le TOML : un `.ozalid` dont on aurait retiré la police, ou dont
+        // le TOML nommerait une famille que le fichier ne déclare pas, composerait
+        // sinon par repli — en silence, dans une écriture que personne n'a choisie. Le
+        // nom devient alors introuvable et `Envois::verifie` refuse de composer.
+        p.meta.envois.personnelle = p.police_personnelle();
+        Ok(p)
     }
 
     fn ecrire<W: Write + Seek>(&self, sortie: W) -> Result<(), String> {
@@ -318,6 +377,11 @@ impl Projet {
         ajoute(&mut zip, MANUSCRIT_MD, self.texte.as_bytes(), texte_opts)?;
         for (nom, oct) in &self.images {
             ajoute(&mut zip, &format!("{IMAGES}{nom}"), oct, brut_opts)?;
+        }
+        // Une police, elle, se dégonfle de moitié : elle est faite de tables et de
+        // courbes, pas d'un flux déjà compressé.
+        for (nom, oct) in &self.polices {
+            ajoute(&mut zip, &format!("{POLICES}{nom}"), oct, texte_opts)?;
         }
         zip.finish().map_err(|e| format!("clôture : {e}"))?;
         Ok(())
@@ -638,6 +702,101 @@ auteur = "Ivan Pjig"
             r.meta.envois.liste[0].contenu,
             "À Léa, qui a lu la première version."
         );
+    }
+
+    /// Une police de la maison qui n'est **pas** une main : sa famille ne figure pas
+    /// dans `MAINS`. C'est ce qui compte ici — avec Caveat, dont la famille est déjà la
+    /// main par défaut, aucun de ces tests ne pourrait échouer.
+    const FOURNIE: &[u8] = include_bytes!("../fonts/EBGaramond[wght].ttf");
+    const FAMILLE: &str = "EB Garamond";
+
+    /// Le `.ozalid` doit être auto-portant : un projet composé avec l'écriture de son
+    /// auteur doit se recomposer à l'identique sur une autre machine, où cette police
+    /// n'est installée nulle part. Les octets voyagent donc dans l'archive, et la main
+    /// avec.
+    #[test]
+    fn la_police_personnelle_voyage_dans_l_archive() {
+        let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
+        p.poser_police("main.ttf", FOURNIE.to_vec()).unwrap();
+        assert_eq!(
+            p.meta.envois.main,
+            crate::envoi::Main::Police {
+                police: FAMILLE.into()
+            }
+        );
+
+        let r = aller_retour(&p);
+        assert_eq!(r.polices["main.ttf"], FOURNIE);
+        assert_eq!(r.meta.envois.personnelle.as_deref(), Some(FAMILLE));
+        assert!(r.meta.envois.verifie().is_ok(), "main perdue à l'ouverture");
+    }
+
+    /// Ce n'est pas le TOML qui compose, c'est le fichier. Un `.ozalid` qui annonce une
+    /// famille que son archive ne porte pas — police retirée, TOML recopié à la main —
+    /// doit se retrouver sans police personnelle, et sa main être refusée : composer par
+    /// repli enverrait au dédicataire un mot dans une écriture que personne n'a choisie.
+    #[test]
+    fn une_police_annoncee_mais_absente_ne_compose_pas() {
+        let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
+        p.meta.envois.personnelle = Some("Ma Main".into());
+        p.meta.envois.main = crate::envoi::Main::Police {
+            police: "Ma Main".into(),
+        };
+
+        let r = aller_retour(&p);
+        assert_eq!(r.meta.envois.personnelle, None);
+        let err = r.meta.envois.verifie().unwrap_err();
+        assert!(err.contains("Ma Main"), "{err}");
+    }
+
+    /// Une seule police à la fois : la précédente s'en va, comme la photo d'une face
+    /// quand on en choisit une autre. Deux polices dans l'archive laisseraient l'ordre
+    /// alphabétique décider laquelle écrit les envois.
+    #[test]
+    fn une_police_choisie_remplace_la_precedente() {
+        let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
+        p.poser_police("premiere.ttf", FOURNIE.to_vec()).unwrap();
+        p.poser_police("seconde.ttf", FOURNIE.to_vec()).unwrap();
+        assert_eq!(p.polices.keys().collect::<Vec<_>>(), ["seconde.ttf"]);
+    }
+
+    /// Retirer la police rend au livre une main qu'il sait composer : la laisser sur une
+    /// écriture qui vient de partir ferait refuser la composition, exactement, mais pour
+    /// rien — l'utilisateur n'a pas demandé un livre qui ne compose plus.
+    #[test]
+    fn retirer_la_police_rend_au_livre_une_main_composable() {
+        let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
+        p.poser_police("main.ttf", FOURNIE.to_vec()).unwrap();
+        p.retirer_police();
+        assert!(p.polices.is_empty());
+        assert_eq!(p.meta.envois.personnelle, None);
+        assert!(p.meta.envois.verifie().is_ok(), "le livre ne compose plus");
+    }
+
+    /// La main embarquée que l'auteur a choisie ne doit pas être emportée par le retrait
+    /// de sa police personnelle : elle ne dépendait pas d'elle.
+    #[test]
+    fn retirer_la_police_ne_touche_pas_a_une_main_embarquee() {
+        let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
+        p.poser_police("main.ttf", FOURNIE.to_vec()).unwrap();
+        let choisie = crate::envoi::Main::Police {
+            police: crate::envoi::MAINS[1].into(),
+        };
+        p.meta.envois.main = choisie.clone();
+        p.retirer_police();
+        assert_eq!(p.meta.envois.main, choisie);
+    }
+
+    /// Un manuscrit renommé en `.ttf` n'est pas une écriture : le refus est au moment du
+    /// choix, seul endroit où il peut encore être corrigé, et l'archive reste intacte.
+    #[test]
+    fn un_fichier_qui_n_est_pas_une_police_ne_devient_pas_la_main() {
+        let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
+        let avant = p.meta.envois.main.clone();
+        let err = p.poser_police("faux.ttf", b"## 01 - Un\n\nTexte.".to_vec());
+        assert!(err.is_err());
+        assert!(p.polices.is_empty(), "l'archive a gardé le faux fichier");
+        assert_eq!(p.meta.envois.main, avant);
     }
 
     /// Une dédicace faite d'espaces ne doit pas coûter deux pages et du dos : c'est

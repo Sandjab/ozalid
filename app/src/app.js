@@ -18,6 +18,14 @@ function h(tag, texte, classe) {
 let projet = null;
 let providers = [];
 let polices = [];
+/**
+ * Les mains embarquées avec l'application.
+ *
+ * Retenues au démarrage plutôt qu'écrites une fois pour toutes dans le `select` : ce
+ * dernier se refait à chaque projet, la police personnelle de l'auteur venant s'ajouter
+ * aux mains de la maison.
+ */
+let mains = [];
 let face = 'une';
 let attenteApercu = null;
 /**
@@ -277,9 +285,7 @@ async function chargerProviders() {
   for (const p of await invoke('polices_texte_liste')) {
     $('inPoliceInterieur').append(new Option(p, p));
   }
-  for (const main of await invoke('mains_liste')) {
-    $('inMain').append(new Option(main, main));
-  }
+  mains = await invoke('mains_liste');
   for (const m of await invoke('maquettes_liste')) {
     const b = h('button', m.libelle);
     b.type = 'button';
@@ -1029,6 +1035,18 @@ $('btAjouterEnvoi').addEventListener('click', () => {
   $('inDedicataire').value = '';
   return envoisModifier([...projet.envois.liste, { dedicataire: qui, contenu: '' }]);
 });
+// La police de l'auteur est copiée dans le `.ozalid`, comme le manuscrit et les photos :
+// le chemin d'où elle vient n'a plus à exister pour que les envois se composent.
+$('btPolice').addEventListener('click', async () => {
+  const chemin = await open({
+    multiple: false,
+    filters: [{ name: 'Police manuscrite', extensions: ['ttf', 'otf'] }],
+  });
+  if (!chemin) return;
+  await tente(async () => afficherProjet(await invoke('police_choisir', { chemin })));
+});
+$('btPoliceRetirer').addEventListener('click', () => tente(async () =>
+  afficherProjet(await invoke('police_retirer'))));
 // La main appartient au livre : la changer réécrit tous ses envois d'un coup.
 $('inMain').addEventListener('change', () => tente(async () =>
   afficherProjet(await invoke('envois_modifier', {

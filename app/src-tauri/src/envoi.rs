@@ -22,8 +22,10 @@ pub const MAINS: &[&str] = &["Caveat", "Dancing Script", "Petit Formal Script"];
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "mode", rename_all = "lowercase")]
 pub enum Main {
-    /// Police manuscrite embarquée avec l'application. Les lots suivants y ajouteront
-    /// la police fournie par l'auteur, l'image écrite à la main et l'image générée.
+    /// Police manuscrite : embarquée avec l'application, ou fournie par l'auteur et
+    /// embarquée dans le `.ozalid`. Une seule variante pour ces deux sources — seule la
+    /// provenance du fichier diffère, la composition est la même. Les lots suivants y
+    /// ajouteront l'image écrite à la main et l'image générée.
     Police { police: String },
 }
 
@@ -49,12 +51,21 @@ pub struct Envoi {
 pub struct Envois {
     #[serde(default)]
     pub main: Main,
+    /// Famille de la police personnelle embarquée sous `polices/`, quand le livre en
+    /// porte une.
+    ///
+    /// Le nom figure ici pour que `projet.toml` reste lisible dézippé, mais **c'est le
+    /// fichier qui fait foi** : à l'ouverture, `normalise` le relève dans l'archive et
+    /// écrase ce que le TOML annonçait. Un nom recopié à la main dans le TOML ferait
+    /// sinon composer une police que Typst ne trouverait pas — c'est-à-dire une autre.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub personnelle: Option<String>,
     #[serde(default)]
     pub liste: Vec<Envoi>,
 }
 
 impl Envois {
-    /// Refuse une main hors liste.
+    /// Refuse une main que Typst ne saurait pas trouver.
     ///
     /// Sans ce contrôle, Typst composerait dans sa police par défaut **sans lever
     /// d'erreur** : `--ignore-system-fonts` empêche une substitution par le système,
@@ -62,13 +73,30 @@ impl Envois {
     /// d'`Interieur::verifie`, pour la même raison.
     pub fn verifie(&self) -> Result<(), String> {
         let Main::Police { police } = &self.main;
-        if MAINS.contains(&police.as_str()) {
+        if MAINS.contains(&police.as_str()) || self.personnelle.as_deref() == Some(police) {
             return Ok(());
         }
+        let mut attendu: Vec<&str> = MAINS.to_vec();
+        attendu.extend(self.personnelle.as_deref());
         Err(format!(
             "main inconnue : « {police} ». Attendu : {}.",
-            MAINS.join(", ")
+            attendu.join(", ")
         ))
+    }
+
+    /// La saisie de l'interface, reprise sans ce qu'elle n'a pas à dire.
+    ///
+    /// La police personnelle n'est pas un réglage : c'est ce que l'archive porte, relevé
+    /// dans son fichier. Laisser la saisie la nommer ferait déclarer bonne, par le
+    /// contrôle qui suit, une main que Typst ne trouverait pas — et l'envoi partirait
+    /// chez le dédicataire dans l'écriture de repli.
+    pub fn reprend(&self, saisie: Envois) -> Result<Envois, String> {
+        let e = Envois {
+            personnelle: self.personnelle.clone(),
+            ..saisie
+        };
+        e.verifie()?;
+        Ok(e)
     }
 }
 
@@ -165,9 +193,79 @@ mod tests {
             main: Main::Police {
                 police: "Comic Sans".into(),
             },
-            liste: vec![],
+            ..Envois::default()
         };
         let err = e.verifie().unwrap_err();
         assert!(err.contains("Comic Sans"), "{err}");
+    }
+
+    /// La police de l'auteur n'est dans aucune liste fermée — c'est tout son objet. Elle
+    /// est admise parce que l'archive la porte, et refusée dès que l'archive ne la porte
+    /// plus : sans quoi un `.ozalid` privé de sa police composerait ses envois par repli,
+    /// en silence, dans une écriture que personne n'a choisie.
+    #[test]
+    fn la_police_personnelle_est_admise_tant_que_l_archive_la_porte() {
+        let mut e = Envois {
+            main: Main::Police {
+                police: "Ma Main".into(),
+            },
+            personnelle: Some("Ma Main".into()),
+            liste: vec![],
+        };
+        assert!(e.verifie().is_ok(), "police personnelle refusée");
+
+        e.personnelle = None;
+        let err = e.verifie().unwrap_err();
+        assert!(err.contains("Ma Main"), "{err}");
+    }
+
+    /// L'interface renvoie l'objet entier, police personnelle comprise puisqu'elle l'a
+    /// reçu ainsi. Le nom qu'elle porte n'engage qu'elle : seul le fichier de l'archive
+    /// dit ce que Typst saura trouver.
+    #[test]
+    fn une_saisie_ne_peut_pas_inventer_une_police_personnelle() {
+        let porte = Envois {
+            personnelle: Some("Ma Main".into()),
+            ..Envois::default()
+        };
+        let saisie = Envois {
+            main: Main::Police {
+                police: "Écriture d'Emma".into(),
+            },
+            personnelle: Some("Écriture d'Emma".into()),
+            liste: vec![],
+        };
+        let err = porte.reprend(saisie).unwrap_err();
+        assert!(err.contains("Écriture d'Emma"), "{err}");
+
+        let bonne = Envois {
+            main: Main::Police {
+                police: "Ma Main".into(),
+            },
+            personnelle: None,
+            liste: vec![],
+        };
+        assert_eq!(
+            porte.reprend(bonne).unwrap().personnelle.as_deref(),
+            Some("Ma Main"),
+            "la police de l'archive a été perdue en chemin"
+        );
+    }
+
+    /// L'erreur doit nommer ce qui est offert, la police personnelle comprise : sans
+    /// elle, le message dirait de choisir parmi trois mains alors que le livre en a
+    /// quatre.
+    #[test]
+    fn l_erreur_de_main_nomme_aussi_la_police_personnelle() {
+        let e = Envois {
+            main: Main::Police {
+                police: "Comic Sans".into(),
+            },
+            personnelle: Some("Ma Main".into()),
+            liste: vec![],
+        };
+        let err = e.verifie().unwrap_err();
+        assert!(err.contains("Ma Main"), "{err}");
+        assert!(err.contains(MAINS[0]), "{err}");
     }
 }

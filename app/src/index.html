@@ -158,7 +158,14 @@
         personne. L'envoi ne déplace aucune page : le dos et la planche restent ceux du
         tirage. Les fichiers sont écrits dans <code>envois/</code>, à côté du
         <code>.ozalid</code>.</p>
-      <label><span>Main</span><select id="inMain"></select></label>
+      <div class="ligne">
+        <label><span>Main</span><select id="inMain"></select></label>
+        <!-- La police de l'auteur entre dans le `.ozalid` : le projet compose la même
+             écriture sur une machine où elle n'est installée nulle part. -->
+        <button id="btPolice" type="button">Ma police…</button>
+        <button id="btPoliceRetirer" type="button" disabled>Retirer</button>
+      </div>
+      <p class="note" id="etatPolice"></p>
       <div class="ligne">
         <!-- Même parti que le select d'ajout d'un destinataire : posé contre son bouton,
              il se lit comme le geste d'ajout, et l'`aria-label` le dit à qui ne le voit
