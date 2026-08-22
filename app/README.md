@@ -66,17 +66,19 @@ n'a pas été pris tant que la diffusion reste confidentielle.
 ## L'écran
 
 Quatre bandes, et la fenêtre elle-même ne défile plus : une **entête** qui nomme le
-livre ouvert, son chemin et son état d'enregistrement ; une rangée de quatre
-**onglets** — Livre, Intérieur, Couverture, Livraison — dans l'ordre où le livre se
-fait ; l'**étape** courante, seule ; un **pied** où l'on choisit pour qui l'on
-regarde, et qui dit ce que vaut le dos. Ce qui ne tient pas se règle par la mise en
-page ; le panneau de réglages de la couverture garde son propre ascenseur — sa
-longueur est irréductible. Une étape qui déborde tombe, elle, dans le filet de la
-bande de contenu : c'est le cas de la Livraison dès le deuxième compte rendu de
-génération, et la barre qui paraît alors est un défaut de mise en page, pas un
-ascenseur qu'on offre.
+livre ouvert, son chemin et son état d'enregistrement ; une rangée de cinq
+**onglets** — Livre, Intérieur, Couverture, Livraison, Envois — dans l'ordre où le
+livre se fait ; l'**étape** courante, seule ; un **pied** où l'on choisit pour qui
+l'on regarde, et qui dit ce que vaut le dos. Les Envois ont leur étape : la main du
+livre, l'accès au modèle et la liste des dédicataires débordaient la Livraison de
+quatre défilements — elle ne garde que les destinataires et leurs packages. Ce qui
+ne tient pas se règle par la mise en page ; le panneau de réglages de la couverture
+garde son propre ascenseur — sa longueur est irréductible. Une étape qui déborde
+tombe, elle, dans le filet de la bande de contenu : c'est le cas de la Livraison dès
+le deuxième compte rendu de génération, et la barre qui paraît alors est un défaut
+de mise en page, pas un ascenseur qu'on offre.
 
-Les quatre onglets se traversent aux flèches, et une seule tabulation suffit à sortir
+Les cinq onglets se traversent aux flèches, et une seule tabulation suffit à sortir
 de la bande : c'est le pattern `tablist`, tenu en entier.
 
 La coquille est en **gris chauds**, blanc pour les surfaces de travail — les champs,
@@ -106,7 +108,7 @@ chaque réglage, et ce qu'il dit de lui-même se lit sous l'image comme une lég
 
 **Enregistrer n'est plus qu'un geste de menu** (⌘S, ⇧⌘S) : les deux boutons ont
 quitté l'écran, comme dans tout éditeur de document macOS. Le sous-menu **« Aller »**
-navigue entre les quatre étapes (⌘1 à ⌘4) ; sans projet ouvert, il ne mène nulle
+navigue entre les cinq étapes (⌘1 à ⌘5) ; sans projet ouvert, il ne mène nulle
 part sans rien casser — la garde est du côté que les onglets et le menu ont en
 commun.
 

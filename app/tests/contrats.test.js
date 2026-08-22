@@ -87,8 +87,8 @@ test('une entrée de menu inconnue est nommée, pas avalée', async () => {
 test('deux colonnes tiennent dans la fenêtre minimale', () => {
   const css = source('src', 'styles.css');
 
-  const etapes = css.match(/#etapeLivre, #etapeInterieur \{[^}]*\}/s);
-  assert.ok(etapes, 'la règle #etapeLivre, #etapeInterieur a changé de forme');
+  const etapes = css.match(/#etapeLivre, #etapeInterieur, #etapeEnvois \{[^}]*\}/s);
+  assert.ok(etapes, 'la règle des étapes en colonnes a changé de forme');
   const colonne = etapes[0].match(/columns: ([\d.]+)rem/);
   const gouttiere = etapes[0].match(/column-gap: ([\d.]+)rem/);
   assert.ok(colonne && gouttiere, `colonnes illisibles dans : ${etapes[0]}`);

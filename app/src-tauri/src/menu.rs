@@ -124,6 +124,11 @@ pub fn poser(app: &AppHandle) -> tauri::Result<()> {
                 .accelerator("CmdOrCtrl+4")
                 .build(app)?,
         )
+        .item(
+            &MenuItemBuilder::with_id("aller.envois", "Envois")
+                .accelerator("CmdOrCtrl+5")
+                .build(app)?,
+        )
         .build()?;
 
     let menu = MenuBuilder::new(app);

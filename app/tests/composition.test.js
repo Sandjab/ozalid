@@ -139,7 +139,7 @@ test('un prestataire à gabarit ne réclame pas une composition mais un relevé'
 test('rien n\'est proposé tant qu\'aucun projet n\'est ouvert', async () => {
   const { els } = await charge({ invoke: faux([LULU]) });
   assert.strictEqual(els.get('accueil').hidden, false);
-  for (const s of ['etapeLivre', 'etapeInterieur', 'etapeCouverture', 'etapeLivraison']) {
+  for (const s of ['etapeLivre', 'etapeInterieur', 'etapeCouverture', 'etapeLivraison', 'etapeEnvois']) {
     assert.strictEqual(els.get(s).hidden, true, `${s} visible sans projet`);
   }
 });

@@ -53,7 +53,7 @@ const nb = (v, d = 2) => v.toLocaleString('fr-FR', {
 /* ---------- coquille ---------- */
 
 /**
- * Les quatre étapes, dans l'ordre où le livre se fait : leur clé — celle des entrées
+ * Les cinq étapes, dans l'ordre où le livre se fait : leur clé — celle des entrées
  * `aller.*` du menu, au préfixe près — leur libellé d'onglet, et la section montrée.
  *
  * La table est la seule source de ce qu'elle porte : les onglets, le routage du menu et
@@ -73,6 +73,7 @@ const ETAPES = [
   ['interieur', '2 · Intérieur', 'etapeInterieur'],
   ['couverture', '3 · Couverture', 'etapeCouverture'],
   ['livraison', '4 · Livraison', 'etapeLivraison'],
+  ['envois', '5 · Envois', 'etapeEnvois'],
 ];
 
 /** L'étape montrée. Sans projet, aucune ne l'est : l'accueil prend leur place. */
@@ -115,14 +116,14 @@ function construireEtapes() {
  * Sans cela, atteindre au clavier le contenu de la Livraison demandait de traverser les
  * quatre onglets un par un ; avec, une tabulation suffit à sortir de la bande.
  *
- * La sélection suit la flèche, sans qu'il faille valider : quatre étapes qui montrent un
+ * La sélection suit la flèche, sans qu'il faille valider : cinq étapes qui montrent un
  * formulaire chacune, aucune n'est coûteuse à afficher, et l'activation manuelle du
  * pattern est faite pour les onglets qui chargent quelque chose.
  *
  * Le focus suit ce que `allerA` a bien voulu changer, et non ce qu'on lui a demandé :
  * sans projet il ne change rien, et il n'y a pas de second garde à écrire ici.
  *
- * Les quatre onglets sont en ligne : ce sont les flèches horizontales qui les
+ * Les cinq onglets sont en ligne : ce sont les flèches horizontales qui les
  * traversent. Un rail vertical demanderait les verticales et un `aria-orientation` — la
  * disposition, elle seule, dit lesquelles.
  */
@@ -192,6 +193,14 @@ function etatEtapes(p) {
     // Rien de vrai à dire avant qu'un package n'ait été généré, et le pied porte déjà
     // le dos : mieux vaut se taire que meubler.
     livraison: { sous: '', alerte: false },
+    // Le compte des envois est la seule chose vraie que le projet porte ici ; zéro
+    // n'est pas une anomalie, donc pas un mot et jamais de témoin.
+    envois: {
+      sous: p.envois.liste.length
+        ? `${p.envois.liste.length} envoi${p.envois.liste.length > 1 ? 's' : ''}`
+        : '',
+      alerte: false,
+    },
   };
 }
 

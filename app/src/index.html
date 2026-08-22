@@ -152,8 +152,11 @@
       <div id="packages" class="resultat" hidden></div>
     </div>
 
+  </section>
+
+  <section id="etapeEnvois" class="etape" role="tabpanel" hidden>
     <div class="bloc">
-      <h2>Envois</h2>
+      <h2>Main</h2>
       <p class="note">Un mot manuscrit sur la page de titre, et un exemplaire par
         personne. L'envoi ne déplace aucune page : le dos et la planche restent ceux du
         tirage. Les fichiers sont écrits dans <code>envois/</code>, à côté du
@@ -184,6 +187,10 @@
           <code>{envoi}</code> y marque l'endroit où le mot de chacun s'insère.</p>
         <label><span>Gabarit</span><textarea id="inGabarit" rows="2"></textarea></label>
       </div>
+    </div>
+
+    <div class="bloc">
+      <h2>Envois</h2>
       <div class="ligne">
         <!-- Même parti que le select d'ajout d'un destinataire : posé contre son bouton,
              il se lit comme le geste d'ajout, et l'`aria-label` le dit à qui ne le voit
@@ -214,6 +221,7 @@
 
 <script src="couverture.js"></script>
 <script src="livraison.js"></script>
+<script src="envois.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

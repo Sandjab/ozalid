@@ -91,7 +91,7 @@ function atelier({
   return { appels, invoke, noms: () => appels.map(([c]) => c) };
 }
 
-const ETAPES = ['livre', 'interieur', 'couverture', 'livraison'];
+const ETAPES = ['livre', 'interieur', 'couverture', 'livraison', 'envois'];
 const montree = (els) =>
   ETAPES.filter((c) => els.get(`etape${c[0].toUpperCase()}${c.slice(1)}`).hidden === false);
 
@@ -188,7 +188,7 @@ test('la flèche boucle et Home revient à la première étape', async () => {
   await els.get('btNouveau').declenche('click');
 
   await els.get('etapes').declenche('keydown', touche('ArrowLeft'));
-  assert.deepEqual(montree(els), ['livraison'], 'la flèche gauche n\'a pas bouclé');
+  assert.deepEqual(montree(els), ['envois'], 'la flèche gauche n\'a pas bouclé');
 
   await els.get('etapes').declenche('keydown', touche('Home'));
   assert.deepEqual(montree(els), ['livre']);

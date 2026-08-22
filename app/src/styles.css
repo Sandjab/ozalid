@@ -180,7 +180,7 @@ main {
    Ce qu'elle ne rattrape pas, et qui est assumé : à 900 × 640, l'étape Intérieur
    composée déborde encore, et c'est le filet de `main` qui la reprend. La compaction
    du bloc de résultat part au lot 4 ; cet ascenseur-là s'en ira avec elle. */
-#etapeLivre, #etapeInterieur {
+#etapeLivre, #etapeInterieur, #etapeEnvois {
   columns: 23rem;
   column-gap: 3rem;
   /* Seule des quatre étapes à ne pas prendre la hauteur de la bande : un flux doit
@@ -196,7 +196,7 @@ main {
    Le filet qui les séparait quand ils s'empilaient ne veut plus rien dire une fois
    qu'ils coulent en colonnes — il ne courrait que sous la première, au hasard de
    l'ordre du balisage. C'est le blanc qui sépare désormais. */
-#etapeLivre > .bloc, #etapeInterieur > .bloc {
+#etapeLivre > .bloc, #etapeInterieur > .bloc, #etapeEnvois > .bloc {
   break-inside: avoid;
   padding: 0;
   margin-bottom: 1rem;
