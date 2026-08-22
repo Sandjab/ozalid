@@ -415,8 +415,15 @@ impl Projet {
                 let Some(court) = nom.strip_prefix(prefixe) else {
                     continue;
                 };
+                // L'entrée du répertoire lui-même, que tout archiveur écrit : rien à
+                // lire, et ce n'est pas un nom de travers.
                 if court.is_empty() {
                     continue;
+                }
+                if !nom_simple(court) {
+                    return Err(format!(
+                        "archive refusée : « {nom} » n'est pas un simple nom de fichier."
+                    ));
                 }
                 if let Some(oct) = fichier(&mut zip, &nom)? {
                     cible.insert(court.to_string(), oct);
@@ -468,6 +475,20 @@ impl Projet {
     }
 }
 
+/// Ce qui suit `images/`, `polices/` ou `envois/` est-il un simple nom de fichier ?
+///
+/// L'application n'en écrit jamais d'autres : ces trois répertoires sont plats, et
+/// leurs noms sont fabriqués — `couverture.jpg`, la police copiée, l'envoi assaini par
+/// `envoi::nom_image`. Mais l'archive est un document qu'on s'échange, et rien n'oblige
+/// celle qu'on ouvre à venir d'ici : `package::ecrire_images` et `ecrire_polices` en
+/// font des chemins par `join`, qui suit ce qui remonte jusqu'à écrire ailleurs.
+///
+/// La contre-oblique est refusée avec la barre : elle sépare sous Windows, et une
+/// archive écrite là-bas y arriverait par le même chemin.
+fn nom_simple(court: &str) -> bool {
+    court != "." && court != ".." && !court.contains(['/', '\\'])
+}
+
 fn ajoute<W: Write + Seek>(
     zip: &mut ZipWriter<W>,
     nom: &str,
@@ -513,6 +534,45 @@ mod tests {
         let mut buf = Vec::new();
         p.ecrire(Cursor::new(&mut buf)).unwrap();
         Projet::lire(Cursor::new(buf)).unwrap()
+    }
+
+    /// Un `.ozalid` n'est pas toujours celui qu'on a écrit : c'est un document qu'on
+    /// s'échange, et une archive fabriquée nomme ses entrées comme elle veut. Ce qui
+    /// suit `images/` devient un chemin chez `package::ecrire_images`, par un
+    /// `dossier.join(nom)` qui suit docilement ce qui remonte — le fichier s'écrirait
+    /// hors du dossier de travail, et l'enregistrement le reconduirait dans l'archive
+    /// suivante. Le refus est ici, à la lecture, parce que les appelants ne peuvent
+    /// pas deviner d'où le nom vient.
+    #[test]
+    fn une_entree_qui_remonte_hors_de_son_repertoire_est_refusee() {
+        for nom in ["../../ailleurs.jpg", "sous/dossier.jpg", "..", "."] {
+            let mut p = Projet::nouveau(livre(), "## 01 - Un\n\nTexte.\n".into());
+            p.images.insert(nom.into(), vec![0xFF, 0xD8, 0xFF]);
+            let mut buf = Vec::new();
+            p.ecrire(Cursor::new(&mut buf)).unwrap();
+            let err = Projet::lire(Cursor::new(buf))
+                .expect_err(&format!("« {nom} » accepté comme nom d'image"));
+            assert!(
+                err.contains(nom),
+                "{nom} : message muet sur le coupable — {err}"
+            );
+        }
+    }
+
+    /// La même garde ne doit pas refuser un projet ordinaire : les trois répertoires
+    /// portent des noms de fichiers simples, et l'entrée du répertoire lui-même — que
+    /// tout archiveur écrit — n'est pas un nom de travers.
+    #[test]
+    fn les_noms_de_fichiers_ordinaires_passent() {
+        let mut p = Projet::nouveau(livre(), "## 01 - Un\n\nTexte.\n".into());
+        p.images
+            .insert("couverture.jpg".into(), vec![0xFF, 0xD8, 0xFF]);
+        p.polices.insert("Ma Main.ttf".into(), vec![0x00, 0x01]);
+        p.images_envois.insert("rex.png".into(), vec![0x89, 0x50]);
+        let r = aller_retour(&p);
+        assert_eq!(r.images.len(), 1);
+        assert_eq!(r.polices.len(), 1);
+        assert_eq!(r.images_envois.len(), 1);
     }
 
     /// Le `.ozalid` est le document de l'utilisateur : ce qui y entre doit en ressortir

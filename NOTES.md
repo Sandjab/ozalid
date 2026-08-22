@@ -48,8 +48,6 @@ C'est cette contrainte qui explique une forme du code qui paraîtrait sinon tord
 
 **Le positionnement vertical du bloc titre en mode `band` est bancal.** `render()` contient deux affectations successives de `block.style.top` (`index.html:1020-1021`), la seconde écrasant la première. Le résultat est correct mais le code ne l'est pas — à nettoyer.
 
-**Un `.ozalid` peut faire écrire un fichier hors de son dossier de travail.** `Projet::ouvrir` retient les entrées de l'archive sous `images/`, `polices/` et `envois/` en gardant tel quel ce qui suit le préfixe, sans jamais regarder à quoi ce nom ressemble ; `package::ecrire_images` et `ecrire_polices` en font ensuite un chemin par `dossier.join(nom)`. Une archive fabriquée portant `images/../../ailleurs.jpg` écrit donc deux répertoires plus haut, et l'enregistrement la reconduit. C'est le zip slip classique, sur un format qu'on s'échange — la parade tient en une validation à l'ouverture (`enclosed_name` du crate `zip`, ou le refus de tout nom qui n'est pas un simple nom de fichier), et elle appartient à `projet.rs`, pas aux appelants. Le guillemet droit dans ces mêmes noms, lui, est fermé : `couverture::bloc_image` les cite désormais par `manuscrit::echappe_chaine`.
-
 ---
 
 ## 5. Points d'attention juridiques
