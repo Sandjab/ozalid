@@ -191,6 +191,37 @@ fn refus(ligne: &str) -> Option<&'static str> {
     }
 }
 
+/// Un entier → son romain, forme canonique.
+///
+/// Les parties d'un roman se comptent sur les doigts : la table s'arrête à `L`, et
+/// au-delà c'est une faute de frappe, pas une intention.
+fn en_romain(mut n: u32) -> String {
+    const TABLE: [(u32, &str); 7] = [
+        (50, "L"),
+        (40, "XL"),
+        (10, "X"),
+        (9, "IX"),
+        (5, "V"),
+        (4, "IV"),
+        (1, "I"),
+    ];
+    let mut s = String::new();
+    for (v, sym) in TABLE {
+        while n >= v {
+            s.push_str(sym);
+            n -= v;
+        }
+    }
+    s
+}
+
+/// Un romain de partie → sa valeur, à condition qu'il soit écrit sous sa forme
+/// canonique. `IIII` vaudrait 4 pour un parseur laxiste et s'imprimerait tel quel :
+/// on le refuse plutôt que de composer une page de partie fautive.
+fn romain(s: &str) -> Option<u32> {
+    (1..=50).find(|n| en_romain(*n) == s)
+}
+
 /// Une rupture de scène sépare deux passages d'un même chapitre ; une rupture qui
 /// ouvre ou ferme un chapitre ne sépare rien. Cet invariant vaut quel que soit l'usage
 /// que l'auteur fait de `---` dans son manuscrit — y compris l'usage réel observé sur
@@ -305,6 +336,21 @@ mod tests {
             morceaux("3 * 4 = 12"),
             vec![Morceau::Brut("3 * 4 = 12".into())]
         );
+    }
+
+    /// Les romains sont réimprimés tels qu'écrits sur la page de partie : une forme
+    /// non canonique composerait un livre fautif. Seule la forme qu'on écrirait à la
+    /// main est admise.
+    #[test]
+    fn seuls_les_romains_canoniques_sont_lus() {
+        assert_eq!(romain("I"), Some(1));
+        assert_eq!(romain("IV"), Some(4));
+        assert_eq!(romain("XIV"), Some(14));
+        assert_eq!(romain("L"), Some(50));
+        assert_eq!(romain("IIII"), None, "forme non canonique");
+        assert_eq!(romain("VX"), None);
+        assert_eq!(romain(""), None);
+        assert_eq!(romain("3"), None);
     }
 
     /// Un manuscrit sans emphase ne produit qu'un morceau : les segments bruts se
