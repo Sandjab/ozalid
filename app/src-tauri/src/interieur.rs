@@ -160,6 +160,18 @@ fn assemble(
         pr.folio_pt
     );
 
+    // Les zones sont déjà validées par `decoupe` : le découpage n'a qu'à les suivre.
+    let lim = pieces
+        .iter()
+        .take_while(|p| matches!(p.sorte, Sorte::Liminaire))
+        .count();
+    let (liminaires_manuscrit, reste) = pieces.split_at(lim);
+    let corps = reste
+        .iter()
+        .take_while(|p| !matches!(p.sorte, Sorte::Annexe))
+        .count();
+    let (corps, annexes) = reste.split_at(corps);
+
     let mut s = String::new();
     s.push_str(&format!(
         r#"// Intérieur — {} ({})
@@ -196,51 +208,71 @@ fn assemble(
         s.push_str(a);
     }
 
-    s.push_str(&liminaires(livre, envoi));
+    s.push_str(&liminaires(livre, envoi, liminaires_manuscrit));
 
     // — Corps, folio rétabli. La numérotation court depuis le faux-titre, seul son
     //   affichage était supprimé : le premier chapitre s'ouvre donc en page 5, ou en 7
     //   quand le livre porte une dédicace. —
     s.push_str(&format!("#set page(footer: {folio})\n"));
 
-    for (i, p) in pieces.iter().enumerate() {
-        // Le premier chapitre suit le dernier saut de page des liminaires : ne pas en
-        // ajouter un.
-        if i > 0 {
+    // `#page(…)[…]` rompt le flux de lui-même, avant et après : après une page de
+    // partie, le `#pagebreak()` d'ouverture du chapitre suivant ferait une page blanche
+    // de plus. Le compte de pages est le seul juge de ce détail.
+    let mut apres_page = false;
+    for (i, p) in corps.iter().enumerate() {
+        match &p.sorte {
+            Sorte::Partie(r) => {
+                s.push_str(&format!(
+                    "#page(footer: none)[\n#v(22mm)\n\
+                     #align(center, text(size: 13pt)[{r}])\n"
+                ));
+                if !p.titre.is_empty() {
+                    s.push_str(&format!(
+                        "#v(3.5mm)\n\
+                         #align(center, text(size: 10pt, tracking: 0.14em)[{}])\n",
+                        majuscules(&p.titre)
+                    ));
+                }
+                s.push_str("]\n#page(footer: none)[]\n");
+                apres_page = true;
+            }
+            Sorte::Chapitre(numero) => {
+                // Le premier chapitre suit le dernier saut de page des liminaires : ne
+                // pas en ajouter un.
+                if i > 0 && !apres_page {
+                    s.push_str("#pagebreak()\n");
+                }
+                s.push_str(&format!(
+                    "#v(22mm)\n#align(center, text(size: 13pt)[{numero}])\n"
+                ));
+                if !p.titre.is_empty() {
+                    s.push_str(&format!(
+                        "#v(3.5mm)\n\
+                         #align(center, text(size: 10pt, tracking: 0.14em)[{}])\n",
+                        majuscules(&p.titre)
+                    ));
+                }
+                s.push_str("#v(11mm)\n");
+                s.push_str(&blocs_typst(&p.blocs));
+                apres_page = false;
+            }
+            // `decoupe` garantit les zones : ni liminaire ni annexe n'entre dans le corps.
+            Sorte::Liminaire | Sorte::Annexe => unreachable!("zone validée par decoupe"),
+        }
+    }
+
+    // Les annexes rejoignent les liminaires hors du folio : il appartient au corps.
+    if !annexes.is_empty() {
+        if !apres_page {
             s.push_str("#pagebreak()\n");
         }
-        let Sorte::Chapitre(numero) = &p.sorte else {
-            unreachable!("les autres sortes arrivent à la tâche 5")
-        };
-        s.push_str(&format!(
-            "#v(22mm)\n#align(center, text(size: 13pt)[{}])\n",
-            numero
-        ));
-        if !p.titre.is_empty() {
-            s.push_str(&format!(
-                "#v(3.5mm)\n#align(center, text(size: 10pt, tracking: 0.14em)[{}])\n",
-                majuscules(&p.titre)
-            ));
-        }
-        s.push_str("#v(11mm)\n");
-        for b in &p.blocs {
-            match b {
-                Bloc::Paragraphe(p) => {
-                    s.push_str(&inline(p));
-                    s.push_str("\n\n");
-                }
-                // Le blanc est en em, non en mm : il suit le corps du prestataire comme
-                // l'interligne, là où l'épreuve, qui n'a qu'un format, se règle en mm.
-                // Il s'ajoute à l'espace de paragraphe, de part et d'autre — une rupture
-                // se voit d'un coup d'œil sur la page, sans la trouer.
-                //
-                // Le paragraphe qui suit garde son alinéa, comme après n'importe quel
-                // blanc : relevé sur la page composée, pas déduit. La marque le rend
-                // sans conséquence — c'est elle qui dit la coupure, pas le retrait.
-                Bloc::Scene => {
-                    s.push_str(&format!("#v(1em)\n#align(center)[{SCENE}]\n#v(1em)\n\n"))
-                }
+        s.push_str("#set page(footer: none)\n");
+        for (i, p) in annexes.iter().enumerate() {
+            if i > 0 {
+                s.push_str("#pagebreak()\n");
             }
+            s.push_str(&ouverture_piece(&p.titre));
+            s.push_str(&blocs_typst(&p.blocs));
         }
     }
 
@@ -287,11 +319,12 @@ pub fn source_ebook(
 }
 
 /// Les pages liminaires : faux-titre, blanche, page de titre, copyright, et — quand le
-/// livre en porte une — la dédicace et sa blanche.
+/// livre en porte une — la dédicace et sa blanche, puis les pièces liminaires du
+/// manuscrit.
 ///
 /// Toutes sans folio, et sans avoir à le dire : `footer: none`, posé par l'entête que
 /// `source` écrit, court jusqu'au `#set page(footer: …)` qui ouvre le corps.
-fn liminaires(livre: &Livre, envoi: Option<Trace>) -> String {
+fn liminaires(livre: &Livre, envoi: Option<Trace>, pieces: &[Piece]) -> String {
     let mut s = String::new();
     s.push_str(&format!(
         r#"#v(42mm)
@@ -381,6 +414,14 @@ fn liminaires(livre: &Livre, envoi: Option<Trace>) -> String {
         ));
     }
 
+    // Les pièces liminaires du manuscrit ferment la série : `footer: none` court encore,
+    // le folio ne sera rétabli qu'au premier chapitre.
+    for p in pieces {
+        s.push_str(&ouverture_piece(&p.titre));
+        s.push_str(&blocs_typst(&p.blocs));
+        s.push_str("#pagebreak()\n\n");
+    }
+
     s
 }
 
@@ -388,6 +429,43 @@ fn liminaires(livre: &Livre, envoi: Option<Trace>) -> String {
 /// que la casse suive la langue du document (le CSS faisait `text-transform`).
 fn majuscules(s: &str) -> String {
     format!("#upper[{}]", echappe(s))
+}
+
+/// L'ouverture d'une pièce à texte — préface, postface.
+///
+/// Le mot occupe la ligne du numéro, mais composé comme un **titre** de chapitre : ce
+/// sont la casse et l'espacement qui font le titre, les 13 pt du gabarit étant la
+/// taille d'un chiffre isolé. Le blanc de 14,5 mm est la somme des deux blancs du
+/// gabarit (3,5 + 11) : le texte s'ouvre à la même hauteur que celui d'un chapitre.
+fn ouverture_piece(titre: &str) -> String {
+    format!(
+        "#v(22mm)\n#align(center, text(size: 10pt, tracking: 0.14em)[{}])\n#v(14.5mm)\n",
+        majuscules(titre)
+    )
+}
+
+/// Les blocs d'une pièce, composés. Partagé par les chapitres et les pièces à texte :
+/// une préface se lit dans la même page qu'un chapitre.
+fn blocs_typst(blocs: &[Bloc]) -> String {
+    let mut s = String::new();
+    for b in blocs {
+        match b {
+            Bloc::Paragraphe(p) => {
+                s.push_str(&inline(p));
+                s.push_str("\n\n");
+            }
+            // Le blanc est en em, non en mm : il suit le corps du prestataire comme
+            // l'interligne, là où l'épreuve, qui n'a qu'un format, se règle en mm.
+            // Il s'ajoute à l'espace de paragraphe, de part et d'autre — une rupture
+            // se voit d'un coup d'œil sur la page, sans la trouer.
+            //
+            // Le paragraphe qui suit garde son alinéa, comme après n'importe quel
+            // blanc : relevé sur la page composée, pas déduit. La marque le rend
+            // sans conséquence — c'est elle qui dit la coupure, pas le retrait.
+            Bloc::Scene => s.push_str(&format!("#v(1em)\n#align(center)[{SCENE}]\n#v(1em)\n\n")),
+        }
+    }
+    s
 }
 
 #[cfg(test)]
@@ -788,10 +866,10 @@ mod tests {
     /// faux, et il ne se découvre qu'après tirage.
     #[test]
     fn une_dedicace_ajoute_une_belle_page_et_sa_blanche() {
-        let sans = liminaires(&livre(), None);
+        let sans = liminaires(&livre(), None, &[]);
         let mut l = livre();
         l.dedicace = Some("À M., qui a tenu la lampe.".into());
-        let avec = liminaires(&l, None);
+        let avec = liminaires(&l, None, &[]);
 
         assert_eq!(
             avec.matches("#pagebreak()").count(),
@@ -809,12 +887,12 @@ mod tests {
     /// du seul fait que le champ existe désormais.
     #[test]
     fn une_dedicace_vide_ou_blanche_ne_compose_rien() {
-        let sans = liminaires(&livre(), None);
+        let sans = liminaires(&livre(), None, &[]);
         for creux in ["", "   ", "\n \n"] {
             let mut l = livre();
             l.dedicace = Some(creux.into());
             assert_eq!(
-                liminaires(&l, None),
+                liminaires(&l, None, &[]),
                 sans,
                 "« {creux:?} » a été pris pour une dédicace"
             );
@@ -828,13 +906,122 @@ mod tests {
     fn une_dedicace_est_echappee_et_garde_ses_sauts_de_ligne() {
         let mut l = livre();
         l.dedicace = Some("À #M.,\nqui a tenu la lampe.".into());
-        let s = liminaires(&l, None);
+        let s = liminaires(&l, None, &[]);
 
         assert!(s.contains(r"À \#M.,"), "dédicace non échappée : {s}");
         assert!(
             s.contains(r"\ qui a tenu la lampe."),
             "saut de ligne perdu : {s}"
         );
+    }
+
+    /// La préface est une pièce liminaire : elle se compose avant le rétablissement du
+    /// folio, donc ses pages n'en portent pas — la règle validée au cadrage.
+    #[test]
+    fn une_preface_se_compose_avant_le_folio() {
+        let mut pieces = vec![Piece {
+            sorte: Sorte::Liminaire,
+            titre: "Préface".into(),
+            blocs: vec![Bloc::Paragraphe("Entrez.".into())],
+        }];
+        pieces.extend(chapitres());
+        let s = source(
+            &livre(),
+            &Interieur::default(),
+            provider("lulu").unwrap(),
+            &Reglage {
+                gouttiere: 25.0,
+                blanche: false,
+            },
+            &pieces,
+            None,
+        );
+        let preface = s.find("Préface").expect("la préface doit être composée");
+        let folio = s
+            .find("#set page(footer: context")
+            .expect("le folio du corps");
+        assert!(
+            preface < folio,
+            "la préface passe après le rétablissement du folio"
+        );
+        assert!(s.contains("Entrez."), "le texte de la préface est perdu");
+    }
+
+    /// Une page de partie prend une belle page au verso blanc, sans folio : deux
+    /// `#page(footer: none)`. Et comme `#page` rompt le flux de lui-même, le chapitre
+    /// qui suit ne doit pas ajouter un `#pagebreak()` — il laisserait une page blanche
+    /// de plus, invisible à la lecture du code et payée au tirage.
+    ///
+    /// La comparaison porte sur un corps d'un seul chapitre : la partie **et** le
+    /// chapitre qui la suit doivent, à eux deux, ne coûter aucun saut de plus.
+    #[test]
+    fn une_page_de_partie_prend_une_belle_page_sans_folio_et_sans_saut_en_trop() {
+        let pieces = vec![
+            Piece {
+                sorte: Sorte::Chapitre(1),
+                titre: "Un".into(),
+                blocs: vec![Bloc::Paragraphe("Texte.".into())],
+            },
+            Piece {
+                sorte: Sorte::Partie("I".into()),
+                titre: "Avant Clément".into(),
+                blocs: Vec::new(),
+            },
+            Piece {
+                sorte: Sorte::Chapitre(2),
+                titre: "Deux".into(),
+                blocs: vec![Bloc::Paragraphe("Suite.".into())],
+            },
+        ];
+        let pr = provider("lulu").unwrap();
+        let r = Reglage {
+            gouttiere: 25.0,
+            blanche: false,
+        };
+        let avec = source(&livre(), &Interieur::default(), pr, &r, &pieces, None);
+        let sans = source(&livre(), &Interieur::default(), pr, &r, &chapitres(), None);
+        assert_eq!(
+            avec.matches("#page(footer: none)").count(),
+            sans.matches("#page(footer: none)").count() + 2,
+            "la partie doit ajouter exactement deux pages sans folio"
+        );
+        assert_eq!(
+            avec.matches("#pagebreak()").count(),
+            sans.matches("#pagebreak()").count(),
+            "le chapitre qui suit la partie ne doit pas ajouter de saut"
+        );
+        assert!(avec.contains("AVANT CLÉMENT") || avec.contains("Avant Clément"));
+    }
+
+    /// Le folio appartient au corps : une postface n'en porte pas, comme la préface.
+    #[test]
+    fn une_annexe_se_compose_sans_folio() {
+        let mut pieces = chapitres();
+        pieces.push(Piece {
+            sorte: Sorte::Annexe,
+            titre: "Postface".into(),
+            blocs: vec![Bloc::Paragraphe("Après coup.".into())],
+        });
+        let s = source(
+            &livre(),
+            &Interieur::default(),
+            provider("lulu").unwrap(),
+            &Reglage {
+                gouttiere: 25.0,
+                blanche: false,
+            },
+            &pieces,
+            None,
+        );
+        let coupe = s
+            .find("#set page(footer: none)")
+            .expect("le folio doit être coupé");
+        let postface = s.find("Postface").expect("la postface doit être composée");
+        assert!(
+            coupe < postface,
+            "la postface se compose avant la coupure du folio"
+        );
+        assert!(s.contains("Après coup."));
     }
 
     fn trace() -> Trace<'static> {
@@ -850,8 +1037,8 @@ mod tests {
     /// pour tous les envois. Si ce test tombe, tous les packages d'envoi sont faux.
     #[test]
     fn un_envoi_ne_cree_aucune_page() {
-        let sans = liminaires(&livre(), None);
-        let avec = liminaires(&livre(), Some(trace()));
+        let sans = liminaires(&livre(), None, &[]);
+        let avec = liminaires(&livre(), Some(trace()), &[]);
 
         assert_eq!(
             avec.matches("#pagebreak()").count(),
@@ -909,7 +1096,7 @@ mod tests {
     /// mot écrit à la main.
     #[test]
     fn l_envoi_est_compose_dans_la_main_du_livre() {
-        let s = liminaires(&livre(), Some(trace()));
+        let s = liminaires(&livre(), Some(trace()), &[]);
         assert!(s.contains(r#"font: "Caveat""#), "main absente : {s}");
     }
 
@@ -919,7 +1106,7 @@ mod tests {
     /// premier coup d'œil et ne se voit dans aucun compte.
     #[test]
     fn un_envoi_n_est_pas_justifie() {
-        let s = liminaires(&livre(), Some(trace()));
+        let s = liminaires(&livre(), Some(trace()), &[]);
         assert!(s.contains("justify: false"), "envoi justifié : {s}");
     }
 
@@ -928,7 +1115,7 @@ mod tests {
     /// envoi réellement composé, pas supposé.
     #[test]
     fn un_envoi_ne_cesure_pas() {
-        let s = liminaires(&livre(), Some(trace()));
+        let s = liminaires(&livre(), Some(trace()), &[]);
         assert!(s.contains("hyphenate: false"), "envoi césuré : {s}");
     }
 
@@ -938,12 +1125,13 @@ mod tests {
     /// ce soit, la pagination du livre entier suivrait, et le dos avec.
     #[test]
     fn une_image_d_envoi_ne_cree_aucune_page_non_plus() {
-        let sans = liminaires(&livre(), None);
+        let sans = liminaires(&livre(), None, &[]);
         let avec = liminaires(
             &livre(),
             Some(Trace::Image {
                 fichier: "Léa.png"
             }),
+            &[],
         );
 
         assert_eq!(
@@ -979,6 +1167,7 @@ mod tests {
             Some(Trace::Image {
                 fichier: "Léa.png"
             }),
+            &[],
         );
         assert!(
             s.contains(r#"image("Léa.png", height: zone.height * 30%)"#),
@@ -1000,6 +1189,7 @@ mod tests {
             Some(Trace::Image {
                 fichier: "Léa.png"
             }),
+            &[],
         );
         assert!(!s.contains("font:"), "une police s'est glissée : {s}");
     }
@@ -1012,7 +1202,7 @@ mod tests {
             police: "Caveat",
             texte: "À #Léa,\navec mon amitié.",
         };
-        let s = liminaires(&livre(), Some(t));
+        let s = liminaires(&livre(), Some(t), &[]);
 
         assert!(s.contains(r"À \#Léa,"), "envoi non échappé : {s}");
         assert!(
