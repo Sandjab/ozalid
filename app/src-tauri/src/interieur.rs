@@ -141,13 +141,14 @@ pub enum Trace<'a> {
 }
 
 /// Source Typst complète de l'intérieur.
-pub fn source(
+fn assemble(
     livre: &Livre,
     int: &Interieur,
     pr: &Provider,
     r: &Reglage,
     chapitres: &[Chapitre],
     envoi: Option<Trace>,
+    avant: Option<&str>,
 ) -> String {
     let (fw, fh) = pr.format;
     // `leading` Typst = espace entre lignes ; `line-height` CSS = distance entre lignes
@@ -188,6 +189,12 @@ pub fn source(
         int.police,
         pr.corps_pt,
     ));
+
+    // La page insérée vient avant tout ce que `liminaires` écrit : c'est la page 1 du
+    // fichier, celle qu'un lecteur voit en ouvrant.
+    if let Some(a) = avant {
+        s.push_str(a);
+    }
 
     s.push_str(&liminaires(livre, envoi));
 
@@ -240,6 +247,40 @@ pub fn source(
     }
     s.push_str(&format!("\n{MARQUEUR}\n"));
     s
+}
+
+/// Source Typst de l'intérieur du livre, tel qu'il part à l'impression.
+pub fn source(
+    livre: &Livre,
+    int: &Interieur,
+    pr: &Provider,
+    r: &Reglage,
+    chapitres: &[Chapitre],
+    envoi: Option<Trace>,
+) -> String {
+    assemble(livre, int, pr, r, chapitres, envoi, None)
+}
+
+/// L'intérieur du livre précédé de sa couverture, **sans imposition**.
+///
+/// La gouttière revient à la marge extérieure et la blanche de parité disparaît : ce
+/// ne sont pas des réglages qu'on offre, c'est ce que veut dire « sans imposition ».
+/// Les deux n'ont de sens qu'une fois le livre relié.
+///
+/// Aucun envoi : l'envoi autographe est une affaire de tirage papier, et il n'a pas de
+/// dédicataire ici.
+pub fn source_ebook(
+    livre: &Livre,
+    int: &Interieur,
+    pr: &Provider,
+    chapitres: &[Chapitre],
+    couverture: &str,
+) -> String {
+    let r = Reglage {
+        gouttiere: pr.exterieur,
+        blanche: false,
+    };
+    assemble(livre, int, pr, &r, chapitres, None, Some(couverture))
 }
 
 /// Les pages liminaires : faux-titre, blanche, page de titre, copyright, et — quand le
@@ -458,6 +499,66 @@ mod tests {
         assert!(s.contains("outside: 15mm"));
         assert!(s.contains("costs: (orphan: 100%, widow: 100%)"), "veuves");
         assert!(s.trim_end().ends_with(MARQUEUR), "marqueur de pagination");
+    }
+
+    /// L'ebook est le livre **sans son imposition** : la gouttière revient à la marge
+    /// extérieure, et il n'y a pas de blanche de parité. Les deux n'ont de sens qu'une fois
+    /// le livre relié — à l'écran, l'une décale le texte une page sur deux et l'autre ajoute
+    /// une page vide.
+    #[test]
+    fn l_ebook_compose_sans_gouttiere_ni_blanche_de_parite() {
+        let pr = provider("lulu").unwrap();
+        let s = source_ebook(
+            &livre(),
+            &Interieur::default(),
+            pr,
+            &chapitres(),
+            "#page[couverture]\n",
+        );
+        assert!(
+            s.contains(&format!("inside: {}mm", pr.exterieur)),
+            "gouttière non ramenée à la marge extérieure : {s}"
+        );
+        assert!(
+            !s.contains("#page(footer: none)[]"),
+            "blanche de parité présente : {s}"
+        );
+    }
+
+    /// La couverture est la **première** page : avant le faux-titre, donc avant tout ce que
+    /// `liminaires` écrit.
+    #[test]
+    fn la_couverture_precede_les_liminaires() {
+        let s = source_ebook(
+            &livre(),
+            &Interieur::default(),
+            provider("lulu").unwrap(),
+            &chapitres(),
+            "#page[COUVERTURE]\n",
+        );
+        let couverture = s.find("COUVERTURE").expect("couverture absente");
+        let faux_titre = s.find("#v(42mm)").expect("faux-titre absent");
+        assert!(couverture < faux_titre, "{s}");
+    }
+
+    /// L'intérieur d'impression ne bouge pas : `source` reste ce qu'elle était, sans page
+    /// insérée. C'est ce test qui dit que le refactor n'a pas fui dans le livre papier.
+    #[test]
+    fn l_interieur_d_impression_ne_porte_aucune_couverture() {
+        let r = Reglage {
+            gouttiere: 15.0,
+            blanche: true,
+        };
+        let s = source(
+            &livre(),
+            &Interieur::default(),
+            provider("lulu").unwrap(),
+            &r,
+            &chapitres(),
+            None,
+        );
+        assert!(s.contains("inside: 15mm"), "{s}");
+        assert!(s.contains("#page(footer: none)[]"), "{s}");
     }
 
     /// La blanche de fin doit être sans folio : un numéro sur une page vide de fin est

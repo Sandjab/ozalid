@@ -858,6 +858,33 @@ pub fn source_une(
     preambule(b.largeur, b.hauteur) + &corps_une(livre, cv, format, image, b, pano)
 }
 
+/// La 1ère, sur une page insérée dans un autre document.
+///
+/// Même corps que [`source_une`], mais les réglages de texte et de paragraphe sont
+/// portés par le **bloc de la page** au lieu du document : les `#set` de [`preambule`]
+/// valent jusqu'à la fin de la source, et l'intérieur qui suivrait perdrait son
+/// interligne et sa justification sur des centaines de pages.
+///
+/// La boîte est rognée, sans fond perdu : un ebook ne se coupe pas.
+pub fn page_une(
+    livre: &Livre,
+    cv: &Couverture,
+    format: (f64, f64),
+    image: Option<&Ressource>,
+    dos_mm: Option<f64>,
+) -> String {
+    let b = Boite::rognee(format);
+    let pano = panorama_face(format, dos_mm, true);
+    format!(
+        "#page(width: {}, height: {}, margin: 0mm, footer: none)[\n  \
+         #set text(lang: \"fr\", top-edge: 0.75em, bottom-edge: -0.25em)\n  \
+         #set par(leading: 0em, spacing: 0em, justify: false)\n{}]\n",
+        mm(b.largeur),
+        mm(b.hauteur),
+        corps_une(livre, cv, format, image, b, pano)
+    )
+}
+
 /// Corps de la 4ème de couverture, dans la boîte donnée.
 ///
 /// `pano` n'est requis que pour le prolongement : il porte la largeur de la planche,
@@ -1030,6 +1057,43 @@ mod tests {
             s.contains(r#"image("ma \"photo\".jpg""#),
             "nom d'image non échappé : {s}"
         );
+    }
+
+    /// La 1ère, posée dans un autre document, ne doit pas emporter ses `#set` : ceux de
+    /// `source_une` valent pour le document entier — `par(leading: 0em, justify: false)`,
+    /// notamment — et écraseraient ceux de l'intérieur pour toutes les pages qui suivent.
+    /// Le livre sortirait sans interligne et au fer à gauche, plusieurs centaines de pages
+    /// durant.
+    #[test]
+    fn la_couverture_inseree_ne_pose_aucun_reglage_de_document() {
+        let p = page_une(&livre(), &maquettes::folio(), FORMAT, None, None);
+        // Tout est enveloppé dans un seul bloc de page : un `#set` posé dedans ne vaut
+        // que pour elle, quelle que soit la colonne où il tombe. Ce qui vaudrait pour
+        // le document, c'est ce que `preambule` écrit *avant* la page — `#set page`, et
+        // les deux réglages de tête.
+        assert!(p.starts_with("#page("), "{p}");
+        assert!(
+            p.trim_end().ends_with(']'),
+            "bloc de page non refermé : {p}"
+        );
+        assert!(!p.contains("#set page("), "{p}");
+        assert!(p.contains("margin: 0mm"), "{p}");
+    }
+
+    /// Les deux formes de la 1ère ne diffèrent que par la portée de leurs réglages, et
+    /// c'est toute leur raison d'être. `source_une` est une source **autonome** : elle
+    /// ouvre par un `#set page` de document, ce qu'il faut pour l'aperçu par face.
+    /// `page_une` est **insérable** : rien chez elle n'atteint le document qui l'accueille.
+    ///
+    /// Ce test tient les deux bouts. Rendre `source_une` scopée casserait l'aperçu ;
+    /// écrire `page_une` comme `preambule(…) + corps_une(…)` ferait perdre son interligne
+    /// et sa justification à l'intérieur qui suit, sur des centaines de pages et sans
+    /// qu'aucune erreur ne soit levée.
+    #[test]
+    fn seule_la_forme_autonome_de_la_1ere_regle_le_document() {
+        let (l, cv) = (livre(), maquettes::folio());
+        assert!(source_une(&l, &cv, FORMAT, None, None).contains("#set page("));
+        assert!(!page_une(&l, &cv, FORMAT, None, None).contains("#set page("));
     }
 
     /// Une maquette est portable d'un format à l'autre : c'est la promesse des
