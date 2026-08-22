@@ -98,15 +98,15 @@ fn paragraphe(s: &str) -> String {
         .collect()
 }
 
-/// Le titre d'un chapitre tel qu'il paraît dans la table des matières.
-fn intitule(ch: &Piece) -> String {
-    let Sorte::Chapitre(numero) = &ch.sorte else {
-        unreachable!("les autres sortes arrivent à la tâche 5")
-    };
-    if ch.titre.is_empty() {
-        numero.to_string()
-    } else {
-        format!("{} — {}", numero, ch.titre)
+/// Le titre d'une pièce tel qu'il paraît dans la table des matières. Le mot « Partie »
+/// n'y figure pas : le romain suffit à distinguer une ouverture de partie d'un chapitre.
+fn intitule(p: &Piece) -> String {
+    match &p.sorte {
+        Sorte::Chapitre(n) if p.titre.is_empty() => n.to_string(),
+        Sorte::Chapitre(n) => format!("{n} — {}", p.titre),
+        Sorte::Partie(r) if p.titre.is_empty() => r.clone(),
+        Sorte::Partie(r) => format!("{r} — {}", p.titre),
+        Sorte::Liminaire | Sorte::Annexe => p.titre.clone(),
     }
 }
 
@@ -115,26 +115,35 @@ fn intitule(ch: &Piece) -> String {
 /// Un seul `<h1>`, qui porte le numéro et le titre : c'est lui que la table des
 /// matières vise, et deux titres de rang 1 par fichier dérouteraient les liseuses qui
 /// bâtissent leur sommaire sur la structure plutôt que sur le `nav`.
-fn chapitre_xhtml(ch: &Piece) -> String {
-    let Sorte::Chapitre(numero) = &ch.sorte else {
-        unreachable!("les autres sortes arrivent à la tâche 5")
-    };
+fn piece_xhtml(p: &Piece) -> String {
     let mut corps = String::from("<h1>");
-    corps.push_str(&format!(r#"<span class="numero">{}</span>"#, numero));
-    if !ch.titre.is_empty() {
+    match &p.sorte {
+        Sorte::Chapitre(n) => corps.push_str(&format!(r#"<span class="numero">{n}</span>"#)),
+        Sorte::Partie(r) => corps.push_str(&format!(r#"<span class="numero">{r}</span>"#)),
+        Sorte::Liminaire | Sorte::Annexe => {}
+    }
+    if !p.titre.is_empty() {
         corps.push_str(&format!(
             r#"<span class="titre">{}</span>"#,
-            echappe(&ch.titre)
+            echappe(&p.titre)
         ));
     }
     corps.push_str("</h1>\n");
-    for b in &ch.blocs {
+    corps.push_str(&blocs_xhtml(&p.blocs));
+    page(&intitule(p), &corps)
+}
+
+/// Les blocs d'une pièce, en XHTML. Une page de partie n'en a aucun : elle ne rend
+/// alors que son `<h1>`.
+fn blocs_xhtml(blocs: &[Bloc]) -> String {
+    let mut s = String::new();
+    for b in blocs {
         match b {
-            Bloc::Paragraphe(p) => corps.push_str(&format!("<p>{}</p>\n", paragraphe(p))),
-            Bloc::Scene => corps.push_str(&format!("<p class=\"scene\">{SCENE_XHTML}</p>\n")),
+            Bloc::Paragraphe(p) => s.push_str(&format!("<p>{}</p>\n", paragraphe(p))),
+            Bloc::Scene => s.push_str(&format!("<p class=\"scene\">{SCENE_XHTML}</p>\n")),
         }
     }
-    page(&intitule(ch), &corps)
+    s
 }
 
 /// L'enveloppe XHTML commune à toutes les pages de l'archive.
@@ -331,7 +340,7 @@ fn nom_chapitre(rang: usize) -> String {
 /// liste et ne peut donc pas s'y décrire lui-même.
 fn contenu(
     livre: &Livre,
-    chapitres: &[Piece],
+    pieces: &[Piece],
     couverture_png: &[u8],
     polices: Option<&Polices>,
 ) -> Vec<Entree> {
@@ -339,23 +348,18 @@ fn contenu(
         Entree::xhtml("couverture.xhtml", couverture_xhtml(), true, None),
         Entree::xhtml("liminaires.xhtml", liminaires_xhtml(livre), true, None),
     ];
-    for (i, ch) in chapitres.iter().enumerate() {
-        e.push(Entree::xhtml(
-            &nom_chapitre(i),
-            chapitre_xhtml(ch),
-            true,
-            None,
-        ));
+    for (i, p) in pieces.iter().enumerate() {
+        e.push(Entree::xhtml(&nom_chapitre(i), piece_xhtml(p), true, None));
     }
     e.push(Entree::xhtml(
         "nav.xhtml",
-        nav_xhtml(chapitres),
+        nav_xhtml(pieces),
         false,
         Some("nav"),
     ));
     e.push(Entree {
         nom: "toc.ncx".into(),
-        octets: ncx(livre, chapitres).into_bytes(),
+        octets: ncx(livre, pieces).into_bytes(),
         media: "application/x-dtbncx+xml",
         proprietes: None,
         spine: false,
@@ -445,13 +449,13 @@ fn lignes(s: &str) -> String {
         .collect()
 }
 
-fn nav_xhtml(chapitres: &[Piece]) -> String {
+fn nav_xhtml(pieces: &[Piece]) -> String {
     let mut l = String::new();
-    for (i, ch) in chapitres.iter().enumerate() {
+    for (i, p) in pieces.iter().enumerate() {
         l.push_str(&format!(
             "<li><a href=\"{}\">{}</a></li>\n",
             nom_chapitre(i),
-            echappe(&intitule(ch))
+            echappe(&intitule(p))
         ));
     }
     page(
@@ -467,14 +471,14 @@ fn nav_xhtml(chapitres: &[Piece]) -> String {
 
 /// La même table, au format des liseuses antérieures à EPUB 3. Elle ne coûte que
 /// quelques centaines d'octets et évite un sommaire vide sur les appareils anciens.
-fn ncx(livre: &Livre, chapitres: &[Piece]) -> String {
+fn ncx(livre: &Livre, pieces: &[Piece]) -> String {
     let mut points = String::new();
-    for (i, ch) in chapitres.iter().enumerate() {
+    for (i, p) in pieces.iter().enumerate() {
         points.push_str(&format!(
             "<navPoint id=\"nav{n}\" playOrder=\"{n}\">\
              <navLabel><text>{}</text></navLabel>\
              <content src=\"{}\"/></navPoint>\n",
-            echappe(&intitule(ch)),
+            echappe(&intitule(p)),
             nom_chapitre(i),
             n = i + 1
         ));
@@ -677,13 +681,13 @@ const CONTAINER: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 /// du jour où on les lance.
 pub fn archive(
     livre: &Livre,
-    chapitres: &[Piece],
+    pieces: &[Piece],
     couverture_png: &[u8],
     polices: Option<&Polices>,
     modifie: &str,
 ) -> Result<Vec<u8>, String> {
-    verifie(livre, chapitres)?;
-    let entrees = contenu(livre, chapitres, couverture_png, polices);
+    verifie(livre, pieces)?;
+    let entrees = contenu(livre, pieces, couverture_png, polices);
     let opf = opf(livre, &entrees, modifie);
 
     let mut buf = Vec::new();
@@ -720,8 +724,18 @@ pub fn archive(
 /// traitement de texte avait posé sans rien montrer. `ebook::generer` les pose donc en
 /// tête, et `archive` continue de les poser aussi : un module qui ne peut produire une
 /// archive invalide que si son appelant a oublié de vérifier n'est pas une garde.
-pub fn verifie(livre: &Livre, chapitres: &[Piece]) -> Result<(), String> {
-    if chapitres.is_empty() {
+/// Où une faute a été trouvée, dit comme l'auteur nomme la pièce dans son manuscrit :
+/// c'est ce nom-là qu'il ira chercher pour corriger.
+fn ou_dans_le_livre(p: &Piece) -> String {
+    match &p.sorte {
+        Sorte::Chapitre(n) => format!("chapitre {n}"),
+        Sorte::Partie(r) => format!("partie {r}"),
+        Sorte::Liminaire | Sorte::Annexe => p.titre.to_lowercase(),
+    }
+}
+
+pub fn verifie(livre: &Livre, pieces: &[Piece]) -> Result<(), String> {
+    if pieces.is_empty() {
         return Err("aucun chapitre : il n'y a pas de livre à mettre en EPUB.".into());
     }
     // `dc:title` doit porter au moins un caractère, sans quoi l'archive est rejetée à
@@ -742,15 +756,12 @@ pub fn verifie(livre: &Livre, chapitres: &[Piece]) -> Result<(), String> {
     if let Some(d) = livre.dedicace {
         verifie_xml(d, "la dédicace")?;
     }
-    for ch in chapitres {
-        let Sorte::Chapitre(numero) = &ch.sorte else {
-            unreachable!("les autres sortes arrivent à la tâche 5")
-        };
-        let ou = format!("chapitre {numero}");
-        verifie_xml(&ch.titre, &ou)?;
-        for b in &ch.blocs {
-            if let Bloc::Paragraphe(p) = b {
-                verifie_xml(p, &ou)?;
+    for p in pieces {
+        let ou = ou_dans_le_livre(p);
+        verifie_xml(&p.titre, &ou)?;
+        for b in &p.blocs {
+            if let Bloc::Paragraphe(t) = b {
+                verifie_xml(t, &ou)?;
             }
         }
     }
@@ -826,7 +837,7 @@ mod tests {
                 Bloc::Paragraphe("Second.".into()),
             ],
         };
-        let x = chapitre_xhtml(&ch);
+        let x = piece_xhtml(&ch);
         assert_eq!(x.matches("<h1").count(), 1);
         assert!(x.contains(r#"<span class="numero">12</span>"#), "{x}");
         assert!(x.contains(r#"<span class="titre">Le seuil</span>"#), "{x}");
@@ -846,7 +857,7 @@ mod tests {
             titre: String::new(),
             blocs: vec![],
         };
-        let x = chapitre_xhtml(&ch);
+        let x = piece_xhtml(&ch);
         assert!(!x.contains(r#"class="titre""#), "{x}");
         assert!(x.contains(r#"<span class="numero">1</span>"#), "{x}");
     }
@@ -860,7 +871,7 @@ mod tests {
             titre: "Pile & face".into(),
             blocs: vec![],
         };
-        assert!(chapitre_xhtml(&ch).contains("Pile &amp; face"));
+        assert!(piece_xhtml(&ch).contains("Pile &amp; face"));
     }
 
     /// Les noms de fichiers réellement posés par `app/outils/polices.sh`, groupés par
@@ -1614,5 +1625,60 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.contains("chapitre"), "{err}");
+    }
+
+    /// Le `<span class="numero">` dit le rang d'un chapitre : une préface n'en a pas,
+    /// et une liseuse afficherait un numéro inventé.
+    #[test]
+    fn une_piece_liminaire_n_emet_pas_de_numero() {
+        let p = Piece {
+            sorte: Sorte::Liminaire,
+            titre: "Préface".into(),
+            blocs: vec![Bloc::Paragraphe("Entrez.".into())],
+        };
+        let x = piece_xhtml(&p);
+        assert!(!x.contains(r#"class="numero""#), "{x}");
+        assert!(x.contains(r#"<span class="titre">Préface</span>"#), "{x}");
+        assert!(x.contains("<p>Entrez.</p>"), "{x}");
+    }
+
+    /// Toutes les pièces sont dans la table des matières : un lecteur doit pouvoir
+    /// sauter à la préface comme à un chapitre.
+    #[test]
+    fn toutes_les_pieces_figurent_a_la_table_des_matieres() {
+        let pieces = vec![
+            Piece {
+                sorte: Sorte::Liminaire,
+                titre: "Préface".into(),
+                blocs: vec![Bloc::Paragraphe("A.".into())],
+            },
+            Piece {
+                sorte: Sorte::Partie("I".into()),
+                titre: "Avant Clément".into(),
+                blocs: Vec::new(),
+            },
+            Piece {
+                sorte: Sorte::Chapitre(1),
+                titre: "Un".into(),
+                blocs: vec![Bloc::Paragraphe("B.".into())],
+            },
+        ];
+        let nav = nav_xhtml(&pieces);
+        assert!(nav.contains("Préface"), "{nav}");
+        assert!(nav.contains("I — Avant Clément"), "{nav}");
+        assert!(nav.contains("1 — Un"), "{nav}");
+    }
+
+    /// Une faute dans une pièce non numérotée doit se situer aussi bien qu'ailleurs :
+    /// « chapitre 0 » enverrait l'auteur chercher au mauvais endroit.
+    #[test]
+    fn une_faute_dans_une_piece_est_situee_par_son_nom() {
+        let pieces = vec![Piece {
+            sorte: Sorte::Liminaire,
+            titre: "Préface".into(),
+            blocs: vec![Bloc::Paragraphe("un \u{1} de contrôle".into())],
+        }];
+        let err = verifie(&livre_temoin(), &pieces).unwrap_err();
+        assert!(err.contains("préface"), "{err}");
     }
 }

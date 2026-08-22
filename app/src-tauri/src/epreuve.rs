@@ -22,7 +22,7 @@ const MARGE_GAUCHE: f64 = 30.0;
 const MARGE_DROITE: f64 = 50.0;
 
 /// Source Typst complète de l'épreuve.
-pub fn source(livre: &Livre, int: &Interieur, chapitres: &[Piece], corps_pt: f64) -> String {
+pub fn source(livre: &Livre, int: &Interieur, pieces: &[Piece], corps_pt: f64) -> String {
     let titre = echappe(&livre.titre);
     let auteur = echappe(&livre.auteur);
     // Les mêmes, cités et non composés : la ligne de commentaire qui ouvre la source et
@@ -38,7 +38,7 @@ pub fn source(livre: &Livre, int: &Interieur, chapitres: &[Piece], corps_pt: f64
     // brut, et annonce donc toujours un peu plus. La divergence est assumée et va
     // toujours dans ce sens : le compte de la garde est celui qu'un auteur appelle des
     // mots. Les deux chiffres se voient — ne pas « corriger » l'un vers l'autre.
-    let mots: usize = chapitres
+    let mots: usize = pieces
         .iter()
         .flat_map(|c| &c.blocs)
         .filter_map(|b| match b {
@@ -119,24 +119,25 @@ pub fn source(livre: &Livre, int: &Interieur, chapitres: &[Piece], corps_pt: f64
               number-clearance: 7mm, numbering-scope: "page")
 "##,
         genre = echappe(&livre.genre),
-        nb_chapitres = chapitres.iter().filter(|p| p.est_chapitre()).count(),
+        nb_chapitres = pieces.iter().filter(|p| p.est_chapitre()).count(),
     );
 
-    for (i, ch) in chapitres.iter().enumerate() {
-        // Le premier chapitre suit le saut de page de la garde.
+    for (i, p) in pieces.iter().enumerate() {
+        // La première pièce suit le saut de page de la garde.
         if i > 0 {
             s.push_str("\n#pagebreak()\n");
         }
-        let Sorte::Chapitre(numero) = &ch.sorte else {
-            unreachable!("les autres sortes arrivent à la tâche 5")
-        };
-        let titre_ch = if ch.titre.is_empty() {
-            numero.to_string()
-        } else {
-            format!("{} — {}", numero, echappe(&ch.titre))
+        let titre_ch = match &p.sorte {
+            Sorte::Chapitre(n) if p.titre.is_empty() => n.to_string(),
+            Sorte::Chapitre(n) => format!("{n} — {}", echappe(&p.titre)),
+            Sorte::Partie(r) if p.titre.is_empty() => format!("Partie {r}"),
+            Sorte::Partie(r) => format!("Partie {r} — {}", echappe(&p.titre)),
+            // Le titre d'un liminaire ou d'une annexe est son mot-clé : il vient de la
+            // liste, pas du manuscrit, mais rien n'oblige à le croire sur parole.
+            Sorte::Liminaire | Sorte::Annexe => echappe(&p.titre),
         };
         s.push_str(&format!("= {titre_ch}\n"));
-        for b in &ch.blocs {
+        for b in &p.blocs {
             match b {
                 Bloc::Paragraphe(p) => {
                     s.push_str(&inline(p));
@@ -331,5 +332,26 @@ mod tests {
     fn le_corps_est_reglable() {
         let s = source(&livre(), &Interieur::default(), &chapitres(), 14.0);
         assert!(s.contains("size: 14pt"), "corps ignoré");
+    }
+
+    /// Une pièce se relit comme le reste — mais son bandeau ne peut pas porter un
+    /// numéro de chapitre qu'elle n'a pas.
+    #[test]
+    fn le_bandeau_d_une_piece_ne_porte_pas_de_numero() {
+        let pieces = vec![
+            Piece {
+                sorte: Sorte::Liminaire,
+                titre: "Préface".into(),
+                blocs: vec![Bloc::Paragraphe("Entrez.".into())],
+            },
+            Piece {
+                sorte: Sorte::Partie("III".into()),
+                titre: "Avant Clément".into(),
+                blocs: Vec::new(),
+            },
+        ];
+        let s = source(&livre(), &Interieur::default(), &pieces, 12.0);
+        assert!(s.contains("= Préface"), "{s}");
+        assert!(s.contains("= Partie III — Avant Clément"), "{s}");
     }
 }
