@@ -456,9 +456,13 @@ p.scene {{ text-align: center; text-indent: 0; margin: 1em 0; word-spacing: 0.5e
 /// Tiré du titre et de l'auteur, non d'un tirage au sort : deux générations du même
 /// livre doivent porter le même identifiant, sans quoi une liseuse y verrait deux
 /// ouvrages et garderait les deux. `envoi::assaini` est déjà la fonction du projet qui
-/// décide ce qu'un titre devient quand il sert de nom — mais elle garde l'espace,
-/// légitime dans un nom de fichier ; ici l'identifiant tient dans un attribut XML, où
-/// un espace serait plus difficile à relire, donc il devient un tiret.
+/// décide ce qu'un titre devient quand il sert de nom.
+///
+/// Les espaces d'`assaini` deviennent des tirets : elle nomme des fichiers, où
+/// l'espace est légitime, mais une URN ne peut pas en porter un sans l'encoder — et un
+/// identifiant encodé se relirait mal d'une génération à l'autre. Un titre à tiret peut
+/// donc produire un `--` dans le résultat ; ça ne se répare pas, l'identifiant est
+/// opaque et seule sa stabilité compte.
 fn identifiant(livre: &Livre) -> String {
     format!(
         "urn:ozalid:{}-{}",
