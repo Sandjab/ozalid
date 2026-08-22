@@ -26,6 +26,9 @@ avec sa fenêtre.
 - **Typst** en sidecar : un binaire statique, sans dépendance système, la même
   version sur les deux plateformes. C'est ce qui rend la pagination reproductible
   d'une machine à l'autre — ni Python, ni pandoc, ni WeasyPrint.
+- **`ureq`**, seule dépendance réseau, tirée par le seul envoi généré par diffusion.
+  Rien d'autre dans l'application n'ouvre de connexion, et composer n'en ouvre
+  jamais : une image acceptée est figée dans le `.ozalid`.
 
 ## Mise en route
 
@@ -148,6 +151,9 @@ résultats. Tout le reste est testable sans fenêtre.
 | `maquettes` | Folio, Blanche et Surimpression |
 | `typst` | Invocation du sidecar : mesurer la pagination, compiler, rendre un aperçu |
 | `interieur` | Source Typst de l'intérieur, police du livre, et convergence gouttière/parité |
+| `envoi` | L'envoi autographe : la main du livre, ses envois, et les noms qu'ils prennent sur le disque |
+| `police` | Ce qu'un fichier de police déclare : sa famille, et les caractères qu'il porte vraiment |
+| `diffusion` | Demander une image à un modèle : le prompt, le contrat, et la clé qui ne remonte jamais |
 | `epreuve` | Source Typst de l'épreuve de relecture : A4, numéros de ligne, marge d'annotation |
 | `planche` | Assemblage 4ème \| dos \| 1ère au gabarit, et dos composé élément par élément |
 | `package` | Un prestataire, un intérieur, une planche, dans son répertoire |
@@ -165,10 +171,19 @@ Une archive, un document :
 
 ```
 projet.toml     identité du livre, police de l'intérieur, réglages de couverture,
-                destinataires, chemin source du manuscrit
+                destinataires, envois, chemin source du manuscrit
 manuscrit.md
 images/         photos source de la 1ère et de la 4ème
+polices/        la police manuscrite de l'auteur, quand il en fournit une
+envois/         les images des envois, une par dédicataire
 ```
+
+Les images d'envoi sont rangées à part de celles de la couverture, et ce n'est pas
+une préférence d'organisation : `package::ecrire_images` donne un rôle aux images du
+projet **par leur seul nom**, et tout ce qui ne commence pas par `quatrieme` y devient
+la première de couverture. La police, elle, est là pour que le `.ozalid` reste
+auto-portant — un livre composé dans l'écriture de son auteur doit se recomposer à
+l'identique sur une machine où elle n'est installée nulle part.
 
 La police de l'intérieur est une section à part, `[interieur]`, qui vaut `EB Garamond`
 quand elle manque — un projet écrit avant qu'elle existe s'ouvre donc sans rien dire.
