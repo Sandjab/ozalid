@@ -1628,13 +1628,32 @@ git commit -m "Le livre entre dans une archive qu'une liseuse sait ouvrir"
 #[test]
 fn la_couverture_inseree_ne_pose_aucun_reglage_de_document() {
     let p = page_une(&livre(), &maquettes::folio(), FORMAT, None, None);
+    // Tout est enveloppé dans un seul bloc de page : un `#set` posé dedans ne vaut
+    // que pour elle. Ce qui vaudrait pour le document, c'est ce que `preambule`
+    // écrit avant la page — à commencer par son `#set page`.
     assert!(p.starts_with("#page("), "{p}");
-    // Un `#set` en tête de ligne vaut pour le document ; à l'intérieur du bloc de
-    // page, il ne vaut que pour elle.
-    assert!(!p.lines().any(|l| l.starts_with("#set ")), "{p}");
+    assert!(p.trim_end().ends_with(']'), "le bloc de page ne se referme pas : {p}");
+    assert!(!p.contains("#set page("), "{p}");
     assert!(p.contains("margin: 0mm"), "{p}");
 }
+
+/// Les deux formes de la 1ère ne diffèrent que par la portée de leurs réglages, et
+/// c'est toute leur raison d'être. `source_une` est une source **autonome** : elle
+/// ouvre par un `#set page` de document, ce qu'il faut pour l'aperçu par face.
+/// `page_une` est **insérable** : rien chez elle n'atteint le document qui l'accueille.
+#[test]
+fn seule_la_forme_autonome_de_la_1ere_regle_le_document() {
+    let (l, cv) = (livre(), maquettes::folio());
+    assert!(source_une(&l, &cv, FORMAT, None, None).contains("#set page("));
+    assert!(!page_une(&l, &cv, FORMAT, None, None).contains("#set page("));
+}
 ```
+
+> **Ne teste pas « aucune ligne ne commence par `#set` ».** `bloc_texte` et `bloc_pied`
+> émettent leurs `#set` en colonne 0, mais imbriqués dans des `#place(…)[` ouverts
+> au-dessus — ils sont déjà scopés, et l'étaient avant ce chantier. Exiger le contraire
+> obligerait à reformater la source de la couverture **imprimée** pour satisfaire un
+> test sur l'ebook. La propriété qui compte est l'enveloppe unique, pas l'indentation.
 
 Et dans le `mod tests` de `interieur.rs` :
 
