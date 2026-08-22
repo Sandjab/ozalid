@@ -146,7 +146,14 @@ pub fn source(livre: &Livre, int: &Interieur, pieces: &[Piece], corps_pt: f64) -
                 Bloc::Scene => s.push_str(&format!(
                     "#v(5mm)\n#align(center)[#text(fill: rgb(\"#808080\"))[{SCENE}]]\n#v(5mm)\n\n"
                 )),
-                Bloc::Blanc => {}
+                // Le livre laisse ce blanc muet ; l'épreuve, non. Elle numérote les
+                // lignes et compose déjà l'astérisme en gris de service : un filet de
+                // la même famille, plus clair, dit la coupure au relecteur sans rien
+                // promettre de la page imprimée.
+                Bloc::Blanc => s.push_str(
+                    "#v(3mm)\n#align(center)[#line(length: 12mm, \
+                     stroke: 0.4pt + rgb(\"#c0c0c0\"))]\n#v(3mm)\n\n",
+                ),
             }
         }
     }
@@ -191,6 +198,31 @@ mod tests {
 
     fn src() -> String {
         source(&livre(), &Interieur::default(), &chapitres(), 12.0)
+    }
+
+    fn pieces_avec_blanc() -> Vec<Piece> {
+        vec![Piece {
+            sorte: Sorte::Chapitre(1),
+            titre: "Un".into(),
+            blocs: vec![
+                Bloc::Paragraphe("Avant.".into()),
+                Bloc::Blanc,
+                Bloc::Paragraphe("Après.".into()),
+            ],
+        }]
+    }
+
+    /// L'épreuve est un document de travail, pas le livre : une coupure muette y serait
+    /// invisible, et le relecteur ne pourrait pas vérifier qu'elle a bien été saisie.
+    /// Le filet la lui montre, dans le gris de service qui ne s'imprime jamais — plus
+    /// clair que celui de l'astérisme, parce que la coupure est la plus légère des deux.
+    #[test]
+    fn le_blanc_de_respiration_porte_un_filet_sur_l_epreuve() {
+        let s = source(&livre(), &Interieur::default(), &pieces_avec_blanc(), 12.0);
+        assert!(s.contains("#line(length: 12mm"), "{s}");
+        assert!(s.contains("#c0c0c0"), "{s}");
+        // La marque de la rupture de scène n'a rien à faire là : c'est l'autre coupure.
+        assert!(!s.contains(SCENE), "{s}");
     }
 
     /// « p. 42, l. 7 » ne désigne une ligne que si le compte repart à chaque page. Une
