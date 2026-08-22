@@ -733,7 +733,33 @@ fn bloc_pied(p: &Pied, cv: &Couverture, (fw, fh): (f64, f64)) -> String {
     )
 }
 
-fn bloc_pastille(p: &Pastille, fw: f64) -> String {
+/// Ce dont un élément dispose pour déborder, bord par bord : la bande de fond perdu que
+/// le massicot emportera.
+///
+/// Elle se déduit de la boîte, jamais du prestataire — et c'est ce qui la rend juste
+/// partout. Nulle du côté du dos, où la face voisine commence et où rien ne serait
+/// coupé ; nulle sur les quatre bords d'un aperçu par face, qui montre le livre déjà
+/// rogné.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Debords {
+    haut: f64,
+    bas: f64,
+    gauche: f64,
+    droite: f64,
+}
+
+impl Debords {
+    fn de(b: Boite, (fw, fh): (f64, f64)) -> Self {
+        Self {
+            haut: b.y0,
+            bas: b.hauteur - b.y0 - fh,
+            gauche: b.x0,
+            droite: b.largeur - b.x0 - fw,
+        }
+    }
+}
+
+fn bloc_pastille(p: &Pastille, fw: f64, d: Debords) -> String {
     if !p.actif || p.texte.trim().is_empty() {
         return String::new();
     }
@@ -755,11 +781,52 @@ fn bloc_pastille(p: &Pastille, fw: f64) -> String {
         tracking: 2.0,
         ..p.style.clone()
     };
+    // Un réglage à zéro veut dire « au bord », et le bord du livre fini est une ligne de
+    // coupe, pas une limite : le massicot y travaille à un ou deux millimètres près. Le
+    // fond de la pastille descend donc dans le fond perdu, que la coupe emportera. Sans
+    // cela le tirage rendrait tantôt une pastille amputée, tantôt un liseré de
+    // couverture entre elle et le bord, et cela varierait d'un exemplaire à l'autre.
+    //
+    // Un décalage non nul, lui, est une distance voulue : rien ne déborde.
+    let (vy, vx) = (
+        if p.dy.abs() < f64::EPSILON {
+            if sy < 0.0 {
+                d.bas
+            } else {
+                d.haut
+            }
+        } else {
+            0.0
+        },
+        if p.dx.abs() < f64::EPSILON {
+            if sx < 0.0 {
+                d.droite
+            } else {
+                d.gauche
+            }
+        } else {
+            0.0
+        },
+    );
+    // Ce que la pastille a à gagner sur chaque bord de la **page**.
+    let (ph, pb) = if sy > 0.0 { (vy, 0.0) } else { (0.0, vy) };
+    let (pg, pd) = if sx > 0.0 { (vx, 0.0) } else { (0.0, vx) };
+    // Le badge est composé à plat, puis tourné d'un quart de tour anti-horaire quand la
+    // pastille est verticale : son côté gauche devient alors le bas de la page, et son
+    // bas la droite. C'est dans ce repère-là qu'il faut allonger, d'où la permutation.
+    let (ix, iy) = (0.028 * fw, 0.012 * fw);
+    let (haut, bas, gauche, droite) = if p.verticale {
+        (iy + pg, iy + pd, ix + pb, ix + ph)
+    } else {
+        (iy + ph, iy + pb, ix + pg, ix + pd)
+    };
     let badge = format!(
-        "box(fill: {}, inset: (x: {}, y: {}), radius: {}, text({})[{}])",
+        "box(fill: {}, inset: (top: {}, bottom: {}, left: {}, right: {}), radius: {}, text({})[{}])",
         couleur(&p.fond),
-        mm(0.028 * fw),
-        mm(0.012 * fw),
+        mm(haut),
+        mm(bas),
+        mm(gauche),
+        mm(droite),
         mm(if p.arrondie { 0.02 * fw } else { 0.0 }),
         style.typst_text(fw),
         echappe(&p.texte),
@@ -772,10 +839,13 @@ fn bloc_pastille(p: &Pastille, fw: f64) -> String {
     } else {
         badge
     };
+    // Le placement suit le débord d'autant que l'encart s'est allongé : la boîte grandit
+    // vers l'extérieur, la voici repoussée d'autant, et le texte ne bouge pas d'un
+    // dixième. C'est ce qui fait que l'aperçu rogné dit vrai sur le livre en main.
     format!(
         "#place({coin}, dx: {}, dy: {}, {contenu})\n",
-        mm(sx * p.dx / 100.0 * fw),
-        mm(sy * p.dy / 100.0 * fw),
+        mm(sx * p.dx / 100.0 * fw - sx * vx),
+        mm(sy * p.dy / 100.0 * fw - sy * vy),
     )
 }
 
@@ -867,7 +937,7 @@ pub fn corps_une(
     let mut cadre = bloc_cadre(&cv.cadre, format);
     cadre.push_str(&bloc_texte(livre, cv, format));
     cadre.push_str(&bloc_pied(&cv.pied, cv, format));
-    cadre.push_str(&bloc_pastille(&cv.pastille, fw));
+    cadre.push_str(&bloc_pastille(&cv.pastille, fw, Debords::de(b, format)));
     s.push_str(&cale(b, format, &cadre));
     s
 }
@@ -1059,6 +1129,100 @@ pub fn source_quatre(
 mod tests {
     use super::*;
     use crate::maquettes;
+
+    fn pastille_au_bord(coin: Coin, verticale: bool) -> Pastille {
+        Pastille {
+            actif: true,
+            texte: "folio".into(),
+            style: dos_style(),
+            fond: "#111111".into(),
+            coin,
+            verticale,
+            arrondie: true,
+            dx: 0.0,
+            dy: 0.0,
+        }
+    }
+
+    /// Le bord du livre fini est une ligne de coupe, pas une limite : le massicot y
+    /// travaille à un ou deux millimètres près. Une pastille calée dessus sortirait du
+    /// tirage tantôt amputée, tantôt bordée d'un liseré de couverture — et cela
+    /// varierait d'un exemplaire à l'autre. Son fond descend donc dans le fond perdu.
+    #[test]
+    fn une_pastille_au_bord_deborde_dans_le_fond_perdu() {
+        let d = Debords {
+            haut: 5.0,
+            bas: 5.0,
+            gauche: 0.0,
+            droite: 5.0,
+        };
+        let s = bloc_pastille(&pastille_au_bord(Coin::BasDroite, false), 135.0, d);
+        assert!(s.contains("bottom: 6.6200mm"), "{s}"); // 0.012 × 135 + 5
+        assert!(s.contains("right: 8.7800mm"), "{s}"); // 0.028 × 135 + 5
+                                                       // Le fond s'allonge et le placement suit d'autant : le texte, lui, ne bouge pas.
+        assert!(s.contains("dx: 5.0000mm"), "{s}");
+        assert!(s.contains("dy: 5.0000mm"), "{s}");
+    }
+
+    /// Le côté du dos n'a pas de fond perdu : la 1ère y touche la 4ème, pas le vide.
+    /// Une pastille qui y déborderait s'imprimerait sur le dos, et rien ne la couperait.
+    #[test]
+    fn une_pastille_ne_deborde_pas_du_cote_du_dos() {
+        let d = Debords {
+            haut: 5.0,
+            bas: 5.0,
+            gauche: 0.0,
+            droite: 5.0,
+        };
+        let s = bloc_pastille(&pastille_au_bord(Coin::BasGauche, false), 135.0, d);
+        assert!(s.contains("bottom: 6.6200mm"), "{s}");
+        assert!(s.contains("left: 3.7800mm"), "{s}"); // 0.028 × 135, sans débord
+        assert!(s.contains("dx: 0.0000mm"), "{s}");
+    }
+
+    /// L'aperçu par face montre la couverture **rognée**, c'est-à-dire le livre tel
+    /// qu'il sort du massicot : aucun débord à y composer, sans quoi il montrerait une
+    /// pastille plus grande que celle qu'on aura en main.
+    #[test]
+    fn sans_fond_perdu_la_pastille_ne_deborde_pas() {
+        let d = Debords {
+            haut: 0.0,
+            bas: 0.0,
+            gauche: 0.0,
+            droite: 0.0,
+        };
+        let s = bloc_pastille(&pastille_au_bord(Coin::BasDroite, false), 135.0, d);
+        assert!(
+            s.contains("inset: (top: 1.6200mm, bottom: 1.6200mm, left: 3.7800mm, right: 3.7800mm)"),
+            "{s}"
+        );
+        assert!(s.contains("dx: 0.0000mm"), "{s}");
+        assert!(s.contains("dy: 0.0000mm"), "{s}");
+    }
+
+    /// Un décalage non nul est une distance voulue au bord : la pastille est alors dans
+    /// la page, et la faire déborder la déplacerait sans que personne l'ait demandé.
+    ///
+    /// Les deux axes décident chacun pour soi : une pastille contre le bord droit mais
+    /// remontée de 3,5 % déborde à droite et pas en bas. Sans quoi il faudrait renoncer
+    /// au débord dès qu'on écarte la pastille d'un seul côté.
+    #[test]
+    fn chaque_axe_decide_seul_de_son_debord() {
+        let d = Debords {
+            haut: 5.0,
+            bas: 5.0,
+            gauche: 0.0,
+            droite: 5.0,
+        };
+        let mut p = pastille_au_bord(Coin::BasDroite, false);
+        p.dy = 3.5;
+        let s = bloc_pastille(&p, 135.0, d);
+        assert!(s.contains("bottom: 1.6200mm"), "{s}");
+        assert!(s.contains("right: 8.7800mm"), "{s}");
+        assert!(s.contains("dx: 5.0000mm"), "{s}");
+        // 3,5 % de 135 mm vers le haut, et rien de plus.
+        assert!(s.contains("dy: -4.7250mm"), "{s}");
+    }
 
     /// Une famille admise sans encre déclarée tomberait sur la valeur de repli, la plus
     /// haute de la table : le dos d'une maquette composée dans cette famille-là serait

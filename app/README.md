@@ -349,6 +349,18 @@ tout ce qui se voit se vérifie dans l'application.
 - **`line-height` CSS ≠ `leading` Typst.** La boîte de ligne est ramenée à 1 em
   (`top-edge: 0.75em, bottom-edge: -0.25em`) pour que les deux grandeurs
   coïncident. Sans cela l'interligne dépend de la police.
+- **L'aperçu par face montre la couverture rognée, la planche montre le fond perdu.**
+  Un élément calé au bord touche le bord dans l'onglet 1ère et s'en trouve à quelques
+  millimètres sur la planche : cette bande-là est celle que le massicot emporte, elle
+  n'est pas un espace ajouté. Les deux vues sortent du même moteur ; c'est la boîte qui
+  diffère (`Boite::rognee` contre `Boite::une`).
+- **Une pastille réglée à 0 % déborde volontairement dans le fond perdu.** Le bord du
+  livre fini est une ligne de coupe, pas une limite : le massicot y travaille à un ou
+  deux millimètres près. Le fond de la pastille descend donc sous la coupe, et son
+  placement suit d'autant — le texte ne bouge pas. Sans cela le tirage rendrait tantôt
+  une pastille amputée, tantôt un liseré de couverture entre elle et le bord. Le débord
+  se déduit de la boîte, jamais du prestataire : nul du côté du dos, nul sur un aperçu
+  par face.
 - **Le manuscrit n'admet qu'un sous-ensemble de Markdown.** Tout le reste est
   refusé avec son numéro de ligne — un aplatissement silencieux donnerait un
   livre faux, découvert après tirage.
