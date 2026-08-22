@@ -72,6 +72,19 @@ pub fn dimensions(octets: &[u8]) -> Option<(u32, u32)> {
     png(octets).or_else(|| jpeg(octets))
 }
 
+/// L'extension qui convient à ces octets-là.
+///
+/// Relevée sur le contenu, jamais sur le nom du fichier d'origine : Typst reconnaît le
+/// format d'une image **à son extension**, si bien qu'un JPEG rangé sous un nom en
+/// `.png` ne se composerait pas — et l'erreur arriverait des centaines de pages plus
+/// loin, sur l'exemplaire d'une personne.
+pub fn extension(octets: &[u8]) -> Option<&'static str> {
+    if png(octets).is_some() {
+        return Some("png");
+    }
+    jpeg(octets).map(|_| "jpg")
+}
+
 fn png(o: &[u8]) -> Option<(u32, u32)> {
     // Signature, puis IHDR : longueur (4), type (4), largeur (4), hauteur (4).
     if o.len() < 24 || &o[..8] != b"\x89PNG\r\n\x1a\n" || &o[12..16] != b"IHDR" {
@@ -228,6 +241,28 @@ mod tests {
         j.extend(1200u16.to_be_bytes());
         j.extend([0u8; 10]);
         assert_eq!(dimensions(&j), Some((1200, 1980)));
+    }
+
+    /// L'extension se relève sur les octets : une photo d'appareil renommée en `.png`
+    /// reste un JPEG, et Typst la lirait à son nom.
+    #[test]
+    fn l_extension_se_releve_sur_le_contenu() {
+        let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+        png.extend(13u32.to_be_bytes());
+        png.extend(b"IHDR");
+        png.extend(10u32.to_be_bytes());
+        png.extend(10u32.to_be_bytes());
+        png.extend([8, 6, 0, 0, 0]);
+        assert_eq!(extension(&png), Some("png"));
+
+        let mut j = vec![0xFF, 0xD8];
+        j.extend([0xFF, 0xC0, 0x00, 0x11, 0x08]);
+        j.extend(10u16.to_be_bytes());
+        j.extend(10u16.to_be_bytes());
+        j.extend([0u8; 10]);
+        assert_eq!(extension(&j), Some("jpg"));
+
+        assert_eq!(extension(b"GIF89a"), None);
     }
 
     #[test]

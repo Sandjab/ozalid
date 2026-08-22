@@ -36,6 +36,13 @@ struct Ouvert {
     /// Vrai dès qu'une commande a touché au projet sans qu'il ait été réécrit.
     /// C'est lui, et lui seul, qui décide si fermer perd du travail.
     modifie: bool,
+    /// La dernière image générée pour un envoi, tant qu'elle n'a pas été acceptée.
+    ///
+    /// Elle vit **hors du projet** : un modèle de diffusion rend rarement une écriture
+    /// lisible du premier coup, et l'archive n'a pas à conserver la suite des essais.
+    /// Accepter la fait entrer dans le `.ozalid` ; fermer le projet la laisse là où elle
+    /// était, c'est-à-dire nulle part.
+    candidat: Option<(usize, Vec<u8>)>,
 }
 
 /// Vue d'un prestataire pour l'interface.
@@ -738,10 +745,22 @@ pub fn couverture_apercu(
 /// n'y entre pas autrement.
 fn donnee_png(chemin: &Path) -> Result<String, String> {
     let octets = std::fs::read(chemin).map_err(|e| format!("aperçu illisible : {e}"))?;
-    Ok(format!(
-        "data:image/png;base64,{}",
+    Ok(donnee_image(&octets))
+}
+
+/// Des octets d'image, prêts à poser dans une balise `img`.
+///
+/// Le type est relevé sur le contenu : la fenêtre affiche d'après lui, et un JPEG
+/// annoncé en PNG resterait un cadre vide.
+fn donnee_image(octets: &[u8]) -> String {
+    let type_mime = match crate::image::extension(octets) {
+        Some("jpg") => "image/jpeg",
+        _ => "image/png",
+    };
+    format!(
+        "data:{type_mime};base64,{}",
         base64::Engine::encode(&base64::engine::general_purpose::STANDARD, octets)
-    ))
+    )
 }
 
 /* ---------- packages ---------- */
@@ -902,17 +921,111 @@ pub fn envoi_image_choisir(
     chemin: String,
     atelier: State<Atelier>,
 ) -> Result<ProjetVue, String> {
-    let source = Path::new(&chemin);
-    let ext = source
-        .extension()
-        .map(|e| e.to_string_lossy().to_lowercase())
-        .filter(|e| matches!(e.as_str(), "jpg" | "jpeg" | "png"))
-        .ok_or("image refusée : seuls le JPEG et le PNG se composent.")?;
-    let octets = std::fs::read(source).map_err(|e| format!("image illisible : {e}"))?;
+    // Aucun contrôle sur l'extension du fichier choisi : c'est le contenu qui décide,
+    // et `poser_image_envoi` le relève. Une photo d'appareil renommée en `.png` reste
+    // un JPEG, et Typst la lirait à son nom.
+    let octets = std::fs::read(Path::new(&chemin)).map_err(|e| format!("image illisible : {e}"))?;
 
     let mut garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_mut().ok_or_else(aucun_projet)?;
-    o.projet.poser_image_envoi(index, &ext, octets)?;
+    o.projet.poser_image_envoi(index, octets)?;
+    vue_modifiee(o)
+}
+
+/// Ce que l'interface sait de l'accès au modèle de diffusion.
+///
+/// **La clé n'y est pas.** Elle est en clair dans `preferences.toml`, avec les
+/// permissions du fichier ; la renvoyer au front la ferait entrer dans une page, donc
+/// dans une capture d'écran, donc dans un message. Savoir qu'elle est posée suffit à
+/// régler l'accès.
+#[derive(Serialize)]
+pub struct AccesVue {
+    pub url: String,
+    pub cle_posee: bool,
+}
+
+#[tauri::command]
+pub fn diffusion_lire(app: tauri::AppHandle) -> AccesVue {
+    let d = config(&app).map(|c| preferences::charger(&c).diffusion);
+    AccesVue {
+        url: d.as_ref().map(|d| d.url.clone()).unwrap_or_default(),
+        cle_posee: d.is_some_and(|d| !d.cle.trim().is_empty()),
+    }
+}
+
+/// Règle l'accès au modèle. `cle` absente laisse en place celle qui est enregistrée.
+///
+/// Sans cela, corriger l'adresse effacerait la clé — le champ de saisie est vide à
+/// l'écran, puisqu'on ne la lui redonne jamais.
+#[tauri::command]
+pub fn diffusion_regler(
+    url: String,
+    cle: Option<String>,
+    app: tauri::AppHandle,
+) -> Result<AccesVue, String> {
+    let dir = config(&app).ok_or("répertoire de configuration introuvable.")?;
+    let mut p = preferences::charger(&dir);
+    p.diffusion.url = url;
+    if let Some(c) = cle {
+        p.diffusion.cle = c;
+    }
+    preferences::enregistrer(&dir, &p)?;
+    Ok(diffusion_lire(app))
+}
+
+/// Demande au modèle l'image d'un envoi, et la garde de côté sans la figer.
+///
+/// Rendue en PNG encodé pour l'aperçu, et **pas** écrite dans le projet : un modèle de
+/// diffusion rend rarement une écriture lisible du premier coup. On regarde, on
+/// regénère, et c'est `envoi_accepter` qui fait entrer l'image dans l'archive.
+#[tauri::command]
+pub fn envoi_generer(
+    index: usize,
+    app: tauri::AppHandle,
+    atelier: State<Atelier>,
+) -> Result<String, String> {
+    let acces = config(&app)
+        .map(|c| preferences::charger(&c).diffusion)
+        .unwrap_or_default();
+    let mut garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_mut().ok_or_else(aucun_projet)?;
+    let crate::envoi::Main::Diffusion { gabarit } = &o.projet.meta.envois.main else {
+        return Err("la main de ce livre n'est pas une image générée.".into());
+    };
+    let e = o
+        .projet
+        .meta
+        .envois
+        .liste
+        .get(index)
+        .ok_or("envoi introuvable : la liste a changé.")?;
+
+    let octets = crate::diffusion::genere(
+        &acces,
+        &crate::diffusion::prompt(gabarit, &e.contenu),
+        &crate::diffusion::Reseau,
+    )?;
+    let donnee = donnee_image(&octets);
+    o.candidat = Some((index, octets));
+    Ok(donnee)
+}
+
+/// Fige l'image générée : elle entre dans l'archive, et n'en bouge plus.
+///
+/// À partir d'ici, composer ne rappelle jamais le réseau — le package se refait des mois
+/// plus tard, hors ligne, à l'identique.
+#[tauri::command]
+pub fn envoi_accepter(index: usize, atelier: State<Atelier>) -> Result<ProjetVue, String> {
+    let mut garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_mut().ok_or_else(aucun_projet)?;
+    let (_, octets) = o
+        .candidat
+        .take()
+        // Le candidat porte son index : accepter après avoir changé de ligne poserait
+        // sinon l'image d'une personne sur l'exemplaire d'une autre.
+        .filter(|(pour, _)| *pour == index)
+        .ok_or("aucune image en attente pour cet envoi : en générer une.")?;
+    o.projet.poser_image_envoi(index, octets)?;
     vue_modifiee(o)
 }
 
@@ -1093,6 +1206,7 @@ fn poser(
         chemin,
         projet,
         modifie,
+        candidat: None,
     });
     vue(garde.as_ref().unwrap())
 }
@@ -1288,11 +1402,27 @@ mod tests {
         assert!(nom_image("planche", "png").is_err());
     }
 
+    /// La clé du modèle est en clair dans `preferences.toml`, avec les permissions du
+    /// fichier : c'est un choix, et il ne tient que si elle ne va nulle part ailleurs.
+    /// Ce test tombe le jour où quelqu'un ajoute le champ à la vue — c'est-à-dire le
+    /// jour où la clé entrerait dans une page, donc dans une capture d'écran.
+    #[test]
+    fn la_vue_de_l_acces_au_modele_ne_porte_pas_la_cle() {
+        let v = AccesVue {
+            url: "https://exemple.test/images".into(),
+            cle_posee: true,
+        };
+        let json = serde_json::to_string(&v).unwrap();
+        assert_eq!(json.matches("cle").count(), 1, "un second « cle » : {json}");
+        assert!(json.contains("cle_posee"), "{json}");
+    }
+
     fn ouvert_neuf() -> Ouvert {
         Ouvert {
             chemin: None,
             projet: Projet::nouveau(Livre::vide(), String::new()),
             modifie: false,
+            candidat: None,
         }
     }
 

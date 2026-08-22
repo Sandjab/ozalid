@@ -192,7 +192,7 @@ async function packager() {
 
 /* ---------- envois ---------- */
 
-/** D'où vient l'écriture des envois de ce livre : `police` ou `image`. */
+/** D'où vient l'écriture des envois de ce livre : `police`, `image` ou `diffusion`. */
 function main() {
   return projet.envois.main.mode;
 }
@@ -215,7 +215,12 @@ function afficherMain() {
   for (const m of mains) sel.append(new Option(m, `police:${m}`));
   if (perso) sel.append(new Option(`${perso} (votre police)`, `police:${perso}`));
   sel.append(new Option('Image écrite à la main', 'image'));
-  sel.value = main() === 'image' ? 'image' : `police:${projet.envois.main.police}`;
+  sel.append(new Option('Image générée', 'diffusion'));
+  sel.value = main() === 'police' ? `police:${projet.envois.main.police}` : main();
+
+  // Le gabarit appartient au livre : il se relit du projet, comme la maquette.
+  $('diffusion').hidden = main() !== 'diffusion';
+  $('inGabarit').value = projet.envois.main.gabarit ?? '';
   $('etatPolice').textContent = perso
     ? `Police personnelle embarquée : ${perso}.`
     : 'Aucune police personnelle : les envois s\'écrivent dans une main de la maison.';
@@ -241,9 +246,9 @@ function afficherEnvois() {
     qui.setAttribute('aria-label', `Dédicataire ${i + 1}`);
     qui.addEventListener('change', () => reglerEnvoi(i, { dedicataire: qui.value }));
 
-    // Le mot change de nature avec la main : un texte à composer, ou une image à
-    // choisir. La ligne ne porte que ce que la main réclame — un champ de texte grisé
-    // sous une main en images donnerait à croire qu'on peut encore y écrire.
+    // Le mot change de nature avec la main : un texte à composer, une image à choisir,
+    // ou ce qu'on demande au modèle. La ligne ne porte que ce que la main réclame — un
+    // champ grisé sous une main en images donnerait à croire qu'on peut y écrire.
     const mot = main() === 'image' ? imageEnvoi(i, e) : motEnvoi(i, e);
 
     const voir = h('button', 'Voir la page');
@@ -255,7 +260,13 @@ function afficherEnvois() {
     retirer.addEventListener('click', () => envoisModifier(
       projet.envois.liste.filter((_, n) => n !== i)));
 
-    ligne.append(qui, mot, voir, retirer);
+    ligne.append(qui, mot);
+    // Deux gestes, et deux seulement : demander une image, et la retenir. C'est le
+    // second qui la fait entrer dans le livre — avant lui, rien n'est figé, et l'on peut
+    // regénérer autant qu'il faut. Un modèle de diffusion rend rarement une écriture
+    // lisible du premier coup.
+    if (main() === 'diffusion') ligne.append(...gestesDeDiffusion(i, e));
+    ligne.append(voir, retirer);
     box.append(ligne);
   }
   $('btEnvoyer').disabled = projet.envois.liste.length === 0;
@@ -288,6 +299,58 @@ function imageEnvoi(i, e) {
   bt.id = `envoi-image-${i}`;
   bt.addEventListener('click', () => choisirImageEnvoi(i));
   return bt;
+}
+
+/**
+ * Demander une image au modèle, puis la retenir.
+ *
+ * « Retenir » est éteint tant que rien n'a été généré dans cette ligne : c'est le geste
+ * qui fige l'image dans le `.ozalid`, et il n'a pas d'objet avant qu'on ait regardé.
+ */
+function gestesDeDiffusion(i, e) {
+  const generer = h('button', 'Générer');
+  generer.type = 'button';
+  generer.id = `envoi-generer-${i}`;
+  generer.addEventListener('click', () => genererEnvoi(i));
+
+  const accepter = h('button', e.image ? `Retenue : ${e.image}` : 'Retenir');
+  accepter.type = 'button';
+  accepter.id = `envoi-accepter-${i}`;
+  accepter.disabled = candidat !== i;
+  accepter.addEventListener('click', () => accepterEnvoi(i));
+  return [generer, accepter];
+}
+
+/**
+ * Demande l'image, et la montre sans la garder.
+ *
+ * Le Rust la tient de côté jusqu'à ce qu'on la retienne : l'archive n'a pas à conserver
+ * la suite des essais, et un livre fermé entre-temps les laisse là où ils étaient.
+ */
+async function genererEnvoi(i) {
+  const img = $('apercuEnvoi');
+  $('etatEnvois').className = 'etat';
+  $('etatEnvois').textContent = 'le modèle compose…';
+  try {
+    img.src = await invoke('envoi_generer', { index: i });
+    img.alt = `Image proposée pour l'exemplaire de ${projet.envois.liste[i].dedicataire}`;
+    img.hidden = false;
+    candidat = i;
+    $('etatEnvois').textContent = '';
+    afficherEnvois();
+  } catch (e) {
+    $('etatEnvois').textContent = String(e);
+    $('etatEnvois').className = 'etat erreur';
+  }
+}
+
+/** Fige l'image proposée : elle entre dans le livre, et n'en bouge plus. */
+async function accepterEnvoi(i) {
+  await tente(async () => {
+    const vue = await invoke('envoi_accepter', { index: i });
+    candidat = null;
+    afficherProjet(vue);
+  });
 }
 
 /** Remplace un envoi par lui-même modifié. */

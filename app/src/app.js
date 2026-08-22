@@ -26,6 +26,14 @@ let polices = [];
  * aux mains de la maison.
  */
 let mains = [];
+/**
+ * L'envoi dont une image générée attend d'être retenue, s'il y en a un.
+ *
+ * Le Rust tient l'image ; l'écran ne retient que la ligne à laquelle elle appartient,
+ * pour n'allumer « Retenir » que là. Générer sur une autre ligne déplace l'attente :
+ * il n'y a qu'une image en attente à la fois, comme il n'y a qu'un aperçu.
+ */
+let candidat = null;
 let face = 'une';
 let attenteApercu = null;
 /**
@@ -286,6 +294,9 @@ async function chargerProviders() {
     $('inPoliceInterieur').append(new Option(p, p));
   }
   mains = await invoke('mains_liste');
+  // L'accès au modèle appartient à la machine, pas au projet : il se lit une fois, au
+  // démarrage, et il survit à tous les livres qu'on ouvrira ensuite.
+  afficherDiffusion(await invoke('diffusion_lire'));
   for (const m of await invoke('maquettes_liste')) {
     const b = h('button', m.libelle);
     b.type = 'button';
@@ -416,7 +427,10 @@ function oublierLesSorties() {
   // n'a personne à nommer, et `afficherProjet` la refait entièrement pour le suivant.
   $('destinataires').replaceChildren();
   // Les envois de même : ce sont les mots écrits pour les lecteurs du livre A, et
-  // l'aperçu de page de titre qui va avec.
+  // l'aperçu de page de titre qui va avec. L'image proposée par le modèle s'en va avec
+  // eux : le Rust l'a oubliée en posant l'autre projet, et laisser « Retenir » allumé
+  // proposerait de figer, dans le livre B, une image demandée pour le livre A.
+  candidat = null;
   $('envois').replaceChildren();
   $('apercuEnvoi').removeAttribute('src');
   $('apercuEnvoi').hidden = true;
@@ -657,6 +671,28 @@ async function majInterieur() {
  * là-bas, une image dont le nom ne commence pas par `quatrieme` **devient** la première
  * de couverture, et le mot manuscrit d'un lecteur remplacerait la couverture du livre.
  */
+/**
+ * Enregistre l'accès au modèle, et rend compte de ce qui est en place.
+ *
+ * `cle` vaut `null` pour laisser celle qui est enregistrée — le champ est vide à
+ * l'écran puisqu'on ne la lui redonne jamais, et corriger l'adresse ne doit pas
+ * l'effacer. La chaîne vide, elle, l'oublie pour de bon.
+ */
+async function reglerDiffusion(cle) {
+  await tente(async () => {
+    afficherDiffusion(await invoke('diffusion_regler', { url: $('inDiffusionUrl').value, cle }));
+    $('inDiffusionCle').value = '';
+  });
+}
+
+/** Ce que la machine sait du modèle : son adresse, et si une clé y est posée. */
+function afficherDiffusion(acces) {
+  $('inDiffusionUrl').value = acces.url;
+  $('etatDiffusion').textContent = acces.cle_posee
+    ? 'clé enregistrée sur cette machine'
+    : 'aucune clé : la génération sera refusée';
+}
+
 async function choisirImageEnvoi(index) {
   const chemin = await open({
     multiple: false,
@@ -1064,6 +1100,18 @@ $('btPolice').addEventListener('click', async () => {
 });
 $('btPoliceRetirer').addEventListener('click', () => tente(async () =>
   afficherProjet(await invoke('police_retirer'))));
+// Le gabarit appartient au livre, l'accès au modèle à la machine : deux commandes, et
+// la clé ne redescend jamais — le champ reste vide, et « inchangée » le dit.
+$('inGabarit').addEventListener('change', () => tente(async () =>
+  afficherProjet(await invoke('envois_modifier', {
+    envois: {
+      main: { mode: 'diffusion', gabarit: $('inGabarit').value },
+      liste: projet.envois.liste,
+    },
+  }))));
+$('btDiffusionRegler').addEventListener('click', () => reglerDiffusion(
+  $('inDiffusionCle').value === '' ? null : $('inDiffusionCle').value));
+$('btDiffusionOublier').addEventListener('click', () => reglerDiffusion(''));
 // La main appartient au livre : la changer réécrit tous ses envois d'un coup.
 $('inMain').addEventListener('change', () => tente(async () => {
   const choix = $('inMain').value;

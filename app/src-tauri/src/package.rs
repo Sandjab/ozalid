@@ -169,7 +169,9 @@ pub fn trace<'a>(
             police,
             texte: &e.contenu,
         }),
-        crate::envoi::Main::Image => {
+        // Générée ou écrite à la main, une image est une image : elle a été acceptée,
+        // elle est dans l'archive, et composer ne rappelle jamais le réseau.
+        crate::envoi::Main::Image | crate::envoi::Main::Diffusion { .. } => {
             let fichier = e
                 .image
                 .as_deref()
@@ -382,6 +384,26 @@ mod tests {
             std::fs::read(dir.path().join("Léa.png")).unwrap(),
             b"\x89PNG"
         );
+    }
+
+    /// **La promesse du figeage.** Une image générée puis acceptée est une image comme
+    /// une autre : elle vit dans l'archive, et composer ne rappelle jamais le modèle. Un
+    /// package se refait des mois plus tard, hors ligne, à l'identique — et le jour où
+    /// le service aura fermé.
+    #[test]
+    fn une_image_generee_et_acceptee_compose_comme_une_autre() {
+        let mut p = projet_en_images(Some("Léa.png"));
+        p.meta.envois.main = crate::envoi::Main::Diffusion {
+            gabarit: "une aquarelle, mention « {envoi} »".into(),
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let t = trace(&p, &p.meta.envois.liste[0], dir.path()).unwrap();
+        assert!(matches!(
+            t,
+            interieur::Trace::Image {
+                fichier: "Léa.png"
+            }
+        ));
     }
 
     /// Un envoi sans image ne compose pas, et l'erreur nomme la personne : la liste peut

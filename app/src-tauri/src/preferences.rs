@@ -20,6 +20,16 @@ const FICHIER: &str = "preferences.toml";
 pub struct Preferences {
     #[serde(default)]
     pub recents: Vec<String>,
+    /// L'adresse du modèle de diffusion et sa clé : elles appartiennent à la machine,
+    /// pas au livre. Un `.ozalid` est fait pour être ouvert ailleurs — y écrire une clé
+    /// la publierait au premier partage.
+    ///
+    /// La clé est en clair ici, avec les permissions du fichier. C'est un choix et non
+    /// un oubli : le trousseau du système réclamerait une dépendance par plateforme. La
+    /// contrepartie est tenue ailleurs — elle ne doit apparaître dans aucun message,
+    /// aucune vue, aucune journalisation.
+    #[serde(default)]
+    pub diffusion: crate::diffusion::Acces,
 }
 
 impl Preferences {
@@ -132,8 +142,24 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut p = Preferences::default();
         p.ajouter_recent(Path::new("/livres/heures-creuses.ozalid"));
+        p.diffusion = crate::diffusion::Acces {
+            url: "https://exemple.test/images".into(),
+            cle: "sk-tres-secrete".into(),
+        };
         enregistrer(dir.path(), &p).unwrap();
         assert_eq!(charger(dir.path()), p);
+    }
+
+    /// Un `preferences.toml` écrit avant la diffusion doit s'ouvrir sans un mot, comme
+    /// un `.ozalid` écrit avant les envois : ce qui se perd ici est un confort, et un
+    /// fichier refusé coûterait la liste des projets récents.
+    #[test]
+    fn des_preferences_sans_section_diffusion_se_relisent() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(fichier(dir.path()), b"recents = [\"/a.ozalid\"]\n").unwrap();
+        let p = charger(dir.path());
+        assert_eq!(p.recents, ["/a.ozalid"]);
+        assert!(!p.diffusion.pret());
     }
 
     /// Aucune de ces trois avaries ne doit empêcher l'application de démarrer : les

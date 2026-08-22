@@ -21,6 +21,11 @@ toml = "0.8"
 zip = { version = "7", default-features = false, features = ["deflate"] }
 # Le bloc de réglages des PNG de l'atelier est du base64.
 base64 = "0.22"
+# La seule dépendance réseau du projet, tirée par le seul envoi généré par diffusion :
+# synchrone, sans exécuteur asynchrone à faire vivre, et avec ses propres racines de
+# certification — l'application est empaquetée, elle ne peut pas compter sur celles du
+# poste. Rien d'autre dans Ozalid n'ouvre de connexion.
+ureq = "3"
 
 [dev-dependencies]
 # Répertoires de travail jetables pour les tests d'import (qui touchent au disque).

@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod couverture;
+pub mod diffusion;
 pub mod envoi;
 pub mod epreuve;
 pub mod image;
@@ -107,6 +108,10 @@ pub fn run() {
             commands::police_choisir,
             commands::police_retirer,
             commands::envoi_image_choisir,
+            commands::diffusion_lire,
+            commands::diffusion_regler,
+            commands::envoi_generer,
+            commands::envoi_accepter,
             commands::envoi_apercu,
             commands::envoyer,
             commands::recents_liste,

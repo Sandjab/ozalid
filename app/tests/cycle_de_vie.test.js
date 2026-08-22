@@ -327,10 +327,12 @@ test('l\'interface ne s\'annonce qu\'une fois ses écouteurs posés', async () =
  * précisément le jour où il devrait parler. Celui-ci part de l'écran — tout ce qui porte
  * `etat` ou `resultat` rend compte d'un geste, donc appartient au livre qui l'a produit.
  *
- * Une seule échappe, et pour la raison inverse : `etatEnregistrement` décrit le projet
- * qu'on vient d'ouvrir, pas celui qu'on quitte.
+ * Deux échappent, et pour la raison inverse : `etatEnregistrement` décrit le projet
+ * qu'on vient d'ouvrir, pas celui qu'on quitte, et `etatDiffusion` ne décrit aucun
+ * livre — l'adresse du modèle et sa clé appartiennent à la machine, et survivent à tous
+ * les livres qu'on y ouvrira.
  */
-const DECRIT_LE_NOUVEAU = new Set(['etatEnregistrement']);
+const DECRIT_LE_NOUVEAU = new Set(['etatEnregistrement', 'etatDiffusion']);
 
 function canauxDeCompteRendu() {
   const html = fs.readFileSync(

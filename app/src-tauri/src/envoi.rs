@@ -24,12 +24,18 @@ pub const MAINS: &[&str] = &["Caveat", "Dancing Script", "Petit Formal Script"];
 pub enum Main {
     /// Police manuscrite : embarquée avec l'application, ou fournie par l'auteur et
     /// embarquée dans le `.ozalid`. Une seule variante pour ces deux sources — seule la
-    /// provenance du fichier diffère, la composition est la même. Le lot suivant y
-    /// ajoutera l'image générée.
+    /// provenance du fichier diffère, la composition est la même.
     Police { police: String },
     /// Une image écrite à la main, une par envoi : l'auteur écrit son mot sur une
     /// feuille, le photographie, et c'est cette image-là qui s'imprime.
     Image,
+    /// Une image par envoi, produite par un modèle de diffusion à partir du `gabarit`
+    /// du livre, dans lequel le mot de chaque envoi s'insère.
+    ///
+    /// Le livre ne porte que le gabarit : l'adresse du modèle et la clé appartiennent à
+    /// la machine, et vivent dans les préférences. Une image acceptée est figée dans
+    /// l'archive comme celle du mode précédent — composer ne rappelle jamais le réseau.
+    Diffusion { gabarit: String },
 }
 
 impl Default for Main {

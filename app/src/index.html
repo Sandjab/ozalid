@@ -166,6 +166,24 @@
         <button id="btPoliceRetirer" type="button" disabled>Retirer</button>
       </div>
       <p class="note" id="etatPolice"></p>
+      <!-- Le modèle de diffusion : l'adresse et la clé appartiennent à la machine, le
+           gabarit au livre. Un `.ozalid` est fait pour être ouvert ailleurs — y écrire
+           une clé la publierait au premier partage. -->
+      <div id="diffusion" hidden>
+        <label><span>Adresse du modèle</span>
+          <input type="url" id="inDiffusionUrl" placeholder="https://…"></label>
+        <label><span>Clé</span>
+          <input type="password" id="inDiffusionCle" placeholder="inchangée"></label>
+        <div class="ligne">
+          <button id="btDiffusionRegler" type="button">Enregistrer l'accès</button>
+          <button id="btDiffusionOublier" type="button">Oublier la clé</button>
+          <span id="etatDiffusion" class="etat"></span>
+        </div>
+        <p class="note">L'adresse et la clé restent sur cette machine, hors du
+          <code>.ozalid</code>. Le gabarit, lui, appartient au livre :
+          <code>{envoi}</code> y marque l'endroit où le mot de chacun s'insère.</p>
+        <label><span>Gabarit</span><textarea id="inGabarit" rows="2"></textarea></label>
+      </div>
       <div class="ligne">
         <!-- Même parti que le select d'ajout d'un destinataire : posé contre son bouton,
              il se lit comme le geste d'ajout, et l'`aria-label` le dit à qui ne le voit

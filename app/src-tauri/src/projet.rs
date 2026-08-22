@@ -295,14 +295,11 @@ impl Projet {
     ///
     /// Le nom vient du dédicataire, pas du fichier choisi : deux photos venues du même
     /// appareil s'appellent souvent pareil, et l'une écraserait l'autre — le second
-    /// exemplaire partirait avec le mot du premier.
-    pub fn poser_image_envoi(
-        &mut self,
-        index: usize,
-        ext: &str,
-        octets: Vec<u8>,
-    ) -> Result<(), String> {
-        crate::image::dimensions(&octets)
+    /// exemplaire partirait avec le mot du premier. L'extension, elle, est relevée sur
+    /// les octets : Typst lit le format d'une image à son extension, et un JPEG rangé
+    /// sous un `.png` ne se composerait pas.
+    pub fn poser_image_envoi(&mut self, index: usize, octets: Vec<u8>) -> Result<(), String> {
+        let ext = crate::image::extension(&octets)
             .ok_or("image refusée : seuls le JPEG et le PNG se composent.")?;
         let e = self
             .meta
@@ -310,7 +307,18 @@ impl Projet {
             .liste
             .get(index)
             .ok_or("envoi introuvable : la liste a changé.")?;
-        let pris: Vec<String> = self.images_envois.keys().cloned().collect();
+        // Les images des *autres* envois : celle que celui-ci portait déjà va partir,
+        // et son nom doit pouvoir resservir — sans quoi chaque essai en pousserait un
+        // nouveau, « Léa-2 », « Léa-3 », pour la même personne.
+        let pris: Vec<String> = self
+            .meta
+            .envois
+            .liste
+            .iter()
+            .enumerate()
+            .filter(|(n, _)| *n != index)
+            .filter_map(|(_, e)| e.image.clone())
+            .collect();
         let nom = crate::envoi::nom_image(&e.dedicataire, ext, &pris);
         self.meta.envois.liste[index].image = Some(nom.clone());
         self.images_envois.insert(nom, octets);
@@ -903,7 +911,7 @@ auteur = "Ivan Pjig"
     #[test]
     fn une_image_d_envoi_voyage_dans_l_archive() {
         let mut p = avec_envois(&["Léa"]);
-        p.poser_image_envoi(0, "png", png(300)).unwrap();
+        p.poser_image_envoi(0, png(300)).unwrap();
 
         let r = aller_retour(&p);
         assert_eq!(r.meta.envois.liste[0].image.as_deref(), Some("Léa.png"));
@@ -917,8 +925,8 @@ auteur = "Ivan Pjig"
     fn deux_envois_ne_partagent_jamais_leur_image() {
         // Deux personnes du même prénom : le cas où le nom seul ne suffit pas.
         let mut p = avec_envois(&["Léa", "Léa"]);
-        p.poser_image_envoi(0, "png", png(300)).unwrap();
-        p.poser_image_envoi(1, "png", png(500)).unwrap();
+        p.poser_image_envoi(0, png(300)).unwrap();
+        p.poser_image_envoi(1, png(500)).unwrap();
 
         assert_eq!(p.meta.envois.liste[0].image.as_deref(), Some("Léa.png"));
         assert_eq!(p.meta.envois.liste[1].image.as_deref(), Some("Léa-2.png"));
@@ -931,11 +939,19 @@ auteur = "Ivan Pjig"
     #[test]
     fn une_image_remplacee_ne_laisse_rien_dans_l_archive() {
         let mut p = avec_envois(&["Léa"]);
-        p.poser_image_envoi(0, "png", png(300)).unwrap();
-        p.poser_image_envoi(0, "jpg", png(500)).unwrap();
+        p.poser_image_envoi(0, png(300)).unwrap();
+        p.poser_image_envoi(0, png(500)).unwrap();
 
         assert_eq!(p.images_envois.len(), 1, "l'ancienne image est restée");
-        assert_eq!(p.meta.envois.liste[0].image.as_deref(), Some("Léa.jpg"));
+        // Le nom ne dérive pas d'un essai à l'autre : c'est celui du dédicataire, et
+        // l'image qu'il portait vient de partir. « Léa-2 », « Léa-3 » à chaque tentative
+        // donneraient à lire une file d'attente là où il n'y a qu'une personne.
+        assert_eq!(p.meta.envois.liste[0].image.as_deref(), Some("Léa.png"));
+        assert_eq!(
+            p.images_envois["Léa.png"],
+            png(500),
+            "l'image n'a pas changé"
+        );
     }
 
     /// Un envoi retiré emporte son image : c'est le mot écrit pour quelqu'un à qui l'on
@@ -943,8 +959,8 @@ auteur = "Ivan Pjig"
     #[test]
     fn un_envoi_retire_emporte_son_image() {
         let mut p = avec_envois(&["Léa", "Marie"]);
-        p.poser_image_envoi(0, "png", png(300)).unwrap();
-        p.poser_image_envoi(1, "png", png(500)).unwrap();
+        p.poser_image_envoi(0, png(300)).unwrap();
+        p.poser_image_envoi(1, png(500)).unwrap();
 
         let restants = crate::envoi::Envois {
             liste: vec![p.meta.envois.liste[1].clone()],
@@ -960,9 +976,7 @@ auteur = "Ivan Pjig"
     #[test]
     fn une_image_d_envoi_illisible_est_refusee() {
         let mut p = avec_envois(&["Léa"]);
-        assert!(p
-            .poser_image_envoi(0, "png", b"pas une image".to_vec())
-            .is_err());
+        assert!(p.poser_image_envoi(0, b"pas une image".to_vec()).is_err());
         assert!(p.images_envois.is_empty());
         assert_eq!(p.meta.envois.liste[0].image, None);
     }
@@ -975,7 +989,7 @@ auteur = "Ivan Pjig"
         let mut p = avec_envois(&["Léa"]);
         p.images
             .insert("couverture.jpg".into(), vec![0xFF, 0xD8, 0xFF]);
-        p.poser_image_envoi(0, "png", png(300)).unwrap();
+        p.poser_image_envoi(0, png(300)).unwrap();
 
         let mut buf = Vec::new();
         p.ecrire(Cursor::new(&mut buf)).unwrap();

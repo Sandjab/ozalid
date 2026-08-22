@@ -134,6 +134,9 @@ async function ouvre(providers, sur = {}, { couverture = null, destinataires } =
     if (cmd === 'recents_liste') return [];
     if (cmd === 'garde_modifications') return 'ignorer';
     if (cmd === 'interface_prete') return null;
+    // L'accès au modèle de diffusion se lit au démarrage : il appartient à la
+    // machine, et l'écran le montre avant qu'aucun projet ne soit ouvert.
+    if (cmd === 'diffusion_lire') return { url: '', cle_posee: false };
     throw new Error(`commande inattendue : ${cmd}`);
   };
   const ctx = await charge({ invoke, open: async () => '/livres/LHC.ozalid' });

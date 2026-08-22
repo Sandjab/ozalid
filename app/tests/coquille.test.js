@@ -48,7 +48,10 @@ function projet(sur = {}) {
  * le prestataire visé vit dans le projet, et un faux qui rendrait toujours le même
  * projet ne montrerait jamais les gestes qui le déplacent.
  */
-function atelier({ recents = [], sur = {}, providers = [LULU], destinataires } = {}) {
+function atelier({
+  recents = [], sur = {}, providers = [LULU], destinataires,
+  acces = { url: '', cle_posee: false },
+} = {}) {
   const appels = [];
   const liste = (destinataires ?? [dest(providers[0])]).map((d) => ({ ...d }));
   let livraison = { destinataires: liste, courant: liste[0].provider };
@@ -60,6 +63,11 @@ function atelier({ recents = [], sur = {}, providers = [LULU], destinataires } =
       case 'polices_liste': return ['Bodoni Moda'];
       case 'polices_texte_liste': return ['EB Garamond'];
       case 'mains_liste': return ['Caveat', 'Dancing Script'];
+      // L'accès au modèle appartient à la machine : le Rust ne rend jamais la clé, il
+      // dit seulement qu'elle est posée.
+      case 'diffusion_lire': return acces;
+      case 'diffusion_regler': return { url: args.url, cle_posee: args.cle !== '' };
+      case 'envoi_generer': return 'data:image/png;base64,QUJD';
       case 'maquettes_liste': return [];
       case 'recents_liste': return recents;
       case 'garde_modifications': return 'ignorer';
@@ -950,7 +958,7 @@ test('la police personnelle s\'ajoute aux mains de la maison', async () => {
 
   const offertes = [...els.get('inMain').children].map((o) => o.value);
   assert.deepEqual(offertes,
-    ['police:Caveat', 'police:Dancing Script', 'police:Ma Main', 'image']);
+    ['police:Caveat', 'police:Dancing Script', 'police:Ma Main', 'image', 'diffusion']);
   assert.equal(els.get('inMain').value, 'police:Ma Main');
   assert.equal(els.get('btPoliceRetirer').disabled, false,
     'une police est embarquée et rien ne la retire');
@@ -1036,4 +1044,102 @@ test('la ligne d\'un envoi suit la main du livre', async () => {
   const choix = a.appels.findLast(([c]) => c === 'envoi_image_choisir');
   assert.ok(choix, 'aucun envoi_image_choisir : le bouton n\'a pas d\'écouteur');
   assert.deepEqual(choix[1], { index: 0, chemin: '/photos/mot.png' });
+});
+
+/* ---------- l'image générée ---------- */
+
+const EN_DIFFUSION = {
+  main: { mode: 'diffusion', gabarit: 'une aquarelle, mention « {envoi} »' },
+  liste: [{ dedicataire: 'Léa', contenu: 'À Léa', image: null }],
+};
+
+/**
+ * Le gabarit appartient au livre : il part avec la main, dans le même objet. L'envoyer
+ * sans lui ramènerait la main au défaut — tous les exemplaires changeraient de forme.
+ */
+test('le gabarit part avec la main du livre', async () => {
+  const a = atelier({ sur: { envois: EN_DIFFUSION } });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  assert.equal(els.get('inGabarit').value, 'une aquarelle, mention « {envoi} »');
+  els.get('inGabarit').value = 'une gravure, mention « {envoi} »';
+  await els.get('inGabarit').declenche('change');
+
+  const envoi = a.appels.findLast(([c]) => c === 'envois_modifier');
+  assert.deepEqual(envoi[1].envois.main,
+    { mode: 'diffusion', gabarit: 'une gravure, mention « {envoi} »' });
+});
+
+/**
+ * **La clé ne redescend jamais.** Elle est en clair dans `preferences.toml`, avec les
+ * permissions du fichier ; la poser dans un champ la ferait entrer dans une capture
+ * d'écran. L'écran ne sait donc que deux choses : l'adresse, et qu'une clé est là.
+ */
+test('la clé du modèle n\'est jamais rendue à l\'écran', async () => {
+  const a = atelier({ acces: { url: 'https://exemple.test/images', cle_posee: true } });
+  const { els } = await charge({ invoke: a.invoke });
+
+  assert.equal(els.get('inDiffusionUrl').value, 'https://exemple.test/images');
+  assert.equal(els.get('inDiffusionCle').value, '', 'une clé est arrivée à l\'écran');
+  assert.match(els.get('etatDiffusion').textContent, /clé enregistrée/);
+});
+
+/**
+ * Corriger l'adresse ne doit pas effacer la clé : le champ est vide à l'écran puisqu'on
+ * ne la redonne jamais, et l'envoyer telle quelle l'effacerait à chaque correction.
+ * L'oubli, lui, se demande — et il envoie une clé vide, pas une absence.
+ */
+test('une clé non ressaisie est laissée en place, et l\'oubli se demande', async () => {
+  const a = atelier({ acces: { url: 'https://exemple.test/images', cle_posee: true } });
+  const { els } = await charge({ invoke: a.invoke });
+
+  els.get('inDiffusionUrl').value = 'https://autre.test/images';
+  await els.get('btDiffusionRegler').declenche('click');
+  const regle = a.appels.findLast(([c]) => c === 'diffusion_regler');
+  assert.deepEqual(regle[1], { url: 'https://autre.test/images', cle: null });
+
+  await els.get('btDiffusionOublier').declenche('click');
+  const oubli = a.appels.findLast(([c]) => c === 'diffusion_regler');
+  assert.equal(oubli[1].cle, '', 'oublier la clé ne l\'efface pas');
+});
+
+/**
+ * Retenir est le geste qui fige l'image dans le livre : il n'a pas d'objet tant qu'on
+ * n'a rien vu. Vérifier qu'il est éteint au départ ne prouverait rien — c'est
+ * l'allumage, après génération, qui se garde.
+ */
+test('retenir une image s\'allume quand le modèle a répondu', async () => {
+  const a = atelier({ sur: { envois: EN_DIFFUSION } });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  assert.equal(els.get('envoi-accepter-0').disabled, true);
+
+  await els.get('envoi-generer-0').declenche('click');
+
+  assert.equal(els.get('apercuEnvoi').src, 'data:image/png;base64,QUJD',
+    'l\'image proposée n\'est pas montrée');
+  assert.equal(els.get('envoi-accepter-0').disabled, false,
+    'le modèle a répondu et rien ne permet de retenir son image');
+
+  await els.get('envoi-accepter-0').declenche('click');
+  const accepte = a.appels.findLast(([c]) => c === 'envoi_accepter');
+  assert.deepEqual(accepte[1], { index: 0 });
+});
+
+/**
+ * Une image proposée appartient au livre pour lequel on l'a demandée. Le Rust l'oublie
+ * en posant le suivant ; si l'écran ne l'oubliait pas aussi, « Retenir » proposerait de
+ * figer dans le livre B une image demandée pour le livre A.
+ */
+test('une image proposée ne survit pas au livre suivant', async () => {
+  const a = atelier({ sur: { envois: EN_DIFFUSION } });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  await els.get('envoi-generer-0').declenche('click');
+
+  await els.get('btNouveau').declenche('click');
+
+  assert.equal(els.get('envoi-accepter-0').disabled, true,
+    'le livre suivant hérite de l\'image proposée pour le précédent');
 });
