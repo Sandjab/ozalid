@@ -548,7 +548,9 @@ pub fn composer(atelier: State<Atelier>) -> Result<Composition, String> {
         pages: r.pages,
         gouttiere: r.gouttiere,
         blanche: r.blanche,
-        chapitres: chapitres.len() as u32,
+        // Le compte rendu dit « Chapitres » : une préface ou une page de partie n'en
+        // est pas un, et l'onglet Livre en affiche déjà le compte juste.
+        chapitres: chapitres.iter().filter(|p| p.est_chapitre()).count() as u32,
         dos: papier.dos.mm(r.pages),
         pdf: pdf.to_string_lossy().into_owned(),
         polices_introuvables,
