@@ -272,8 +272,22 @@ fn liminaires(livre: &Livre, envoi: Option<Trace>) -> String {
         // Le nom du fichier est fabriqué par `envoi::nom_image` : assaini, il ne porte
         // ni guillemet qui refermerait la chaîne, ni séparateur qui la ferait sortir du
         // répertoire où l'image vient d'être écrite.
+        //
+        // La hauteur est bornée à 30 % du corps — le blanc que la page de titre laisse
+        // au bas, sur tous les formats. La largeur reste maîtresse tant que la hauteur
+        // tient : une image qui passait hier ne bouge pas d'un pixel ; seule celle qui
+        // recouvrirait le titre est ramenée à la borne. Pas de `fit: "contain"` : le
+        // cadre qu'il demande n'ancre pas son contenu en bas, l'image y flotterait.
         Some(Trace::Image { fichier }) => s.push_str(&format!(
-            "#place(bottom + center, dy: -28mm, image(\"{fichier}\", width: 70%))\n"
+            r#"#place(bottom + center, dy: -28mm, layout(zone => {{
+  let plein = measure(image("{fichier}", width: zone.width * 70%))
+  if plein.height > zone.height * 30% {{
+    image("{fichier}", height: zone.height * 30%)
+  }} else {{
+    image("{fichier}", width: 70%)
+  }}
+}}))
+"#
         )),
         None => {}
     }
@@ -790,6 +804,29 @@ mod tests {
         assert!(
             avec.contains(r#"image("Léa.png", width: 70%)"#),
             "l'image n'est pas posée : {avec}"
+        );
+    }
+
+    /// Une image trop haute recouvrait le titre — vu à l'aperçu, comme prévu par la
+    /// spec, et tranché ensuite : le blanc du bas fait 30 % du corps, l'image s'y
+    /// borne. La largeur reste maîtresse tant que la hauteur tient — une image déjà
+    /// acceptée ne bouge pas d'un pixel — et la hauteur ne prend la main que sur
+    /// celles qui déborderaient.
+    #[test]
+    fn une_image_trop_haute_est_bornee_au_blanc_du_bas() {
+        let s = liminaires(
+            &livre(),
+            Some(Trace::Image {
+                fichier: "Léa.png"
+            }),
+        );
+        assert!(
+            s.contains(r#"image("Léa.png", height: zone.height * 30%)"#),
+            "aucune borne de hauteur : {s}"
+        );
+        assert!(
+            s.contains(r#"if plein.height > zone.height * 30%"#),
+            "la borne s'applique même quand la largeur suffit : {s}"
         );
     }
 
