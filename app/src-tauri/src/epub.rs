@@ -141,7 +141,9 @@ fn blocs_xhtml(blocs: &[Bloc]) -> String {
         match b {
             Bloc::Paragraphe(p) => s.push_str(&format!("<p>{}</p>\n", paragraphe(p))),
             Bloc::Scene => s.push_str(&format!("<p class=\"scene\">{SCENE_XHTML}</p>\n")),
-            Bloc::Blanc => {}
+            // L'espace insécable n'est pas une précaution de style : les liseuses
+            // suppriment les paragraphes vides, et le blanc s'en irait avec.
+            Bloc::Blanc => s.push_str("<p class=\"blanc\">\u{a0}</p>\n"),
         }
     }
     s
@@ -554,6 +556,7 @@ h1 .numero {{ display: block; font-size: 1.2em; }}
 h1 .titre {{ display: block; margin-top: 0.6em; font-size: 0.85em;
              letter-spacing: 0.14em; text-transform: uppercase; }}
 p.scene {{ text-align: center; text-indent: 0; margin: 1em 0; word-spacing: 0.5em; }}
+p.blanc {{ margin: 0; text-indent: 0; }}
 .couverture {{ margin: 0; text-align: center; }}
 .couverture img {{ max-width: 100%; }}
 .titre-page {{ margin-top: 25%; text-align: center; }}
@@ -813,6 +816,29 @@ mod tests {
         assert!(crate::manuscrit::SCENE.contains(r"\*"));
         assert_eq!(SCENE_XHTML.matches('*').count(), 3);
         assert!(!SCENE_XHTML.contains('#'));
+    }
+
+    /// Les liseuses escamotent les `<p>` vides : sans l'espace insécable, le blanc
+    /// disparaîtrait de l'EPUB alors qu'il est sur le papier. Le caractère est écrit en
+    /// littéral U+00A0, comme l'astérisme — le document est du XHTML sans DTD, où
+    /// `&nbsp;` n'est pas défini et ferait échouer la lecture.
+    #[test]
+    fn le_blanc_de_respiration_survit_aux_liseuses() {
+        let x = blocs_xhtml(&[
+            Bloc::Paragraphe("Avant.".into()),
+            Bloc::Blanc,
+            Bloc::Paragraphe("Après.".into()),
+        ]);
+        assert!(x.contains("<p class=\"blanc\">\u{a0}</p>"), "{x}");
+        assert!(!x.contains("&nbsp;"), "{x}");
+    }
+
+    /// Une classe sans règle laisserait la liseuse appliquer son style de paragraphe :
+    /// alinéa et marges reviendraient, et le blanc vaudrait alors plus qu'une ligne.
+    #[test]
+    fn la_feuille_de_style_porte_la_regle_du_blanc() {
+        let f = css(None);
+        assert!(f.contains("p.blanc { margin: 0"), "{f}");
     }
 
     /// Un chapitre rend un titre unique — numéro et titre dans le même `<h1>` — puis ses
