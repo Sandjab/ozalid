@@ -114,6 +114,13 @@
          l'aperçu vide disait déjà, mot pour mot, deux centimètres plus bas. -->
     <div class="outils">
       <div class="ligne onglets" id="faces"></div>
+      <!-- La lunette de la planche. Hors de `#faces` : cette boîte est reconstruite par
+           `construireFaces`, et `choisirFace` y compte les enfants par rang — un bouton
+           étranger dedans ferait viser la face voisine. Elle naît allumée et masquée :
+           la planche n'est pas la face de départ. -->
+      <button id="btFondPerdu" class="lunette" type="button" aria-pressed="true" hidden>
+        Fond perdu
+      </button>
       <span class="creux"></span>
       <!-- Un menu d'action, pas un état : rien dans le projet ne dit de quelle maquette
            on est parti, et le geste écrase les réglages. Il revient donc toujours sur

@@ -376,6 +376,9 @@ function poserDisposition(panneau) {
   couv.setAttribute('data-face', face);
   couv.setAttribute('data-panneau', panneau ? 'oui' : 'non');
   $('reglages').hidden = !panneau;
+  // La lunette n'a d'objet que là où il y a du fond perdu à voir. Masquée plutôt que
+  // grisée, comme les réglages sans objet.
+  $('btFondPerdu').hidden = face !== 'planche';
 }
 
 /**
@@ -484,6 +487,19 @@ function poserCoupe(coupe) {
 /** L'habillage suit deux choses : l'aperçu posé et la lunette. Les deux passent ici. */
 function rendreCoupe() {
   $('coupe').hidden = !coupeCourante || !fondPerduVisible;
+}
+
+/**
+ * Allume ou éteint la lunette.
+ *
+ * Rien à recomposer : l'habillage est posé **sur** l'image, pas dedans. C'est ce qui
+ * rend la bascule instantanée — et ce qui garantit qu'aucun repère ne peut se glisser
+ * dans le PDF remis au prestataire.
+ */
+function basculerFondPerdu() {
+  fondPerduVisible = !fondPerduVisible;
+  $('btFondPerdu').setAttribute('aria-pressed', String(fondPerduVisible));
+  rendreCoupe();
 }
 
 async function rendreApercu() {

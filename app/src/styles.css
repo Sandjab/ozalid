@@ -547,6 +547,19 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
   border-color: var(--encre);
 }
 
+/* La lunette de la planche : deux états, comme une face, mais elle n'est pas une face —
+   `.onglets button` ne peut pas l'habiller, elle vit hors de `#faces` pour la raison
+   que dit le balisage. Elle porte donc le même vêtement, redit ici. */
+.lunette { background: transparent; color: var(--encre); border-color: var(--trait); }
+
+.lunette[aria-pressed="true"] {
+  background: var(--encre);
+  color: var(--surface);
+  border-color: var(--encre);
+}
+
+.lunette:hover:not([aria-pressed="true"]) { background: var(--survol); }
+
 .apercu {
   display: block;
   max-width: 100%;

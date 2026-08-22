@@ -544,3 +544,41 @@ test('l\'aperçu retiré emporte le rapport d\'aspect du cadre', async () => {
   await attendreApercu();
   assert.strictEqual(cadre.style.getPropertyValue('--ratio'), '');
 });
+
+/**
+ * Éteindre la lunette montre la couverture telle qu'elle sera en main. Sans nouvelle
+ * composition : c'est tout l'intérêt d'habiller l'image plutôt que de la refaire —
+ * Typst met une seconde là où le CSS ne met rien.
+ */
+test('éteindre le fond perdu retire l\'habillage sans recomposer', async () => {
+  const { els, appels } = await ouvre(maquette());
+  await face(els, 'Planche').declenche('click');
+  await attendreApercu();
+  const avant = appels.filter(([c]) => c === 'couverture_apercu').length;
+
+  await els.get('btFondPerdu').declenche('click');
+  assert.strictEqual(els.get('coupe').hidden, true, 'habillage resté allumé');
+  assert.strictEqual(els.get('btFondPerdu').getAttribute('aria-pressed'), 'false');
+  assert.strictEqual(
+    appels.filter(([c]) => c === 'couverture_apercu').length, avant,
+    'la bascule a relancé une composition'
+  );
+
+  await els.get('btFondPerdu').declenche('click');
+  assert.strictEqual(els.get('coupe').hidden, false, 'habillage non rallumé');
+});
+
+/**
+ * Un bouton qui ne peut rien faire est un piège : les trois autres faces n'ont pas de
+ * fond perdu à montrer. Même raison que les réglages sans objet, masqués plutôt que
+ * grisés.
+ */
+test('la bascule ne s\'offre que sur la planche', async () => {
+  const { els } = await ouvre(maquette());
+  await attendreApercu();
+  assert.strictEqual(els.get('btFondPerdu').hidden, true, 'bascule offerte sur la 1ère');
+
+  await face(els, 'Planche').declenche('click');
+  await attendreApercu();
+  assert.strictEqual(els.get('btFondPerdu').hidden, false, 'bascule absente de la planche');
+});

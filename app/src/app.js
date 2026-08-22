@@ -940,6 +940,7 @@ $('btReimporter').addEventListener('click', reimporter);
 $('btChoisirManuscrit').addEventListener('click', choisirManuscrit);
 $('btImageUne').addEventListener('click', () => choisirImage('une'));
 $('btImageQuatre').addEventListener('click', () => choisirImage('quatre'));
+$('btFondPerdu').addEventListener('click', basculerFondPerdu);
 // Le seul écouteur de l'application qui ne réponde pas à un geste : c'est l'image
 // décodée qui donne au cadre sa taille, et elle ne l'est qu'après avoir été posée.
 $('apercu').addEventListener('load', poserRatio);
