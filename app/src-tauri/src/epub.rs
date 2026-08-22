@@ -10,6 +10,8 @@
 //! seulement ce qui appartient au livre : son texte, sa coupure en chapitres, ses
 //! ruptures de scène, son œil.
 
+use crate::manuscrit::{self, Bloc, Chapitre, Morceau};
+
 /// Texte brut → contenu XML.
 ///
 /// Rien à voir avec `manuscrit::echappe`, qui protège le markup Typst : les deux
@@ -33,8 +35,6 @@ fn echappe(s: &str) -> String {
     }
     out
 }
-
-use crate::manuscrit::{self, Bloc, Chapitre, Morceau};
 
 /// La rupture de scène telle que l'EPUB l'écrit.
 ///
