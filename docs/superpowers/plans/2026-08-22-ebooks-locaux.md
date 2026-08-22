@@ -249,6 +249,16 @@ git commit -m "Les astérisques du manuscrit ne se lisent plus qu'une fois"
 Chapitres, PNG et fichiers de police en entrée ; une archive en sortie. Ni disque, ni
 Typst, ni prestataire : tout ce lot se vérifie par des tests unitaires.
 
+> **La barrière clippy est au bout du lot, pas à chaque tâche.** Le module se construit
+> de bas en haut : `echappe` n'a d'appelant qu'à la tâche 3, `chapitre_xhtml` qu'à la
+> tâche 6, `contenu` et `opf` qu'à la tâche 8. Entre-temps, `-D warnings` refuse le
+> `dead_code` de fonctions privées que seuls les tests appellent encore. Les exposer en
+> `pub` ou poser un `#[allow(dead_code)]` qu'on retirerait deux commits plus loin
+> déformerait la conception pour satisfaire un lint. Le gage de chaque tâche du lot est
+> donc `cargo test --lib` et `cargo fmt --check` ; **`cargo clippy --all-targets -- -D
+> warnings` est exigé à la tâche 8**, qui referme le module. Rien ne se pousse avant
+> qu'il soit vert — la CI le lance à chaque push.
+
 ### Task 2 : le squelette du module et l'échappement XML
 
 **Files:**
@@ -298,13 +308,13 @@ mod tests {
 ```
 
 Puis déclarer le module dans `lib.rs`, en respectant l'ordre alphabétique de la liste
-existante — entre `envoi` et `epreuve`. `ebook` viendra à la tâche 11 ; ne pas l'ajouter
-maintenant, il n'existe pas encore et `lib.rs` ne compilerait plus.
+existante — **après** `epreuve`, car `epr` précède `epu`. `ebook` viendra à la tâche 11 ;
+ne pas l'ajouter maintenant, il n'existe pas encore et `lib.rs` ne compilerait plus.
 
 ```rust
 pub mod envoi;
-pub mod epub;
 pub mod epreuve;
+pub mod epub;
 ```
 
 - [ ] **Step 2 : lancer le test pour le voir échouer**
@@ -1209,13 +1219,14 @@ cd app/src-tauri && cargo test --lib epub
 
 Attendu : SUCCÈS, 19 tests.
 
-- [ ] **Step 5 : clippy et fmt**
+- [ ] **Step 5 : fmt**
 
 ```bash
-cd app/src-tauri && cargo clippy --all-targets -- -D warnings && cargo fmt --check
+cd app/src-tauri && cargo fmt --check
 ```
 
-Attendu : aucune sortie.
+Attendu : aucune sortie. **Pas de clippy ici** : `contenu` n'aura d'appelant hors des
+tests qu'à la tâche 8. Voir l'encadré en tête du lot 2.
 
 - [ ] **Step 6 : commit**
 
