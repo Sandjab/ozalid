@@ -263,10 +263,29 @@ input, select, textarea {
 textarea { resize: vertical; }
 select:disabled { color: var(--gris); background: var(--eteint); }
 
-.ligne { display: flex; align-items: center; gap: .8rem; }
+/* Ce qui ne tient pas dans la ligne passe dessous, entier. Sans `wrap`, le flex
+   comprime ses boutons jusqu'à couper leur libellé en deux — « Ma police… » sur deux
+   lignes dans une colonne de 23 rem — et un bouton coupé se lit comme deux boutons. */
+.ligne { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
+
+/* Un libellé posé dans une ligne ne réclame pas la colonne de formulaire. Les 13 rem
+   qu'un `label` impose partout ailleurs alignent des champs empilés ; ici la ligne
+   porte déjà d'autres contrôles, et cette colonne les repousse hors des 23 rem de la
+   leur — le bouton se replie sur deux lignes, et le select tronque son contenu à ce
+   qui reste. Le champ prend donc sa largeur au lieu de celle qu'on lui laisse. */
+.ligne label { grid-template-columns: auto auto; margin-bottom: 0; }
+.ligne label select { width: auto; }
+
+/* Un champ posé *dans* une ligne partage la place au lieu de la prendre toute : le
+   `width: 100%` qui convient à un champ empilé sous son libellé renverrait ici, à lui
+   seul, le bouton d'à côté à la ligne suivante. Il garde de quoi se lire. */
+.ligne > input, .ligne > select { width: auto; flex: 1; min-width: 8rem; }
 
 button {
   font: inherit;
+  /* Un libellé de bouton ne se coupe pas : il nomme un geste, et la moitié d'un geste
+     ne veut rien dire. C'est la ligne qui cède, pas le mot. */
+  white-space: nowrap;
   padding: .4rem .9rem;
   border: 1px solid var(--encre);
   border-radius: 3px;
