@@ -40,6 +40,15 @@ impl Typst {
         self
     }
 
+    /// Les répertoires de polices, pour qui a besoin des fichiers eux-mêmes.
+    ///
+    /// L'EPUB embarque la police du livre : elle doit être **celle que Typst a
+    /// employée**, donc venir des mêmes répertoires. En chercher d'autres embarquerait
+    /// une écriture que la composition n'a pas vue.
+    pub fn polices(&self) -> &[PathBuf] {
+        &self.polices
+    }
+
     /// Compte de pages final de la source, sans produire de PDF.
     /// La source doit se terminer par [`MARQUEUR`].
     pub fn pages(&self, source: &Path) -> Result<u32, String> {
@@ -182,5 +191,21 @@ warning: unknown font family: plume fantome
     #[test]
     fn un_stderr_sain_ne_releve_aucune_famille() {
         assert!(familles_introuvables("").is_empty());
+    }
+
+    /// `ebook` doit lire les fichiers de police pour en embarquer deux dans l'EPUB : les
+    /// répertoires que Typst connaît sont les seuls qui fassent foi — s'en chercher
+    /// d'autres embarquerait une police que la composition n'a pas employée.
+    #[test]
+    fn les_repertoires_de_polices_sont_lisibles_du_dehors() {
+        let t = Typst::new("/x/typst")
+            .avec_polices("/a/fonts")
+            .avec_polices("/b/fonts");
+        let p: Vec<_> = t
+            .polices()
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect();
+        assert_eq!(p, vec!["/a/fonts", "/b/fonts"]);
     }
 }
