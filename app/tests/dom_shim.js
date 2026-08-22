@@ -20,6 +20,14 @@ class El {
     this.className = '';
     this.hidden = false;
     this.disabled = false;
+    // Le style inline, réduit aux variables CSS : c'est tout ce que l'application y
+    // pose — les deux fractions de la coupe, que ni un attribut `data-` ni une classe
+    // ne peuvent transporter jusqu'à un `calc()`.
+    const proprietes = new Map();
+    this.style = {
+      setProperty: (nom, valeur) => proprietes.set(nom, String(valeur)),
+      getPropertyValue: (nom) => proprietes.get(nom) ?? '',
+    };
     this._id = undefined;
     this._registre = null;
   }

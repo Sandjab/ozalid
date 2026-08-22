@@ -83,3 +83,20 @@ test('un listen sur mesure fait dire au helper pourquoi il ne peut rien', async 
 
   await assert.rejects(() => menu('fichier.nouveau'), /listen/);
 });
+
+/**
+ * Une variable CSS est le seul moyen de faire passer un nombre du Rust à la feuille de
+ * style : un attribut `data-` ne se lit pas dans un `calc()`. Le faux DOM doit donc
+ * savoir en retenir une, sans quoi l'habillage de la coupe ne s'exécute nulle part.
+ *
+ * Sur `couv`, et non sur le cadre de l'aperçu : ce qui est vérifié ici est le faux DOM
+ * lui-même, pas ce que l'application en fait — n'importe quel élément fait l'affaire.
+ */
+test('une variable CSS posée sur un élément se relit', async () => {
+  const { els } = await charge({ invoke: invokeMuet });
+  const el = els.get('couv');
+  el.style.setProperty('--coupe-x', '0.0129');
+  assert.strictEqual(el.style.getPropertyValue('--coupe-x'), '0.0129');
+  assert.strictEqual(el.style.getPropertyValue('--coupe-y'), '',
+    'une variable jamais posée doit se lire vide, comme dans le navigateur');
+});
