@@ -227,9 +227,15 @@ fn assemble(
                 // du corps, la parité dépend de la longueur du chapitre précédent, donc
                 // d'un texte que l'auteur retouche. Sans ce saut, trois paragraphes
                 // ajoutés au chapitre d'avant retournent le dispositif, et cela ne se
-                // découvre qu'après tirage. La page que le saut insère parfois porte le
-                // folio du corps, comme la blanche de parité du livre.
-                s.push_str("#pagebreak(to: \"odd\")\n");
+                // découvre qu'après tirage.
+                //
+                // Le saut n'est pas un `pagebreak(to: "odd")` : la page qu'il insère
+                // hérite du folio du corps, et une page entièrement vide portant son
+                // numéro au milieu du livre se remarque — aucune édition courante ne le
+                // fait. La blanche est donc posée ici, sans folio, en regardant la
+                // parité de la page où le flux se trouve : la partie ouvre la suivante,
+                // donc c'est une page **impaire** en cours qui appelle une blanche.
+                s.push_str("#context if calc.odd(here().page()) { page(footer: none)[] }\n");
                 s.push_str(&format!(
                     "#page(footer: none)[\n#v(22mm)\n\
                      #align(center, text(size: 13pt)[{r}])\n"
@@ -1038,8 +1044,14 @@ mod tests {
             None,
         );
         assert!(
-            s.contains("#pagebreak(to: \"odd\")\n#page(footer: none)["),
+            s.contains("if calc.odd(here().page()) { page(footer: none)[] }"),
             "la page de partie n'est pas calée sur un recto : {s}"
+        );
+        // La blanche du calage est posée sans folio, comme les deux pages de la partie :
+        // une page vide numérotée au milieu du livre se remarque.
+        assert!(
+            !s.contains("#pagebreak(to: \"odd\")"),
+            "le calage par saut de parité laisserait une blanche foliotée : {s}"
         );
     }
 
