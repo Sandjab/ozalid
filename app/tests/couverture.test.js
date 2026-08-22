@@ -458,3 +458,54 @@ test('l\'invitation à choisir une maquette n\'hérite pas du rouge de l\'échec
   assert.strictEqual(els.get('etatApercu').className, 'note',
     'une invitation à choisir écrite en rouge se lit comme un refus');
 });
+
+/**
+ * La face Planche est la vue de contrôle : c'est là, et là seulement, qu'une image à
+ * fond perdu voulue et une pastille tombée sous la coupe cessent de se ressembler.
+ * Les fractions viennent du Rust — les recalculer ici redirait la règle qui choisit
+ * entre le fond perdu publié et le relevé.
+ */
+test('la planche marque la coupe avec les fractions que le Rust donne', async () => {
+  const { els } = await ouvre(maquette());
+  await face(els, 'Planche').declenche('click');
+  await attendreApercu();
+  const cadre = els.get('cadreApercu');
+  assert.strictEqual(cadre.style.getPropertyValue('--coupe-x'), '0.0129');
+  assert.strictEqual(cadre.style.getPropertyValue('--coupe-y'), '0.0175');
+  assert.strictEqual(els.get('coupe').hidden, false, 'coupe non marquée sur la planche');
+});
+
+/**
+ * La 1ère se compose au format rogné : il n'y a pas de bande à couper, et un trait sur
+ * le bord même de l'image se lirait comme une coupe à zéro millimètre du texte.
+ */
+test('une face sans fond perdu ne montre aucune coupe', async () => {
+  const { els } = await ouvre(maquette());
+  await attendreApercu();
+  assert.strictEqual(els.get('coupe').hidden, true, 'coupe marquée sur la 1ère');
+});
+
+/**
+ * Un aperçu qui échoue retire l'image ; l'habillage doit partir avec elle. Seul sur la
+ * scène, il marquerait la coupe d'une couverture qui n'est plus affichée.
+ */
+test('un aperçu qui échoue emporte l\'habillage avec l\'image', async () => {
+  let casse = false;
+  const { els } = await ouvre(maquette(), {
+    couverture_apercu: (args) => {
+      if (casse) throw 'prolongement panoramique : la largeur du dos est inconnue';
+      return {
+        image: 'data:image/png;base64,QUJD',
+        coupe: args.face === 'planche' ? { x: 0.0129, y: 0.0175 } : null,
+      };
+    },
+  });
+  await face(els, 'Planche').declenche('click');
+  await attendreApercu();
+  assert.strictEqual(els.get('coupe').hidden, false);
+
+  casse = true;
+  await els.get('inDestinataire').declenche('change');
+  await attendreApercu();
+  assert.strictEqual(els.get('coupe').hidden, true, 'habillage laissé seul à l\'écran');
+});

@@ -133,9 +133,16 @@
          style ne peut pas les déduire seule. -->
     <div class="couv" id="couv">
       <div class="face">
-        <!-- L'aperçu est centré dans une scène qui, elle, a la hauteur disponible :
-             l'image garde ses proportions et ne pousse jamais la fenêtre. -->
-        <div class="scene"><img id="apercu" class="apercu" alt="Aperçu de la couverture"></div>
+        <!-- L'habillage se cale sur l'image, jamais sur la scène : la scène occupe la
+             colonne entière, une couverture y est centrée et plus étroite, et un
+             habillage calé sur elle marquerait la coupe à côté du livre. D'où ce cadre,
+             qui n'existe que pour épouser l'image. -->
+        <div class="scene">
+          <div class="cadre" id="cadreApercu">
+            <img id="apercu" class="apercu" alt="Aperçu de la couverture">
+            <div class="coupe" id="coupe" hidden></div>
+          </div>
+        </div>
         <p class="note" id="etatApercu"></p>
       </div>
       <div id="reglages" class="reglages"></div>

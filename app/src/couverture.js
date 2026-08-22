@@ -443,6 +443,30 @@ function poserApercu(a) {
   if (a) img.src = a.image;
   else img.removeAttribute('src');
   img.hidden = !a;
+  poserCoupe(a?.coupe ?? null);
+}
+
+/**
+ * La bande que le massicot emporte, mesurée par le Rust et posée sur l'image.
+ *
+ * Deux fractions, pas des millimètres : l'aperçu s'affiche à la taille que la fenêtre
+ * lui laisse, et seules des proportions y survivent. Elles ne se recalculent pas ici —
+ * ce serait redire la règle qui choisit entre le fond perdu publié par le prestataire
+ * et celui relevé sur son gabarit.
+ */
+function poserCoupe(coupe) {
+  coupeCourante = coupe;
+  if (coupe) {
+    const cadre = $('cadreApercu');
+    cadre.style.setProperty('--coupe-x', String(coupe.x));
+    cadre.style.setProperty('--coupe-y', String(coupe.y));
+  }
+  rendreCoupe();
+}
+
+/** L'habillage suit deux choses : l'aperçu posé et la lunette. Les deux passent ici. */
+function rendreCoupe() {
+  $('coupe').hidden = !coupeCourante || !fondPerduVisible;
 }
 
 async function rendreApercu() {

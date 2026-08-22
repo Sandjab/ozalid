@@ -35,6 +35,16 @@ let mains = [];
  */
 let candidat = null;
 let face = 'une';
+
+/**
+ * La coupe du dernier aperçu posé, s'il en avait une, et si la lunette est allumée.
+ *
+ * Les deux vivent ici et non dans le projet : ce qu'on regarde n'est pas ce qu'on
+ * imprime. Rien n'en va dans le `.ozalid`, et le PDF remis ne porte aucun repère —
+ * c'est ce que `planche.rs` promet en tête de fichier.
+ */
+let coupeCourante = null;
+let fondPerduVisible = true;
 let attenteApercu = null;
 
 /**
