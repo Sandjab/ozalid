@@ -85,10 +85,17 @@ rendue**, jamais sur `.scene` : la scène occupe la largeur de la colonne, une c
 y est centrée et plus étroite, et un habillage calé sur la scène marquerait la coupe à
 côté de la couverture.
 
-Le cadre reprend donc les contraintes qui dimensionnent l'image aujourd'hui
-(`max-width`, `max-height`, et le `width: 100%` que la face Dos impose), sans les
-rompre : c'est le point délicat de ce chantier, et il se vérifie à l'œil sur les quatre
-faces.
+Le cadre ne peut pas se dimensionner sur l'image : celle-ci se borne en pourcentage de
+son cadre, le cadre attend sa taille de l'image, et le navigateur tranche ce cycle à
+zéro — mesuré, cadre et image à 0 × 0 dans une scène de 620 × 345. Il tient donc sa
+taille de son **rapport d'aspect**, borné par `max-width` et `max-height`, et l'image le
+remplit. Le rapport est posé par le front à partir de l'image décodée (`naturalWidth /
+naturalHeight`), et retiré avec elle : un cadre sans image garderait sinon sa place,
+vide, et pousserait plus bas le message qui dit qu'il n'y a rien à voir.
+
+C'était le point délicat du chantier, et il ne se voyait qu'à l'écran : aucun test du
+faux DOM ne mesure une boîte. La garde est donc double — un test qui vérifie que le
+rapport est bien posé et bien retiré, et une vérification au navigateur.
 
 ### Un seul élément pour les deux effets
 
