@@ -289,6 +289,8 @@ pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Piece>, String> {
     // Le manuscrit est trois zones dans cet ordre : liminaires, corps, annexes.
     let mut vu_corps = false;
     let mut vu_annexe = false;
+    // Les parties se suivent depuis I : une partie sautée ne se verrait qu'au tirage.
+    let mut derniere_partie = 0;
     for (no, ligne) in md.lines().enumerate() {
         let no = no + 1;
         let t = ligne.trim();
@@ -314,6 +316,25 @@ pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Piece>, String> {
                 // se suivent, et c'est le premier chapitre qui ferme la zone.
                 Sorte::Liminaire => {}
                 Sorte::Annexe => vu_annexe = true,
+                Sorte::Partie(ref r) if vu_annexe => {
+                    return Err(format!(
+                        "ligne {no} : « Partie {r} » vient après une pièce annexe, qui \
+                         ferme le livre."
+                    ));
+                }
+                Sorte::Partie(ref r) => {
+                    // `entete` a déjà refusé ce qui n'est pas un romain canonique.
+                    let n = romain(r).expect("romain validé par entete");
+                    if n != derniere_partie + 1 {
+                        return Err(format!(
+                            "ligne {no} : partie {r} après la partie {}, attendu {}.",
+                            en_romain(derniere_partie),
+                            en_romain(derniere_partie + 1)
+                        ));
+                    }
+                    derniere_partie = n;
+                    vu_corps = true;
+                }
                 _ if vu_annexe => {
                     return Err(format!(
                         "ligne {no} : « {} » vient après une pièce annexe, qui ferme le \
@@ -338,6 +359,12 @@ pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Piece>, String> {
             // Titre du livre : le projet fait foi, pas le manuscrit.
             continue;
         } else if let Some(courant) = pieces.last_mut() {
+            if let Sorte::Partie(r) = &courant.sorte {
+                return Err(format!(
+                    "ligne {no} : du texte sous « Partie {r} » — une page de partie ne \
+                     porte que son titre."
+                ));
+            }
             courant.blocs.push(Bloc::Paragraphe(t.to_string()));
         } else {
             // Avant le premier « ## » : liminaires du manuscrit, composés par le projet.
@@ -351,7 +378,7 @@ pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Piece>, String> {
         return Err("aucun chapitre trouvé (attendu : « ## NN - Titre »).".into());
     }
     if let Some(n) = attendu {
-        let trouves = pieces.len() as u32;
+        let trouves = pieces.iter().filter(|p| p.est_chapitre()).count() as u32;
         if trouves != n {
             return Err(format!(
                 "{n} chapitres attendus (projet), {trouves} trouvés."
@@ -366,6 +393,23 @@ fn entete(reste: &str, no: usize) -> Result<Piece, String> {
         return Ok(Piece {
             sorte,
             titre: mot.to_string(),
+            blocs: Vec::new(),
+        });
+    }
+    if let Some(apres) = reste.strip_prefix("Partie ") {
+        let (num, titre) = match apres.split_once('-') {
+            Some((n, t)) => (n.trim(), t.trim()),
+            None => (apres.trim(), ""),
+        };
+        if romain(num).is_none() {
+            return Err(format!(
+                "ligne {no} : « {num} » n'est pas un numéro de partie (attendu : I, II, \
+                 III…)."
+            ));
+        }
+        return Ok(Piece {
+            sorte: Sorte::Partie(num.to_string()),
+            titre: titre.to_string(),
             blocs: Vec::new(),
         });
     }
@@ -687,6 +731,71 @@ mod tests {
         assert!(
             !chapitres[0].titre.is_empty(),
             "un chapitre sans titre : la conversion a mangé l'en-tête"
+        );
+    }
+
+    /// Un titre libre est indiscernable d'un chapitre mal formé : la page de partie se
+    /// marque donc explicitement, et son romain se vérifie comme le reste.
+    #[test]
+    fn une_page_de_partie_porte_un_romain_et_un_titre_libre() {
+        let p = decoupe(
+            "## Partie I - Avant Clément\n\n## 01 - Un\n\nA.\n\n\
+             ## Partie II - Après Clément\n\n## 02 - Deux\n\nB.\n",
+            None,
+        )
+        .unwrap();
+        assert_eq!(p[0].sorte, Sorte::Partie("I".into()));
+        assert_eq!(p[0].titre, "Avant Clément");
+        assert_eq!(p[2].sorte, Sorte::Partie("II".into()));
+    }
+
+    /// Comme `## 7`, une partie peut n'avoir que son numéro.
+    #[test]
+    fn une_page_de_partie_sans_titre_est_admise() {
+        let p = decoupe("## Partie I\n\n## 01 - Un\n\nA.\n", None).unwrap();
+        assert_eq!(p[0].sorte, Sorte::Partie("I".into()));
+        assert_eq!(p[0].titre, "");
+    }
+
+    /// Une partie sautée est une partie perdue en route, et elle ne se verrait qu'au
+    /// tirage.
+    #[test]
+    fn un_romain_de_partie_qui_ne_suit_pas_est_refuse() {
+        let md = "## Partie I - Un\n\n## 01 - Un\n\nA.\n\n## Partie IV - Quatre\n\n\
+                  ## 02 - Deux\n\nB.\n";
+        let err = decoupe(md, None).unwrap_err();
+        // « Partie IV » est en ligne 7 dans ce manuscrit (comptage vérifié) : la ligne 5
+        // du texte de la tâche était une coquille de comptage.
+        assert!(err.contains("ligne 7"), "{err}");
+        assert!(
+            err.contains("II"),
+            "l'erreur doit dire ce qui était attendu : {err}"
+        );
+
+        let err = decoupe("## Partie X - Dix\n\n## 01 - Un\n\nA.\n", None).unwrap_err();
+        assert!(err.contains("ligne 1"), "{err}");
+    }
+
+    /// Une page de partie ne porte que son titre : un paragraphe écrit là serait
+    /// silencieusement perdu à la composition, ce que le format refuse partout ailleurs.
+    #[test]
+    fn du_texte_sous_une_page_de_partie_est_refuse() {
+        let err = decoupe("## Partie I - Un\n\nDu texte.\n\n## 01 - Un\n\nA.\n", None).unwrap_err();
+        assert!(err.contains("ligne 3"), "{err}");
+    }
+
+    /// Le contrôle d'intégrité du projet dit un nombre de **chapitres** : une préface
+    /// ajoutée au manuscrit ne doit pas faire croire à un chapitre de plus.
+    #[test]
+    fn le_controle_d_integrite_ne_compte_que_les_chapitres() {
+        let md = "## Préface\n\nA.\n\n## Partie I - Un\n\n## 01 - Un\n\nB.\n\n\
+                  ## 02 - Deux\n\nC.\n\n## Postface\n\nD.\n";
+        let p = decoupe(md, Some(2)).expect("deux chapitres, pièces en plus");
+        assert_eq!(p.len(), 5);
+        assert_eq!(p.iter().filter(|p| p.est_chapitre()).count(), 2);
+        assert!(
+            decoupe(md, Some(5)).is_err(),
+            "les pièces ne sont pas des chapitres"
         );
     }
 

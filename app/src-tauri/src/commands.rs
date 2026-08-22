@@ -1237,7 +1237,7 @@ fn vue(o: &Ouvert) -> Result<ProjetVue, String> {
     // Le compte de chapitres affiché est celui du manuscrit embarqué, pas celui que le
     // projet déclare : c'est l'écart entre les deux qui signale un manuscrit périmé.
     let chapitres_trouves = manuscrit::decoupe(&o.projet.texte, None)
-        .map(|c| c.len() as u32)
+        .map(|p| p.iter().filter(|p| p.est_chapitre()).count() as u32)
         .unwrap_or(0);
     Ok(ProjetVue {
         chemin: o.chemin.as_ref().map(|c| c.to_string_lossy().into_owned()),

@@ -119,7 +119,7 @@ pub fn source(livre: &Livre, int: &Interieur, chapitres: &[Piece], corps_pt: f64
               number-clearance: 7mm, numbering-scope: "page")
 "##,
         genre = echappe(&livre.genre),
-        nb_chapitres = chapitres.len(),
+        nb_chapitres = chapitres.iter().filter(|p| p.est_chapitre()).count(),
     );
 
     for (i, ch) in chapitres.iter().enumerate() {
