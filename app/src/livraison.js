@@ -158,6 +158,14 @@ function afficherPackages(resultats) {
       infos.append(dl);
       // Une police que Typst a remplacée sans échouer : ce PDF-là part chez
       // l'imprimeur, l'alerte se lit donc sur le package qu'elle a traversé.
+      // Le dos est composé sur une zone qui rogne ce qui dépasse, sans rien dire : un
+      // titre coupé au pli ne se verrait qu'à l'impression. La maquette est unique, les
+      // formats ne le sont pas — c'est le seul endroit où ça produit un fichier faux.
+      if (p.dos_requis !== null) {
+        infos.append(h('p', `Dos de ${nb(p.dos)} mm pour un texte qui en réclame `
+          + `${nb(p.dos_requis)} mm : il sera rogné au pli. Réduire le corps du dos, ou `
+          + 'y éteindre un élément.', 'note alerte'));
+      }
       if (p.polices_introuvables.length) {
         infos.append(h('p', 'Police introuvable, composé dans une écriture de repli : '
           + `${p.polices_introuvables.join(', ')}. Le PDF ne suit pas la maquette.`,

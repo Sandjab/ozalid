@@ -20,7 +20,7 @@ use crate::maquettes;
 use crate::package;
 use crate::planche;
 use crate::preferences;
-use crate::projet::{Destinataire, Livraison, Livre, Projet};
+use crate::projet::{Destinataire, Livraison, Livre, Mesure, Projet};
 use crate::providers::{self, Provider};
 use crate::typst::Typst;
 
@@ -118,6 +118,11 @@ pub struct ProjetVue {
 
 #[derive(Serialize)]
 pub struct Composition {
+    /// Le projet tel qu'il ressort de la composition : c'est lui qui porte désormais la
+    /// mesure, rangée chez le destinataire visé. Les quatre chiffres ci-dessous en sont
+    /// une copie de lecture, issue du même calcul — le compte rendu de l'écran les lit
+    /// sans avoir à retrouver le destinataire.
+    pub projet: ProjetVue,
     pub pages: u32,
     pub gouttiere: f64,
     pub blanche: bool,
@@ -343,8 +348,9 @@ pub fn manuscrit_reimporter(atelier: State<Atelier>) -> Result<ProjetVue, String
     let source = o.projet.meta.manuscrit.source.clone().ok_or_else(|| {
         "ce projet ne mémorise aucune source de manuscrit — en choisir une.".to_string()
     })?;
-    o.projet.texte = std::fs::read_to_string(&source)
+    let texte = std::fs::read_to_string(&source)
         .map_err(|e| format!("manuscrit introuvable ({source}) : {e}"))?;
+    o.projet.remplacer_texte(texte);
     vue_modifiee(o)
 }
 
@@ -353,8 +359,9 @@ pub fn manuscrit_reimporter(atelier: State<Atelier>) -> Result<ProjetVue, String
 pub fn manuscrit_choisir(chemin: String, atelier: State<Atelier>) -> Result<ProjetVue, String> {
     let mut garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_mut().ok_or_else(aucun_projet)?;
-    o.projet.texte =
+    let texte =
         std::fs::read_to_string(&chemin).map_err(|e| format!("manuscrit illisible : {e}"))?;
+    o.projet.remplacer_texte(texte);
     o.projet.meta.manuscrit.source = Some(chemin);
     vue_modifiee(o)
 }
@@ -363,7 +370,7 @@ pub fn manuscrit_choisir(chemin: String, atelier: State<Atelier>) -> Result<Proj
 pub fn livre_modifier(livre: Livre, atelier: State<Atelier>) -> Result<ProjetVue, String> {
     let mut garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_mut().ok_or_else(aucun_projet)?;
-    o.projet.meta.livre = livre;
+    o.projet.modifier_livre(livre);
     vue_modifiee(o)
 }
 
@@ -380,7 +387,7 @@ pub fn interieur_modifier(
     interieur.verifie()?;
     let mut garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_mut().ok_or_else(aucun_projet)?;
-    o.projet.meta.interieur = interieur;
+    o.projet.modifier_interieur(interieur);
     vue_modifiee(o)
 }
 
@@ -474,6 +481,11 @@ pub fn destinataire_regler(
         .find(|d| d.provider == destinataire.provider)
         .ok_or_else(|| format!("{} n'est pas destinataire de ce livre.", pr.libelle))?;
     *place = destinataire;
+    // Le papier change l'épaisseur d'une page, le relevé change le dos directement :
+    // dans les deux cas la mesure retenue ne vaut plus. Effacée ici plutôt que de faire
+    // confiance à ce que l'interface a envoyé — elle rebâtit le destinataire depuis ses
+    // contrôles, et n'a aucune raison de porter une mesure.
+    place.compose = None;
     vue_modifiee(o)
 }
 
@@ -502,8 +514,8 @@ pub fn destinataire_viser(
 /// de pages avec le dos qui en découle.
 #[tauri::command]
 pub fn composer(atelier: State<Atelier>) -> Result<Composition, String> {
-    let garde = atelier.ouvert.lock().unwrap();
-    let o = garde.as_ref().ok_or_else(aucun_projet)?;
+    let mut garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_mut().ok_or_else(aucun_projet)?;
     let (pr, papier, _) = vise(o)?;
 
     let livre = &o.projet.meta.livre;
@@ -544,14 +556,30 @@ pub fn composer(atelier: State<Atelier>) -> Result<Composition, String> {
     let pdf = dossier.join(format!("interieur-{}.pdf", pr.cle));
     let polices_introuvables = typst.compile(&src, &pdf)?;
 
+    // Le compte rendu dit « Chapitres » : une préface ou une page de partie n'en est
+    // pas un, et l'onglet Livre en affiche déjà le compte juste.
+    let chapitres = chapitres.iter().filter(|p| p.est_chapitre()).count() as u32;
+    let dos = papier.dos.mm(r.pages);
+
+    // La mesure entre dans le projet, chez le destinataire pour qui elle a été faite :
+    // revenir à ce prestataire, ou rouvrir le livre, ne la fera plus recalculer.
+    o.projet.meta.livraison.retenir_mesure(
+        pr.cle,
+        Mesure {
+            pages: r.pages,
+            gouttiere: r.gouttiere,
+            blanche: r.blanche,
+            dos,
+        },
+    );
+
     Ok(Composition {
+        projet: vue_modifiee(o)?,
         pages: r.pages,
         gouttiere: r.gouttiere,
         blanche: r.blanche,
-        // Le compte rendu dit « Chapitres » : une préface ou une page de partie n'en
-        // est pas un, et l'onglet Livre en affiche déjà le compte juste.
-        chapitres: chapitres.iter().filter(|p| p.est_chapitre()).count() as u32,
-        dos: papier.dos.mm(r.pages),
+        chapitres,
+        dos,
         pdf: pdf.to_string_lossy().into_owned(),
         polices_introuvables,
     })

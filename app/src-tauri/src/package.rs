@@ -31,6 +31,11 @@ pub struct Package {
     pub gouttiere: f64,
     pub blanche: bool,
     pub dos: f64,
+    /// Épaisseur que le texte du dos réclame, **quand elle dépasse `dos`** : le titre
+    /// part rogné au pli sur ce PDF-là. `None`, il tient. C'est la seule chose qu'une
+    /// maquette unique pour N formats casse au lieu de simplement la déplacer — le
+    /// corps du dos suit la largeur de couverture, son épaisseur suit la pagination.
+    pub dos_requis: Option<f64>,
     pub fond_perdu: f64,
     /// Dimensions de la planche, en mm.
     pub planche: (f64, f64),
@@ -137,6 +142,7 @@ pub fn assembler(
         gouttiere: r.gouttiere,
         blanche: r.blanche,
         dos: g.dos,
+        dos_requis: planche::dos_insuffisant(livre, cv, g.format.0, g.dos),
         fond_perdu: g.fond_perdu,
         planche: (g.largeur(), g.hauteur()),
         chemins: vec![affiche(&pdf_int), affiche(&pdf_pl)],

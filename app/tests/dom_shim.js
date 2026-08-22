@@ -55,6 +55,23 @@ class El {
     return c;
   }
 
+  /**
+   * Le vrai DOM convertit en chaîne ce qu'on affecte à `value` : `input.value = 64`
+   * donne « 64 », et l'application appelle `.trim()` dessus sans y penser. Un faux qui
+   * garderait le nombre ferait échouer ici du code qui marche dans la fenêtre — c'est
+   * ce qui a caché `livre()` à tous les tests jusqu'au premier qui l'a exercé.
+   *
+   * `null` devient la chaîne vide, comme le `[LegacyNullToEmptyString]` que la spec
+   * pose sur `input` et `textarea`.
+   */
+  get value() {
+    return this._value;
+  }
+
+  set value(v) {
+    this._value = v == null ? '' : String(v);
+  }
+
   get textContent() {
     return this.enfants.length
       ? this.enfants.map((c) => c.textContent).join('')

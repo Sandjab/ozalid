@@ -50,11 +50,20 @@ function projet(sur = {}) {
  */
 function atelier({
   recents = [], sur = {}, providers = [LULU], destinataires,
-  acces = { url: '', cle_posee: false },
+  acces = { url: '', cle_posee: false }, composition,
 } = {}) {
   const appels = [];
   const liste = (destinataires ?? [dest(providers[0])]).map((d) => ({ ...d }));
-  let livraison = { destinataires: liste, courant: liste[0].provider };
+  let livraison = { destinataires: liste, courant: liste[0].provider, deja_compose: false };
+  // Les règles du Rust, modélisées ici parce que le front les lit désormais dans le
+  // projet au lieu de les tenir lui-même : une mesure entre chez le destinataire pour
+  // qui elle a été faite, et tout ce qui pagine les efface toutes.
+  const oublier = () => {
+    livraison = {
+      ...livraison,
+      destinataires: livraison.destinataires.map(({ compose, ...d }) => d),
+    };
+  };
   const vue = () => projet({ livraison, ...sur });
   const invoke = async (cmd, args) => {
     appels.push([cmd, args]);
@@ -78,12 +87,41 @@ function atelier({
         livraison = { ...livraison, courant: args.providerCle };
         return vue();
       case 'destinataire_regler':
+        // Le papier et le relevé déplacent le dos : le Rust efface la mesure de ce
+        // destinataire-là, et ne reprend jamais celle que l'interface lui enverrait.
         livraison = {
           ...livraison,
           destinataires: livraison.destinataires.map((d) => (
-            d.provider === args.destinataire.provider ? args.destinataire : d
+            d.provider === args.destinataire.provider
+              ? { ...args.destinataire, compose: undefined }
+              : d
           )),
         };
+        return vue();
+      case 'composer':
+        livraison = {
+          ...livraison,
+          deja_compose: true,
+          destinataires: livraison.destinataires.map((d) => (
+            d.provider === livraison.courant
+              ? {
+                ...d,
+                compose: {
+                  pages: composition.pages,
+                  gouttiere: composition.gouttiere,
+                  blanche: composition.blanche,
+                  dos: composition.dos,
+                },
+              }
+              : d
+          )),
+        };
+        return { ...composition, projet: vue() };
+      case 'livre_modifier':
+      case 'interieur_modifier':
+      case 'manuscrit_reimporter':
+      case 'manuscrit_choisir':
+        oublier();
         return vue();
       default: return vue();
     }
@@ -495,12 +533,7 @@ test('le pied nomme le prestataire et dit le dos non composé', async () => {
  * voit au massicot, jamais avant.
  */
 test('une fois l\'intérieur composé, le pied porte le dos mesuré', async () => {
-  const a = atelier();
-  const invoke = async (cmd, args) => {
-    if (cmd === 'composer') return COMPOSITION;
-    return a.invoke(cmd, args);
-  };
-  const { els } = await charge({ invoke });
+  const { els } = await charge({ invoke: atelierCompose([LULU]) });
   await els.get('btNouveau').declenche('click');
 
   await els.get('btComposer').declenche('click');
@@ -555,11 +588,7 @@ const COOLLIBRI = {
  * de la liste y sont destinataires : c'est ce qui rend le pointeur déplaçable.
  */
 function atelierCompose(liste, composition = COMPOSITION) {
-  const a = atelier({ providers: liste, destinataires: liste.map(dest) });
-  return async (cmd, args) => {
-    if (cmd === 'composer') return composition;
-    return a.invoke(cmd, args);
-  };
+  return atelier({ providers: liste, destinataires: liste.map(dest), composition }).invoke;
 }
 
 /**
@@ -755,8 +784,8 @@ test('un dos périmé par un changement de gabarit allume le témoin de l\'Inté
 
 /**
  * Le témoin dit où réparer ; il doit donc s'éteindre quand on y répare. Recomposer est
- * le seul geste qui rend un dos juste, et il ne repasse pas par `afficherProjet` : un
- * témoin qui survivrait à sa réparation enverrait recomposer un livre déjà composé.
+ * le seul geste qui rend un dos juste : un témoin qui survivrait à sa réparation
+ * enverrait recomposer un livre déjà composé.
  */
 test('recomposer éteint le témoin de l\'Intérieur', async () => {
   const { els } = await charge({ invoke: atelierCompose([LULU, KDP]) });

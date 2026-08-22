@@ -204,6 +204,26 @@ projets écrits ensuite. Un prestataire ou un papier que la table ne porte plus 
 **élagué à l'ouverture** plutôt que de faire refuser le projet : le manuscrit et la
 maquette sont intacts, et la liste se refait en trois clics.
 
+Chaque destinataire y porte en outre **ce que sa dernière composition a mesuré** —
+pages, gouttière, blanche, dos. Une par destinataire, parce que le même manuscrit ne
+fait pas le même nombre de pages en poche et en grand format, et dans le fichier, parce
+que rouvrir un livre composé la veille ne doit pas redemander une composition entière
+pour un chiffre qui n'a pas bougé. L'invariant qui tient tout le dispositif tient en une
+phrase : **une mesure enregistrée vaut toujours.** Rien n'y est estampillé, rien n'est à
+comparer avant de s'en servir — ce qui pourrait la périmer l'efface à la source, dans le
+Rust, au moment du geste : le livre (`modifier_livre` — une dédicace prend une belle
+page et sa blanche), la police (`modifier_interieur`), le texte (`remplacer_texte`), le
+papier et le relevé (`destinataire_regler`). Grossièrement et sans rien comparer :
+recomposer pour rien coûte une composition, en rater une imprime un mauvais dos.
+
+`deja_compose`, à côté de la liste, dit que ce livre a été composé au moins une fois. Il
+n'est jamais repris, parce que c'est de l'histoire et non un état : lui seul distingue un
+dos qu'on n'a jamais demandé — rien à faire — d'un dos qu'une modification vient de
+périmer. C'est aussi le consentement de la **recomposition automatique** : une fois ce
+premier clic donné, périmer une mesure la refait toute seule, débouncée et une à la
+fois. Avant lui, rien ne part — regarder une première de couverture réclame un format,
+pas une composition.
+
 Le manuscrit y est **copié**, ce qui rend le projet complet sur une autre machine.
 Corriger le fichier d'origine ne met donc pas la copie à jour : « Réimporter le
 manuscrit » le fait, en un bouton, grâce au chemin mémorisé. L'écart entre les

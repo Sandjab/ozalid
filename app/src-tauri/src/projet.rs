@@ -132,16 +132,42 @@ pub struct Destinataire {
     pub dos_mm: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fond_perdu_mm: Option<f64>,
+    /// Ce que la dernière composition a mesuré pour ce destinataire-là.
+    ///
+    /// **Une mesure présente vaut toujours.** C'est l'invariant de tout le dispositif :
+    /// rien ici n'est estampillé, rien n'est à comparer avant de s'en servir, et ce qui
+    /// pourrait la périmer l'efface à la source. Absente, il n'y a rien à afficher.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compose: Option<Mesure>,
+}
+
+/// Ce qu'une composition mesure, et que le projet retient.
+///
+/// Retenue par destinataire et dans le `.ozalid`, et non dans une variable de
+/// l'interface : le même livre a autant de paginations que de gabarits, et les
+/// redemander une à une à chaque changement de lunette faisait payer une composition
+/// entière pour un chiffre déjà connu — puis une deuxième fois à la réouverture.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Mesure {
+    pub pages: u32,
+    pub gouttiere: f64,
+    pub blanche: bool,
+    /// Dos en mm, ou absent chez un prestataire qui ne publie pas de formule et dont le
+    /// relevé manque : composé ne veut pas dire chiffré.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dos: Option<f64>,
 }
 
 impl Destinataire {
-    /// Un destinataire neuf chez ce prestataire : son papier par défaut, aucun relevé.
+    /// Un destinataire neuf chez ce prestataire : son papier par défaut, aucun relevé,
+    /// aucune mesure — il n'a jamais été composé.
     pub fn pour(pr: &crate::providers::Provider) -> Self {
         Self {
             provider: pr.cle.into(),
             papier: pr.papier_defaut().cle.into(),
             dos_mm: None,
             fond_perdu_mm: None,
+            compose: None,
         }
     }
 }
@@ -156,6 +182,15 @@ pub struct Livraison {
     pub destinataires: Vec<Destinataire>,
     /// Clé du prestataire visé — toujours l'un des destinataires ci-dessus.
     pub courant: String,
+    /// Ce livre a été composé au moins une fois, pour n'importe lequel des
+    /// destinataires. Posé à la première composition, **jamais repris** : c'est de
+    /// l'histoire du projet, pas un état courant.
+    ///
+    /// Il dit la seule chose qu'une mesure effacée ne dit plus : la différence entre un
+    /// dos qu'on n'a jamais demandé et un dos qu'une modification vient de périmer. Le
+    /// premier ne réclame rien, le second réclame une recomposition.
+    #[serde(default)]
+    pub deja_compose: bool,
 }
 
 /// Un livre naît avec un destinataire, le premier de la table : le pointeur ne doit
@@ -167,6 +202,7 @@ impl Default for Livraison {
         Self {
             destinataires: vec![Destinataire::pour(pr)],
             courant: pr.cle.into(),
+            deja_compose: false,
         }
     }
 }
@@ -177,6 +213,36 @@ impl Livraison {
         self.destinataires
             .iter()
             .find(|d| d.provider == self.courant)
+    }
+
+    /// Oublie ce que toutes les compositions ont mesuré.
+    ///
+    /// Grossier et complet : appelé dès que quelque chose *peut* déplacer la pagination,
+    /// sans regarder si elle l'a déplacée. C'est le parti déjà pris pour le manuscrit —
+    /// comparer deux fois un roman entier coûte plus qu'une recomposition, et se tromper
+    /// de ce côté-là n'imprime rien de faux.
+    ///
+    /// `deja_compose` survit : ce qui vient d'être perdu, c'est la mesure, pas le fait
+    /// qu'on en ait déjà voulu une.
+    pub fn oublier_mesures(&mut self) {
+        for d in &mut self.destinataires {
+            d.compose = None;
+        }
+    }
+
+    /// Retient ce qu'une composition vient de mesurer pour un destinataire.
+    ///
+    /// Sans effet si le prestataire n'est plus de la liste : une composition dont le
+    /// destinataire a disparu en chemin n'a personne à renseigner.
+    pub fn retenir_mesure(&mut self, provider: &str, mesure: Mesure) {
+        if let Some(d) = self
+            .destinataires
+            .iter_mut()
+            .find(|d| d.provider == provider)
+        {
+            d.compose = Some(mesure);
+            self.deja_compose = true;
+        }
     }
 
     /// Remet la liste d'accord avec la table des gabarits.
@@ -193,7 +259,11 @@ impl Livraison {
                 return false;
             };
             if pr.papier(&d.papier).is_none() {
+                // Le papier change l'épaisseur d'une page sans toucher à la pagination :
+                // la mesure retenue ne vaut plus, et la garder ici la rendrait fausse
+                // dès l'ouverture, sans qu'aucun geste ne l'ait provoquée.
                 d.papier = pr.papier_defaut().cle.into();
+                d.compose = None;
             }
             vus.insert(d.provider.clone())
         });
@@ -266,6 +336,32 @@ impl Projet {
             polices: BTreeMap::new(),
             images_envois: BTreeMap::new(),
         }
+    }
+
+    /// Remplace l'identité du livre, et oublie ce que les compositions avaient mesuré.
+    ///
+    /// Les pages liminaires composent : une dédicace prend une belle page et sa blanche,
+    /// un pavé de copyright plus long peut refluer. Le dos suit, sans que le gabarit, le
+    /// papier ni la police aient bougé — c'est la cause qui échappait à tout le monde.
+    ///
+    /// Les deux gestes sont ici et non chez l'appelant pour qu'on ne puisse pas faire le
+    /// premier en oubliant le second.
+    pub fn modifier_livre(&mut self, livre: Livre) {
+        self.meta.livre = livre;
+        self.meta.livraison.oublier_mesures();
+    }
+
+    /// Remplace les réglages d'intérieur, et oublie les mesures : la police repagine.
+    pub fn modifier_interieur(&mut self, interieur: crate::interieur::Interieur) {
+        self.meta.interieur = interieur;
+        self.meta.livraison.oublier_mesures();
+    }
+
+    /// Remplace le texte du manuscrit, et oublie les mesures : le texte fait la
+    /// pagination, et c'est la seule cause qui ne se lise nulle part dans l'interface.
+    pub fn remplacer_texte(&mut self, texte: String) {
+        self.texte = texte;
+        self.meta.livraison.oublier_mesures();
     }
 
     /// Reprend la liste des envois saisie par l'interface, et jette ce qu'elle abandonne.
@@ -671,9 +767,11 @@ auteur = "Ivan Pjig"
                     papier: "mesure".into(),
                     dos_mm: Some(18.4),
                     fond_perdu_mm: Some(3.0),
+                    compose: None,
                 },
             ],
             courant: "coollibri-148x210".into(),
+            deja_compose: false,
         };
 
         let r = aller_retour(&p);
@@ -682,6 +780,102 @@ auteur = "Ivan Pjig"
         assert_eq!(d.dos_mm, Some(18.4));
         assert_eq!(d.fond_perdu_mm, Some(3.0));
         assert_eq!(r.meta.livraison.destinataires[0].provider, "lulu");
+    }
+
+    /// Une mesure quelconque : sa valeur n'importe jamais, seule sa présence est lue.
+    const MESURE: Mesure = Mesure {
+        pages: 262,
+        gouttiere: 25.0,
+        blanche: true,
+        dos: Some(16.513),
+    };
+
+    /// Le chiffre que l'application existe pour ne pas faire ressaisir doit survivre à
+    /// la fermeture du livre. Sans ça, rouvrir un projet composé la veille redemande une
+    /// composition entière pour retrouver un dos qui n'a pas bougé d'un micron.
+    #[test]
+    fn la_mesure_d_un_destinataire_survit_a_l_aller_retour() {
+        let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
+        p.meta
+            .livraison
+            .retenir_mesure(&p.meta.livraison.courant.clone(), MESURE);
+
+        let r = aller_retour(&p);
+        assert_eq!(
+            r.meta.livraison.courant().expect("courant perdu").compose,
+            Some(MESURE)
+        );
+        assert!(
+            r.meta.livraison.deja_compose,
+            "l'histoire du livre est perdue"
+        );
+    }
+
+    /// Chaque destinataire porte la sienne : le même manuscrit ne fait pas le même
+    /// nombre de pages en poche et en grand format, et une mesure commune serait fausse
+    /// pour tout le monde sauf un.
+    #[test]
+    fn une_mesure_ne_renseigne_que_son_destinataire() {
+        let mut l = Livraison {
+            destinataires: vec![
+                Destinataire::pour(crate::providers::provider("lulu").unwrap()),
+                Destinataire::pour(crate::providers::provider("kdp-6x9").unwrap()),
+            ],
+            courant: "lulu".into(),
+            deja_compose: false,
+        };
+        l.retenir_mesure("lulu", MESURE);
+        assert_eq!(l.destinataires[0].compose, Some(MESURE));
+        assert_eq!(
+            l.destinataires[1].compose, None,
+            "mesure de Lulu prêtée à KDP"
+        );
+    }
+
+    /// Les trois causes qui déplacent la pagination — le livre, la police, le texte —
+    /// n'en laissent aucune debout. Chacune est câblée sur la méthode qui les efface, et
+    /// non sur l'appelant : c'est ce qui rend impossible de modifier sans périmer.
+    #[test]
+    fn ce_qui_pagine_efface_toutes_les_mesures() {
+        let neuf = || {
+            let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
+            let cle = p.meta.livraison.courant.clone();
+            p.meta.livraison.retenir_mesure(&cle, MESURE);
+            p
+        };
+        let mesure = |p: &Projet| p.meta.livraison.courant().unwrap().compose;
+
+        let mut p = neuf();
+        p.modifier_livre(livre());
+        assert_eq!(mesure(&p), None, "le livre n'a rien périmé");
+
+        let mut p = neuf();
+        p.modifier_interieur(crate::interieur::Interieur {
+            police: "Cardo".into(),
+        });
+        assert_eq!(mesure(&p), None, "la police n'a rien périmé");
+
+        let mut p = neuf();
+        p.remplacer_texte("## 02\n\nB.\n".into());
+        assert_eq!(mesure(&p), None, "le texte n'a rien périmé");
+    }
+
+    /// `deja_compose` n'est pas un état courant mais de l'histoire : il distingue un dos
+    /// qu'on n'a jamais demandé — rien à faire — d'un dos qu'une modification vient de
+    /// périmer, qui réclame une recomposition. L'effacer avec les mesures rendrait les
+    /// deux situations indiscernables.
+    #[test]
+    fn perimer_une_mesure_n_efface_pas_l_histoire_du_livre() {
+        let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
+        assert!(
+            !p.meta.livraison.deja_compose,
+            "un livre neuf serait composé"
+        );
+        let cle = p.meta.livraison.courant.clone();
+        p.meta.livraison.retenir_mesure(&cle, MESURE);
+
+        p.remplacer_texte("## 02\n\nB.\n".into());
+        assert!(p.meta.livraison.deja_compose);
     }
 
     /// Un prestataire retiré de la table, un papier renommé, le même prestataire deux
@@ -696,16 +890,19 @@ auteur = "Ivan Pjig"
                     papier: "standard".into(),
                     dos_mm: None,
                     fond_perdu_mm: None,
+                    compose: None,
                 },
                 Destinataire {
                     provider: "lulu".into(),
                     papier: "papier-renomme".into(),
                     dos_mm: None,
                     fond_perdu_mm: None,
+                    compose: Some(MESURE),
                 },
                 Destinataire::pour(crate::providers::provider("lulu").unwrap()),
             ],
             courant: "prestataire-disparu".into(),
+            deja_compose: true,
         };
         l.normalise();
 
@@ -713,6 +910,12 @@ auteur = "Ivan Pjig"
         assert_eq!(l.destinataires[0].provider, "lulu");
         assert_eq!(l.destinataires[0].papier, "standard");
         assert_eq!(l.courant, "lulu", "le pointeur désigne un absent");
+        // Le papier a été repris d'office : la mesure qui allait avec ne vaut plus, et
+        // la garder ferait afficher un dos faux dès l'ouverture, sans aucun geste.
+        assert!(
+            l.destinataires[0].compose.is_none(),
+            "mesure gardée sous un papier repris d'office"
+        );
     }
 
     /// Le pointeur ne peut pas être vide : sans lui, même regarder une première de
@@ -722,6 +925,7 @@ auteur = "Ivan Pjig"
         let mut l = Livraison {
             destinataires: vec![],
             courant: String::new(),
+            deja_compose: false,
         };
         l.normalise();
         assert_eq!(l.destinataires.len(), 1);

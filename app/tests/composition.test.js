@@ -153,7 +153,8 @@ test('un projet importé remplit les champs et ouvre la première étape', async
 
   assert.strictEqual(els.get('inTitre').value, 'Les Heures creuses');
   assert.strictEqual(els.get('inTitrePage').value, 'Les Heures\ncreuses');
-  assert.strictEqual(els.get('inChapitres').value, 64);
+  // Une chaîne, comme dans la fenêtre : `input.value` n'est jamais un nombre.
+  assert.strictEqual(els.get('inChapitres').value, '64');
   assert.strictEqual(els.get('etapeLivre').hidden, false);
   assert.match(els.get('etatImages').textContent, /couverture\.jpg/);
 });

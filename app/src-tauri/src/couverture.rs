@@ -43,6 +43,41 @@ pub fn police_connue(f: &str) -> bool {
     POLICES.contains(&f)
 }
 
+/// Hauteur d'encre d'une ligne, en fraction du corps, famille par famille.
+///
+/// Typst compose une ligne à la hauteur de sa capitale — ses réglages par défaut sont
+/// `top-edge: "cap-height"`, `bottom-edge: "baseline"` —, mais l'encre déborde cette
+/// boîte des deux côtés : un « j » sous la ligne de base, un accent au-dessus des
+/// capitales. C'est l'encre qu'un dos doit contenir, pas la boîte de mise en page.
+/// D'où l'extension que la fonte déclare elle-même, de l'ascendante à la descendante,
+/// délibérément généreuse : une alerte qui manque un titre rogné ne sert à rien, une
+/// alerte de trop se lève en regardant la vignette.
+///
+/// Relevé sur les fichiers de `app/src-tauri/fonts` avec le Typst épinglé (0.15.1) :
+/// `measure(text(font: f, size: 10pt, top-edge: "ascender", bottom-edge: "descender")[…])`
+/// divisé par le corps. Une famille ajoutée à [`POLICES`] s'ajoute ici — c'est ce que
+/// tient le test `toute_police_declare_son_encre`.
+const ENCRE: &[(&str, f64)] = &[
+    ("Bodoni Moda", 1.525),
+    ("Playfair Display", 1.333),
+    ("Prata", 1.355),
+    ("Spectral", 1.522),
+    ("EB Garamond", 1.305),
+    ("Libre Baskerville", 1.240),
+    ("Archivo", 1.088),
+    ("Libre Franklin", 1.212),
+    ("Oswald", 1.482),
+];
+
+/// Une famille inconnue prend la plus haute encre de la table : une maquette venue
+/// d'ailleurs doit lever une alerte de trop, jamais une de moins.
+fn encre(police: &str) -> f64 {
+    ENCRE.iter().find(|(f, _)| *f == police).map_or_else(
+        || ENCRE.iter().map(|(_, h)| *h).fold(0.0, f64::max),
+        |(_, h)| *h,
+    )
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Mode {
@@ -407,6 +442,14 @@ impl Style {
     /// Corps en mm à partir du % de largeur.
     fn corps(&self, largeur: f64) -> f64 {
         self.taille / 100.0 * largeur
+    }
+
+    /// Hauteur d'encre d'une ligne composée dans ce style, en mm.
+    ///
+    /// Elle suit la largeur de couverture, comme le corps : c'est ce qui la rend
+    /// comparable à une épaisseur de dos, qui n'en dépend pas du tout.
+    pub fn encre_mm(&self, largeur: f64) -> f64 {
+        self.corps(largeur) * encre(&self.police)
     }
 
     fn typst_text(&self, largeur: f64) -> String {
@@ -1016,6 +1059,19 @@ pub fn source_quatre(
 mod tests {
     use super::*;
     use crate::maquettes;
+
+    /// Une famille admise sans encre déclarée tomberait sur la valeur de repli, la plus
+    /// haute de la table : le dos d'une maquette composée dans cette famille-là serait
+    /// jugé trop juste, sans que rien ne dise pourquoi. La table suit `POLICES`.
+    #[test]
+    fn toute_police_declare_son_encre() {
+        for f in POLICES {
+            assert!(
+                ENCRE.iter().any(|(nom, _)| nom == f),
+                "{f} est admise mais n'a pas d'encre relevée"
+            );
+        }
+    }
 
     fn livre() -> Livre {
         Livre {

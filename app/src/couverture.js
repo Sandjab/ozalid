@@ -263,7 +263,7 @@ function ecrire(obj, chemin, valeur) {
 
 /* Le panneau, l'aperçu et les faces vivent ici, avec le schéma qu'ils servent. Rien
    ne s'exécute au chargement — le fichier reste requérable nu par les tests — et
-   l'état partagé (`projet`, `face`, `dosCompose`…) est déclaré dans `app.js`, comme
+   l'état partagé (`projet`, `face`…) est déclaré dans `app.js`, comme
    pour `livraison.js`. */
 
 /**
@@ -419,25 +419,16 @@ function demanderApercu() {
 }
 
 /**
- * Dos à passer à l'aperçu : celui de la composition, et seulement s'il vaut pour ce
- * qui est affiché. Trois choses le déplacent, et il faut les trois : le gabarit, parce
- * que le même manuscrit ne fait pas le même nombre de pages en poche et en grand
- * format ; la police, qui repagine ; le papier, qui change l'épaisseur d'une page sans
- * même toucher à la pagination. La quatrième cause, le texte lui-même, n'a rien à
- * comparer ici : elle périme `dosCompose` au moment du remplacement.
+ * Dos à passer à l'aperçu : celui que le destinataire visé porte, et rien d'autre.
  *
- * Les trois se lisent dans le projet, plus dans les contrôles : le projet est ce que le
- * Rust a accepté, là où un panneau pas encore reposé porte encore une saisie refusée.
- * C'est ce qui rend l'ordre des appels indifférent — le lot 2 avait payé l'inverse.
+ * Il n'y a plus rien à comparer ici, et c'est tout l'objet du dispositif : une mesure
+ * enregistrée vaut toujours. Les quatre causes qui la déplaçaient — le gabarit, le
+ * papier, la police, le texte — l'effacent maintenant à la source, dans le Rust, au
+ * moment même du geste. L'estampille qu'on tenait ici ne voyait que trois d'entre
+ * elles ; le livre, cinquième cause, lui échappait entièrement.
  */
 function dosCourant() {
-  const d = destinataireCourant();
-  return d
-    && dosCompose?.provider === d.provider
-    && dosCompose?.papier === d.papier
-    && dosCompose?.police === projet.interieur.police
-    ? dosCompose.mm
-    : null;
+  return destinataireCourant()?.compose?.dos ?? null;
 }
 
 /**

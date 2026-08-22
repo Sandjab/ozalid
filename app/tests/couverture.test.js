@@ -191,7 +191,8 @@ test('le panneau se remplit depuis la maquette du projet', async () => {
   const valeurs = lignes.map((l) => l.children[1].value);
   assert.ok(valeurs.includes('bandeau'), 'le mode n\'est pas repris');
   assert.ok(valeurs.includes('#ffffff'), 'le papier n\'est pas repris');
-  assert.ok(valeurs.includes(6.4), 'le corps de l\'auteur n\'est pas repris');
+  // Une chaîne : un contrôle ne rend jamais le nombre qu'on lui a posé.
+  assert.ok(valeurs.includes('6.4'), 'le corps de l\'auteur n\'est pas repris');
 });
 
 /**

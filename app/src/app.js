@@ -36,15 +36,21 @@ let mains = [];
 let candidat = null;
 let face = 'une';
 let attenteApercu = null;
+
 /**
- * Dos de la dernière composition, en mm, avec le prestataire, le papier et la police
- * pour lesquels il vaut.
+ * L'attente avant une recomposition automatique, et de quoi n'en lancer qu'une.
  *
- * Il n'est jamais saisi : il vient de la pagination mesurée par Typst. C'est ce qui
- * permet à l'aperçu de planche d'être juste, et ce qui le fait refuser de s'afficher
- * tant que l'intérieur n'a pas été composé.
+ * `veilleSuspendue` couvre le seul rendu où la veille ne doit pas partir : celui d'un
+ * projet qu'on vient d'ouvrir. Un livre enregistré dans un état périmé réclame bien une
+ * composition, mais l'ouvrir n'est pas la demander — et une minute de Typst à
+ * l'ouverture d'un fichier qu'on voulait seulement regarder serait pire que le clic
+ * qu'on cherche à supprimer.
  */
-let dosCompose = null;
+let attenteComposition = null;
+let compositionEnCours = false;
+let compositionARefaire = false;
+let veilleSuspendue = false;
+const DELAI_COMPOSITION = 400;
 
 const nb = (v, d = 2) => v.toLocaleString('fr-FR', {
   minimumFractionDigits: d, maximumFractionDigits: d
@@ -174,7 +180,11 @@ function etatEtapes(p) {
   const ecart = attendu !== null && attendu !== undefined && attendu !== p.chapitres_trouves;
   // Un dos existe et ne vaut plus : ni « jamais composé », qui ne réclame rien, ni
   // « à jour ».
-  const dosPerime = dosCompose !== null && dosCourant() === null;
+  // Un dos existe et ne vaut plus. `deja_compose` fait toute la différence : sans lui,
+  // un livre jamais composé et un livre dont la mesure vient d'être périmée se
+  // ressembleraient trait pour trait, et le premier serait signalé en alerte pour un
+  // travail qu'on ne lui a jamais demandé.
+  const dosPerime = p.livraison.deja_compose && !destinataireCourant()?.compose;
   return {
     livre: {
       sous: ecart
@@ -391,6 +401,65 @@ function afficherProjet(p) {
   demanderApercu();
   majPied();
   majEtapes();
+  veiller();
+}
+
+/**
+ * Recompose de soi-même quand la mesure du destinataire visé vient d'être périmée.
+ *
+ * Deux conditions, et il faut les deux. `deja_compose` est le **consentement** : ce
+ * livre a déjà été composé à la main au moins une fois, donc on sait que son dos
+ * intéresse quelqu'un. Avant ce premier clic, rien ne part tout seul — regarder une
+ * première de couverture réclame un format, pas une composition, et faire payer une
+ * minute de Typst à qui n'a rien demandé serait pire que le clic qu'on lui épargne.
+ * L'absence de mesure est le **besoin** : présente, il n'y a rien à recalculer.
+ *
+ * Débouncé, parce qu'un livre se modifie par rafales : changer le titre puis la
+ * dédicace ne doit lancer qu'une composition, celle du dernier état.
+ */
+function veiller() {
+  if (veilleSuspendue) {
+    veilleSuspendue = false;
+    return;
+  }
+  if (!projet?.livraison.deja_compose || destinataireCourant()?.compose) return;
+  clearTimeout(attenteComposition);
+  attenteComposition = setTimeout(() => recomposer(false), DELAI_COMPOSITION);
+}
+
+/**
+ * Une composition à la fois, et la dernière gagne.
+ *
+ * Une composition dure des secondes ; un réglage changé pendant qu'elle tourne rendrait
+ * son résultat faux à l'instant où il arrive. Plutôt que d'en lancer une seconde en
+ * parallèle — le Rust les sérialiserait sur son verrou, et on paierait les deux —, on
+ * note qu'il faudra recommencer, et on recommence une fois.
+ */
+async function recomposer(force) {
+  if (compositionEnCours) {
+    compositionARefaire = true;
+    return;
+  }
+  // Le besoin a pu disparaître pendant l'attente : le bouton reste un recours, et
+  // l'employer désarme la veille plutôt que de faire recalculer à l'identique ce que le
+  // clic vient d'obtenir. `force` couvre le seul cas où la mesure présente ne vaut
+  // rien — celui d'une reprise, expliqué plus bas.
+  if (!force && destinataireCourant()?.compose) return;
+  compositionEnCours = true;
+  try {
+    await composer();
+  } finally {
+    compositionEnCours = false;
+  }
+  // Reprogrammée sans repasser par `veiller` : la composition qui vient de finir a
+  // déposé une mesure, et elle a l'air fraîche — mais elle a été lancée sur l'état
+  // d'avant la modification qui nous a réveillés. `veiller` la croirait bonne et
+  // laisserait le livre porter, jusqu'au prochain geste, le dos d'un texte périmé.
+  if (compositionARefaire) {
+    compositionARefaire = false;
+    clearTimeout(attenteComposition);
+    attenteComposition = setTimeout(() => recomposer(true), DELAI_COMPOSITION);
+  }
 }
 
 /**
@@ -434,7 +503,9 @@ async function tente(fn) {
  * un autre projet, et remplacer le manuscrit de celui qui est ouvert.
  */
 function oublierLaComposition() {
-  dosCompose = null;
+  // Le dos n'est plus effacé ici : il vit dans le projet, et c'est le Rust qui le périme
+  // au moment du geste qui l'a rendu faux. Ce qui reste ici est ce qui n'appartient
+  // qu'à l'écran — des chiffres affichés, des chemins de fichiers, des messages.
   for (const id of ['resultat', 'packages', 'ebooks', 'resultatEnvois']) {
     $(id).replaceChildren();
     $(id).hidden = true;
@@ -459,6 +530,11 @@ function oublierLaComposition() {
  */
 function oublierLesSorties() {
   oublierLaComposition();
+  // Un autre livre s'ouvre : la composition en attente était celle de celui qu'on
+  // quitte, et le premier rendu du nouveau ne doit rien déclencher.
+  clearTimeout(attenteComposition);
+  compositionARefaire = false;
+  veilleSuspendue = true;
   // L'étape courante est une sortie comme une autre : elle appartenait au projet qu'on
   // regardait. Rester sur la Livraison en ouvrant un autre livre donnerait à lire ses
   // packages sous le titre du nouveau.
@@ -637,9 +713,22 @@ function livre() {
   };
 }
 
+/**
+ * Le livre vient d'être modifié : ses pages liminaires composent, donc paginent. Une
+ * dédicace prend une belle page et sa blanche — deux pages —, un pavé de copyright plus
+ * long peut refluer. Le dos suit, alors que le gabarit, le papier et la police n'ont pas
+ * bougé : c'est exactement la cause qu'aucune estampille ne voit.
+ *
+ * Périmé sans regarder quel champ a changé ni s'il pagine réellement. La liste de ceux
+ * qui composent vit dans `interieur::source` ; la tenir en double ici la ferait diverger
+ * en silence, et se tromper de ce côté-là ne coûte qu'une composition.
+ */
 async function majLivre() {
-  await tente(async () =>
-    afficherProjet(await invoke('livre_modifier', { livre: livre() })));
+  await tente(async () => {
+    const p = await invoke('livre_modifier', { livre: livre() });
+    oublierLaComposition();
+    afficherProjet(p);
+  });
 }
 
 /**
@@ -721,16 +810,10 @@ async function composer() {
   try {
     const c = await invoke('composer');
     afficher(c);
-    // Le dos sort de la pagination qu'on vient de mesurer : l'aperçu de planche s'en
-    // sert tel quel, sans que personne ne le retape. Il est estampillé de ce pour quoi
-    // il vaut, tel que le projet le porte — c'est ce que `dosCourant()` relit.
-    const d = destinataireCourant();
-    dosCompose = c.dos === null ? null : {
-      provider: d.provider,
-      papier: d.papier,
-      police: projet.interieur.police,
-      mm: c.dos,
-    };
+    // Le dos sort de la pagination qu'on vient de mesurer, et c'est le projet qui le
+    // retient désormais, chez le destinataire pour qui il vaut. L'interface n'en garde
+    // aucune copie : elle le relit là où il est enregistré, comme tout le reste.
+    afficherProjet(c.projet);
     if (face === 'planche') demanderApercu();
     $('etat').textContent = '';
   } catch (e) {

@@ -10,7 +10,9 @@
 //! fond perdu suffit à dire où couper. Ce qui aide l'œil vit dans l'épreuve, pas dans
 //! le fichier remis à l'imprimeur.
 
-use crate::couverture::{self, Boite, Couverture, FondQuatre, Panorama, PlaceDos, Ressource};
+use crate::couverture::{
+    self, Boite, Couverture, ElementDos, FondQuatre, Panorama, PlaceDos, Ressource,
+};
 use crate::projet::Livre;
 use crate::providers::{Papier, Provider};
 
@@ -102,6 +104,65 @@ fn mm(v: f64) -> String {
 /// Hors panorama, il n'a pas lieu d'être : il poserait la couleur du dos sur la 1ère.
 const COUTURE: f64 = 0.2;
 
+/// Ce qui sépare le texte du dos de chacun de ses deux plis, en mm.
+///
+/// Un dos carré collé ne se plie pas au trait près : un texte calé contre le pli passe
+/// sur la face au premier exemplaire mal plié. Aucun gabarit de la table ne publie
+/// cette valeur — c'est donc un choix, pris large plutôt que juste, et le seul endroit
+/// où le reprendre.
+const JEU_PLI: f64 = 1.0;
+
+/// Les éléments que le dos compose réellement, avec leur texte.
+///
+/// Un élément éteint, ou dont le texte est vide, ne laisse pas de trou sur le dos :
+/// c'est ce qui permet de composer un dos sans éditeur. [`bloc_dos`] et [`dos_requis`]
+/// lisent la même liste, sans quoi une maquette serait jugée sur un auteur qu'elle ne
+/// porte pas.
+fn composes<'a>(livre: &'a Livre, cv: &'a Couverture) -> Vec<(&'a ElementDos, &'a str)> {
+    [
+        (&cv.dos.auteur, livre.auteur.trim()),
+        (&cv.dos.titre, livre.titre.trim()),
+        (&cv.dos.editeur, cv.pied.editeur.trim()),
+    ]
+    .into_iter()
+    .filter(|(el, texte)| el.actif && !texte.is_empty())
+    .collect()
+}
+
+/// Épaisseur de dos que la maquette réclame, en mm : sa ligne la plus haute, plus le
+/// jeu de pli de part et d'autre. Zéro quand le dos ne porte aucun texte.
+///
+/// Le corps des textes de dos est un pourcentage de la **largeur de couverture** —
+/// c'est ce qui rend une maquette portable d'un format à l'autre. L'épaisseur du dos,
+/// elle, vient de la pagination et du papier. Les deux ne s'accordent par aucune
+/// construction : la même maquette réclame un dos plus épais en grand format qu'en
+/// poche, quand un grand format pagine justement plus court. C'est cet écart-là qu'on
+/// mesure, et c'est le prix de « une maquette pour tous les formats ».
+///
+/// Les éléments d'un même dos se rangent côte à côte le long du dos, jamais l'un sous
+/// l'autre : c'est donc le plus haut qui commande, pas leur somme.
+pub fn dos_requis(livre: &Livre, cv: &Couverture, largeur: f64) -> f64 {
+    let els = composes(livre, cv);
+    if els.is_empty() {
+        return 0.0;
+    }
+    els.iter()
+        .map(|(el, _)| el.style.encre_mm(largeur))
+        .fold(0.0, f64::max)
+        + 2.0 * JEU_PLI
+}
+
+/// L'épaisseur réclamée, **et seulement quand le dos ne l'offre pas**. `None`, le texte
+/// tient.
+///
+/// Sans cette mesure, un dos trop mince ne se voit nulle part : [`zone`] compose avec
+/// `clip: true`, donc le titre est coupé net, sans erreur et sans message, sur le PDF
+/// qui part à l'impression.
+pub fn dos_insuffisant(livre: &Livre, cv: &Couverture, largeur: f64, dos: f64) -> Option<f64> {
+    let requis = dos_requis(livre, cv, largeur);
+    (requis > dos).then_some(requis)
+}
+
 /// Une zone de la planche, découpée à ses bords : ce qui déborde du dos ne doit pas
 /// mordre sur la 1ère, et réciproquement.
 fn zone(dx: f64, largeur: f64, hauteur: f64, contenu: &str) -> String {
@@ -156,18 +217,11 @@ fn bloc_dos(
     }
 
     // Chaque élément est rangé à sa place, puis les éléments d'une même place sont
-    // ordonnés par leur rang. Un élément éteint, ou dont le texte est vide, ne laisse
-    // pas de trou : c'est ce qui permet de composer un dos sans éditeur, ou un dos qui
-    // ne porte que le titre.
+    // ordonnés par leur rang. Ceux qui ne composent pas — éteints ou sans texte — sont
+    // déjà écartés par `composes` : c'est ce qui permet de composer un dos sans
+    // éditeur, ou un dos qui ne porte que le titre.
     let mut places: [Vec<(u8, String)>; 3] = [Vec::new(), Vec::new(), Vec::new()];
-    for (el, texte) in [
-        (&d.auteur, livre.auteur.trim()),
-        (&d.titre, livre.titre.trim()),
-        (&d.editeur, cv.pied.editeur.trim()),
-    ] {
-        if !el.actif || texte.is_empty() {
-            continue;
-        }
+    for (el, texte) in composes(livre, cv) {
         let i = match el.place {
             PlaceDos::Pied => 0,
             PlaceDos::Centre => 1,
@@ -631,6 +685,76 @@ mod tests {
         // La page, elle, est cette boîte couchée : le dos y court en largeur.
         let page = format!("#set page(width: {}, height: {}", mm(g.format.1), mm(g.dos));
         assert!(s.contains(&page), "page attendue {page} dans :\n{s}");
+    }
+
+    /// Le corps du texte de dos est un pourcentage de la **largeur de couverture** ;
+    /// l'épaisseur du dos, elle, vient de la pagination. Rien n'accorde les deux : la
+    /// même maquette réclame un dos plus épais en grand format qu'en poche. C'est
+    /// l'hypothèse « une maquette pour tous les formats » qui se paie ici, et c'est
+    /// pour ça que la mesure suit la largeur au lieu d'être un seuil fixe.
+    #[test]
+    fn le_dos_requis_suit_la_largeur_de_couverture() {
+        let cv = maquettes::folio();
+        let r = |largeur| dos_requis(&livre(), &cv, largeur) - 2.0 * JEU_PLI;
+        // Le jeu de pli mis à part, ce qui reste est du corps : il double quand la
+        // couverture double.
+        assert!(
+            (r(216.0) - 2.0 * r(108.0)).abs() < 1e-9,
+            "108 mm réclame {}, 216 mm {}",
+            r(108.0),
+            r(216.0)
+        );
+    }
+
+    /// Un livre mince dans un grand format : le dos ne tient pas le texte que la
+    /// maquette y compose. Sans cette mesure, rien ne le dit — `zone` compose avec
+    /// `clip: true`, donc le titre part **rogné, sans erreur**, sur le PDF remis à
+    /// l'imprimeur. C'est le seul cas où une maquette unique produit un fichier faux
+    /// et non un fichier différent.
+    #[test]
+    fn un_dos_trop_mince_pour_son_texte_est_signale() {
+        let cv = maquettes::folio();
+        let mince = gabarit("kdp-6x9", 80);
+        let epais = gabarit("kdp-6x9", 400);
+        let insuffisant = |g: &Gabarit| dos_insuffisant(&livre(), &cv, g.format.0, g.dos);
+        assert!(
+            insuffisant(&mince).is_some_and(|r| r > mince.dos),
+            "80 pages : dos de {} mm, réclamé {:?}",
+            mince.dos,
+            insuffisant(&mince)
+        );
+        assert!(
+            insuffisant(&epais).is_none(),
+            "400 pages : dos de {} mm, réclamé {:?}",
+            epais.dos,
+            insuffisant(&epais)
+        );
+    }
+
+    /// La mesure ne juge que ce que `source_dos` compose. Un élément éteint, ou dont le
+    /// texte est vide, ne laisse pas de trou sur le dos : il ne doit pas non plus lui
+    /// réclamer d'épaisseur, sinon une maquette sans mention d'éditeur serait refusée
+    /// sur le corps d'un éditeur qu'elle ne porte pas.
+    #[test]
+    fn un_element_qui_ne_compose_pas_ne_reclame_pas_depaisseur() {
+        let mut cv = maquettes::folio();
+        cv.pied.editeur = "Folio".into();
+        cv.dos.editeur.actif = true;
+        cv.dos.editeur.style.taille = 20.0;
+        let avec = dos_requis(&livre(), &cv, 108.0);
+
+        cv.dos.editeur.actif = false;
+        let sans = dos_requis(&livre(), &cv, 108.0);
+        assert!(sans < avec, "éteint {sans} mm, allumé {avec} mm");
+
+        // Le texte vide compte comme éteint : c'est la règle de `source_dos`.
+        cv.dos.editeur.actif = true;
+        cv.pied.editeur = String::new();
+        assert!(
+            (dos_requis(&livre(), &cv, 108.0) - sans).abs() < 1e-9,
+            "éditeur sans texte : {} mm au lieu de {sans} mm",
+            dos_requis(&livre(), &cv, 108.0)
+        );
     }
 
     /// Le quart de tour emmène la boîte hors de la page, à gauche : sans le `dx` qui l'y

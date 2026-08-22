@@ -70,6 +70,7 @@ function paquet(sur = {}) {
     gouttiere: 25,
     blanche: true,
     dos: 16.513,
+    dos_requis: null,
     fond_perdu: 3.175,
     planche: [238.863, 181.35],
     chemins: ['/livres/LHC/lulu/interieur-lulu.pdf', '/livres/LHC/lulu/couverture-lulu.pdf'],
@@ -87,23 +88,49 @@ function paquet(sur = {}) {
  * relit la liste à chaque retour de commande. Un faux qui rendrait toujours le même
  * projet ne prouverait donc plus rien — il masquerait justement le câblage qu'on vérifie.
  */
-async function ouvre(providers, sur = {}, { couverture = null, destinataires } = {}) {
+async function ouvre(
+  providers,
+  sur = {},
+  { couverture = null, destinataires, dejaCompose = false } = {}
+) {
   const appels = [];
   const liste = (destinataires ?? [chez(providers[0])]).map((d) => ({ ...d }));
   let projet = {
     ...PROJET,
     couverture,
-    livraison: { destinataires: liste, courant: liste[0].provider },
+    livraison: { destinataires: liste, courant: liste[0].provider, deja_compose: dejaCompose },
   };
   const maj = (livraison) => {
     projet = { ...projet, livraison: { ...projet.livraison, ...livraison } };
     return projet;
   };
+  // Les règles du Rust, modélisées ici : la mesure d'une composition entre chez le
+  // destinataire pour qui elle a été faite, et tout ce qui pagine les efface toutes.
+  // Sans ce modèle, le front n'aurait plus rien à lire — il ne tient plus de dos.
+  const oublier = () => maj({
+    destinataires: projet.livraison.destinataires.map(({ compose, ...d }) => d),
+  });
+  const retenir = (c) => maj({
+    deja_compose: true,
+    destinataires: projet.livraison.destinataires.map((d) => (
+      d.provider === projet.livraison.courant
+        ? {
+          ...d,
+          compose: {
+            pages: c.pages, gouttiere: c.gouttiere, blanche: c.blanche, dos: c.dos,
+          },
+        }
+        : d
+    )),
+  });
   const invoke = async (cmd, args) => {
     appels.push([cmd, args]);
     if (cmd in sur) {
       const v = sur[cmd];
-      return typeof v === 'function' ? v(args) : v;
+      const r = typeof v === 'function' ? await v(args) : v;
+      // Une composition surchargée par un test reste soumise aux règles : c'est le
+      // projet qui porte la mesure, et le front la relit là.
+      return cmd === 'composer' ? { ...r, projet: retenir(r) } : r;
     }
     if (cmd === 'providers_liste') return providers;
     if (cmd === 'polices_liste') return ['Archivo', 'Spectral'];
@@ -116,7 +143,9 @@ async function ouvre(providers, sur = {}, { couverture = null, destinataires } =
     if (cmd === 'destinataire_regler') {
       return maj({
         destinataires: projet.livraison.destinataires.map((d) => (
-          d.provider === args.destinataire.provider ? args.destinataire : d
+          d.provider === args.destinataire.provider
+            ? { ...args.destinataire, compose: undefined }
+            : d
         )),
       });
     }
@@ -137,9 +166,13 @@ async function ouvre(providers, sur = {}, { couverture = null, destinataires } =
     }
     if (cmd === 'interieur_modifier') {
       projet = { ...projet, interieur: args.interieur };
-      return projet;
+      return oublier();
     }
-    if (cmd === 'manuscrit_reimporter' || cmd === 'manuscrit_choisir') return projet;
+    if (cmd === 'livre_modifier') {
+      projet = { ...projet, livre: args.livre };
+      return oublier();
+    }
+    if (cmd === 'manuscrit_reimporter' || cmd === 'manuscrit_choisir') return oublier();
     // Le démarrage et la garde envoient ces trois commandes sans qu'aucun test ne les
     // demande : sans réponse ici, elles lèveraient avant que rien ne soit vérifié.
     if (cmd === 'recents_liste') return [];
@@ -156,6 +189,9 @@ async function ouvre(providers, sur = {}, { couverture = null, destinataires } =
 }
 
 const attendreApercu = () => new Promise((r) => setTimeout(r, 300));
+/** Plus long que le débounce de la recomposition automatique (400 ms). */
+const attendreComposition = () => new Promise((r) => setTimeout(r, 700));
+const combien = (appels, cmd) => appels.filter(([c]) => c === cmd).length;
 const dernier = (appels, cmd) => appels.filter(([c]) => c === cmd).pop();
 
 /* ---------- la liste des destinataires ---------- */
@@ -328,6 +364,35 @@ test('un package sans substitution n\'affiche aucune alerte de police', async ()
   });
   await els.get('btPackager').declenche('click');
   assert.doesNotMatch(els.get('packages').textContent, /repli/);
+});
+
+/**
+ * Le seul endroit où une maquette unique pour N formats produit un fichier **faux** et
+ * non un fichier différent : le corps du dos suit la largeur de couverture, son
+ * épaisseur suit la pagination, et la zone qui compose le dos rogne ce qui dépasse sans
+ * rien dire. Le compte rendu du package est le dernier écran avant l'imprimeur.
+ */
+test('un dos trop mince pour son texte porte l\'alerte sur son package', async () => {
+  const { els } = await ouvre([LULU], {
+    packager: () => [{
+      provider: 'lulu', libelle: 'Lulu', erreur: null,
+      package: paquet({ dos: 4.2, dos_requis: 6.31 }),
+    }],
+  });
+  await els.get('btPackager').declenche('click');
+
+  const t = els.get('packages').textContent;
+  assert.match(t, /4,20 mm/, 'le dos réel doit se lire');
+  assert.match(t, /6,31 mm/, 'le dos réclamé doit se lire');
+  assert.match(t, /rogné/);
+});
+
+test('un dos qui tient n\'affiche aucune alerte', async () => {
+  const { els } = await ouvre([LULU], {
+    packager: () => [{ provider: 'lulu', libelle: 'Lulu', package: paquet(), erreur: null }],
+  });
+  await els.get('btPackager').declenche('click');
+  assert.doesNotMatch(els.get('packages').textContent, /rogné/);
 });
 
 test('un package affiche le dos, la planche et les fichiers produits', async () => {
@@ -534,6 +599,173 @@ test('un dos calculé pour une autre police ne vaut plus rien', async () => {
     dernier(appels, 'couverture_apercu')[1].dosMm,
     null,
     'dos d\'Alegreya réutilisé pour Cardo'
+  );
+});
+
+/**
+ * **Le test qui porte le lot.** Le même livre a autant de paginations que de gabarits,
+ * et chacune coûte une composition entière. Les retenir une par destinataire, dans le
+ * projet, fait de la lunette ce qu'elle prétend être : revenir sur un prestataire déjà
+ * composé retrouve son dos, sans rien recalculer et sans emprunter celui du voisin.
+ *
+ * Le compte des `composer` est la moitié du test : sans lui, une implémentation qui
+ * recomposerait en douce à chaque aller-retour passerait pour juste.
+ */
+test('revenir à un destinataire déjà composé retrouve son dos sans recomposer', async () => {
+  const dos = [16.513, 21.4];
+  let n = 0;
+  const { els, appels } = await ouvre([LULU, KDP], {
+    composer: () => ({ ...COMPOSITION, dos: dos[n++] }),
+  }, { couverture: {}, destinataires: [chez(LULU), chez(KDP)] });
+  const vise = async (cle) => {
+    els.get('inDestinataire').value = cle;
+    await els.get('inDestinataire').declenche('change');
+    await attendreComposition();
+  };
+  await els.get('btComposer').declenche('click');
+  await face(els, 'Planche').declenche('click');
+  await attendreApercu();
+  assert.strictEqual(dernier(appels, 'couverture_apercu')[1].dosMm, 16.513);
+
+  // KDP n'a jamais été composé : la veille s'en charge, et lui donne son dos à lui.
+  await vise('kdp-6x9');
+  assert.strictEqual(dernier(appels, 'couverture_apercu')[1].dosMm, 21.4);
+
+  const avant = combien(appels, 'composer');
+  await vise('lulu');
+  assert.strictEqual(dernier(appels, 'couverture_apercu')[1].dosMm, 16.513,
+    'le dos de Lulu n\'a pas été retrouvé');
+  assert.strictEqual(combien(appels, 'composer'), avant,
+    'revenir sur un destinataire déjà composé a recomposé');
+});
+
+/**
+ * Ce que le lot rend : une mesure périmée se refait toute seule. Le geste qui l'a
+ * périmée — ici la police — suffit, et le bouton n'est plus qu'un recours.
+ */
+test('une modification recompose d\'elle-même, une fois le livre composé', async () => {
+  const { els, appels } = await ouvre([LULU], { composer: COMPOSITION }, { couverture: {} });
+  await els.get('btComposer').declenche('click');
+  assert.strictEqual(combien(appels, 'composer'), 1);
+
+  els.get('inPoliceInterieur').value = 'Cardo';
+  await els.get('inPoliceInterieur').declenche('change');
+  await attendreComposition();
+
+  assert.strictEqual(combien(appels, 'composer'), 2, 'la police n\'a rien relancé');
+});
+
+/**
+ * L'autre moitié de la règle, et la plus importante : **rien ne part avant le premier
+ * clic**. Une composition dure des secondes et écrit des fichiers ; la déclencher chez
+ * quelqu'un qui n'a jamais rien composé — qui règle une couverture, par exemple —
+ * coûterait plus cher que le clic qu'on lui épargne.
+ */
+test('rien ne se compose tout seul tant qu\'on ne l\'a pas demandé une fois', async () => {
+  const { els, appels } = await ouvre([LULU], { composer: COMPOSITION }, { couverture: {} });
+
+  els.get('inPoliceInterieur').value = 'Cardo';
+  await els.get('inPoliceInterieur').declenche('change');
+  els.get('inDedicace').value = 'À M.';
+  await els.get('inDedicace').declenche('change');
+  await attendreComposition();
+
+  assert.strictEqual(combien(appels, 'composer'), 0, 'composé sans qu\'on le demande');
+});
+
+/**
+ * Une composition dure des secondes ; ce qu'on modifie pendant qu'elle tourne rend son
+ * résultat faux à l'instant où il arrive. Deux exigences, et la seconde est celle qui
+ * fait mal : n'en lancer qu'une à la fois — deux en parallèle se sérialiseraient sur le
+ * verrou du Rust et on paierait les deux —, et **recommencer** quand quelque chose a
+ * bougé entre-temps, alors même que la composition qui vient de finir a déposé une
+ * mesure d'apparence fraîche.
+ */
+test('une modification pendant la composition la fait recommencer, une fois', async () => {
+  let enCours = 0;
+  let parallele = 0;
+  const { els, appels } = await ouvre([LULU], {
+    composer: async () => {
+      enCours += 1;
+      parallele = Math.max(parallele, enCours);
+      await new Promise((r) => setTimeout(r, 1000));
+      enCours -= 1;
+      return COMPOSITION;
+    },
+  }, { couverture: {} });
+  await els.get('btComposer').declenche('click');
+
+  els.get('inPoliceInterieur').value = 'Cardo';
+  await els.get('inPoliceInterieur').declenche('change');
+  await new Promise((r) => setTimeout(r, 600));
+  // La recomposition tourne depuis 200 ms : la dédicace arrive en plein milieu.
+  els.get('inDedicace').value = 'À M.';
+  await els.get('inDedicace').declenche('change');
+  await new Promise((r) => setTimeout(r, 3000));
+
+  assert.strictEqual(parallele, 1, 'deux compositions en parallèle');
+  assert.strictEqual(combien(appels, 'composer'), 3,
+    'la modification arrivée en cours de route n\'a pas fait recommencer');
+});
+
+/**
+ * Le bouton reste un recours, et l'employer doit désarmer la veille : sans quoi une
+ * impatience — modifier puis cliquer aussitôt — se paierait d'une seconde composition,
+ * qui recalculerait à l'identique ce que le clic venait d'obtenir.
+ */
+test('composer à la main pendant l\'attente annule la recomposition', async () => {
+  const { els, appels } = await ouvre([LULU], { composer: COMPOSITION }, { couverture: {} });
+  await els.get('btComposer').declenche('click');
+
+  els.get('inPoliceInterieur').value = 'Cardo';
+  await els.get('inPoliceInterieur').declenche('change');
+  await els.get('btComposer').declenche('click');
+  await attendreComposition();
+
+  assert.strictEqual(combien(appels, 'composer'), 2, 'la veille a recomposé par-dessus');
+});
+
+/**
+ * Un livre enregistré dans un état périmé réclame bien une composition, mais l'ouvrir
+ * n'est pas la demander : on ouvre aussi un `.ozalid` pour regarder sa couverture, et
+ * une minute de Typst au premier double-clic serait exactement le genre de zèle qu'on
+ * reproche à une application.
+ */
+test('ouvrir un livre dont la mesure est périmée ne compose rien', async () => {
+  const { appels } = await ouvre([LULU], { composer: COMPOSITION }, {
+    couverture: {}, dejaCompose: true,
+  });
+  await attendreComposition();
+
+  assert.strictEqual(combien(appels, 'composer'), 0, 'composé à la seule ouverture');
+});
+
+/**
+ * La cause qu'aucune estampille ne voyait : le livre lui-même compose des pages
+ * liminaires. Une dédicace prend une belle page et son verso blanc — deux pages de plus,
+ * et le corps s'ouvre en page 7 au lieu de 5 (`interieur.rs`, test
+ * `une_dedicace_ajoute_une_belle_page_et_sa_blanche`). Le gabarit, le papier et la
+ * police n'ont pas bougé d'un pouce, et le dos n'est pourtant plus le même.
+ *
+ * La péremption est volontairement grossière — n'importe quelle modification du livre,
+ * sans regarder si elle pagine — pour la même raison que le manuscrit : la liste des
+ * champs qui composent vit dans `interieur::source`, et une liste tenue en double ici
+ * finirait par diverger sans que rien ne le dise.
+ */
+test('un dos calculé avant la dédicace ne vaut plus rien', async () => {
+  const { els, appels } = await ouvre([LULU], { composer: COMPOSITION }, { couverture: {} });
+  await els.get('btComposer').declenche('click');
+  await face(els, 'Planche').declenche('click');
+  await attendreApercu();
+  assert.strictEqual(dernier(appels, 'couverture_apercu')[1].dosMm, 16.513);
+
+  els.get('inDedicace').value = 'À M., qui a tenu la lampe.';
+  await els.get('inDedicace').declenche('change');
+  await attendreApercu();
+  assert.strictEqual(
+    dernier(appels, 'couverture_apercu')[1].dosMm,
+    null,
+    'dos d\'avant la dédicace réutilisé'
   );
 });
 
