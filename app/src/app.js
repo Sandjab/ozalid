@@ -1115,9 +1115,12 @@ $('btDiffusionOublier').addEventListener('click', () => reglerDiffusion(''));
 // La main appartient au livre : la changer réécrit tous ses envois d'un coup.
 $('inMain').addEventListener('change', () => tente(async () => {
   const choix = $('inMain').value;
-  const main = choix.startsWith('police:')
-    ? { mode: 'police', police: choix.slice('police:'.length) }
-    : { mode: choix };
+  // Chaque forme emporte ce qu'elle réclame : une police son nom, une image générée son
+  // gabarit. L'envoyer sans lui laisserait le Rust refuser une main dont il ne saurait
+  // pas quoi demander au modèle.
+  const main = { mode: choix.startsWith('police:') ? 'police' : choix };
+  if (main.mode === 'police') main.police = choix.slice('police:'.length);
+  if (main.mode === 'diffusion') main.gabarit = projet.envois.main.gabarit ?? '';
   afficherProjet(await invoke('envois_modifier', {
     envois: { main, liste: projet.envois.liste },
   }));

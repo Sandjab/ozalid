@@ -35,7 +35,13 @@ pub enum Main {
     /// Le livre ne porte que le gabarit : l'adresse du modèle et la clé appartiennent à
     /// la machine, et vivent dans les préférences. Une image acceptée est figée dans
     /// l'archive comme celle du mode précédent — composer ne rappelle jamais le réseau.
-    Diffusion { gabarit: String },
+    ///
+    /// Le gabarit est facultatif : on choisit cette main **avant** d'écrire le prompt,
+    /// et un `.ozalid` qui l'aurait perdu doit s'ouvrir pour qu'on puisse le réécrire.
+    Diffusion {
+        #[serde(default)]
+        gabarit: String,
+    },
 }
 
 impl Default for Main {
@@ -232,6 +238,26 @@ mod tests {
             ["Marie-Léa.png", "Marie-Léa-2.png", "Marie-Léa-3.png"]
         );
         assert_eq!(nom_image("..", "jpg", &pris), "envoi.jpg");
+    }
+
+    /// On choisit la main **avant** d'écrire le gabarit : le mode doit donc pouvoir
+    /// voyager sans lui, à l'aller comme au retour. Le refus s'était vu à l'écran — la
+    /// commande rendait « missing field gabarit » sur le simple choix de la forme.
+    #[test]
+    fn une_main_generee_se_choisit_avant_d_avoir_son_gabarit() {
+        let sans: Main = serde_json::from_str(r#"{"mode":"diffusion"}"#)
+            .expect("une main générée sans gabarit est refusée");
+        assert_eq!(
+            sans,
+            Main::Diffusion {
+                gabarit: String::new()
+            }
+        );
+        let e = Envois {
+            main: sans,
+            ..Envois::default()
+        };
+        assert!(e.verifie().is_ok());
     }
 
     /// Une main qui pose une image n'a aucun nom de police à trouver : la refuser

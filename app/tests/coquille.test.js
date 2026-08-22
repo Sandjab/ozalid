@@ -1021,6 +1021,24 @@ test('choisir l\'image comme main envoie le mode, pas une police', async () => {
 });
 
 /**
+ * Chaque forme emporte ce que le Rust lui réclame. Le mode seul suffit à l'image écrite
+ * à la main ; l'image générée, elle, réclame son gabarit, et la commande refuse une main
+ * qui n'en porte pas — trouvé à l'écran, invisible ici tant que le faux Rust acceptait
+ * tout ce qu'on lui envoyait.
+ */
+test('choisir l\'image générée envoie aussi le gabarit', async () => {
+  const a = atelier();
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  els.get('inMain').value = 'diffusion';
+  await els.get('inMain').declenche('change');
+
+  const envoi = a.appels.findLast(([c]) => c === 'envois_modifier');
+  assert.deepEqual(envoi[1].envois.main, { mode: 'diffusion', gabarit: '' });
+});
+
+/**
  * Sous une main en images, la ligne d'un envoi ne porte plus de texte à écrire mais une
  * image à choisir. Laisser le champ de texte donnerait à croire qu'on peut encore y
  * écrire, alors que rien de ce qu'on y taperait ne serait imprimé.
