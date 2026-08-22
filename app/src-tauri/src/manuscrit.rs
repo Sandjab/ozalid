@@ -244,6 +244,28 @@ fn romain(s: &str) -> Option<u32> {
     (1..=50).find(|n| en_romain(*n) == s)
 }
 
+/// Les pièces qui précèdent le corps, et celles qui le suivent.
+///
+/// Liste **fermée** : c'est elle qui permet d'admettre un titre non numéroté sans
+/// rouvrir le format. `## Chapitre premier` doit rester une erreur.
+const LIMINAIRES: [&str; 3] = ["Préface", "Avant-propos", "Prologue"];
+const ANNEXES: [&str; 3] = ["Épilogue", "Postface", "Remerciements"];
+
+/// Un titre → la pièce qu'il nomme, s'il en nomme une.
+///
+/// Insensible à la casse, pas aux accents : le titre rendu est celui de la liste, pour
+/// que ce qui s'imprime ne dépende pas de ce qui a été tapé.
+fn mot_cle(titre: &str) -> Option<(Sorte, &'static str)> {
+    let bas = titre.to_lowercase();
+    if let Some(m) = LIMINAIRES.iter().find(|m| m.to_lowercase() == bas) {
+        return Some((Sorte::Liminaire, *m));
+    }
+    ANNEXES
+        .iter()
+        .find(|m| m.to_lowercase() == bas)
+        .map(|m| (Sorte::Annexe, *m))
+}
+
 /// Une rupture de scène sépare deux passages d'un même chapitre ; une rupture qui
 /// ouvre ou ferme un chapitre ne sépare rien. Cet invariant vaut quel que soit l'usage
 /// que l'auteur fait de `---` dans son manuscrit — y compris l'usage réel observé sur
@@ -264,6 +286,9 @@ fn elague_rupture_finale(ch: Option<&mut Piece>) {
 /// `projet.toml` : il n'a de sens qu'au gel, quand le compte ne doit plus bouger.
 pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Piece>, String> {
     let mut pieces: Vec<Piece> = Vec::new();
+    // Le manuscrit est trois zones dans cet ordre : liminaires, corps, annexes.
+    let mut vu_corps = false;
+    let mut vu_annexe = false;
     for (no, ligne) in md.lines().enumerate() {
         let no = no + 1;
         let t = ligne.trim();
@@ -276,7 +301,26 @@ pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Piece>, String> {
             // Le chapitre qui se ferme ne doit pas garder de rupture en dernière
             // position : elle ne séparerait rien.
             elague_rupture_finale(pieces.last_mut());
-            pieces.push(entete(reste.trim(), no)?);
+            let piece = entete(reste.trim(), no)?;
+            match piece.sorte {
+                Sorte::Liminaire if vu_corps || vu_annexe => {
+                    return Err(format!(
+                        "ligne {no} : « {} » est une pièce liminaire, elle ne peut pas \
+                         suivre un chapitre.",
+                        piece.titre
+                    ));
+                }
+                Sorte::Annexe => vu_annexe = true,
+                _ if vu_annexe => {
+                    return Err(format!(
+                        "ligne {no} : « {} » vient après une pièce annexe, qui ferme le \
+                         livre.",
+                        piece.titre
+                    ));
+                }
+                _ => vu_corps = true,
+            }
+            pieces.push(piece);
         } else if t == "---" {
             // Hors chapitre, la rupture appartient aux liminaires : rien à garder. Dans
             // un chapitre, elle n'est gardée qu'à la suite d'un paragraphe : ni en tête
@@ -315,6 +359,13 @@ pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Piece>, String> {
 }
 
 fn entete(reste: &str, no: usize) -> Result<Piece, String> {
+    if let Some((sorte, mot)) = mot_cle(reste) {
+        return Ok(Piece {
+            sorte,
+            titre: mot.to_string(),
+            blocs: Vec::new(),
+        });
+    }
     let (num, titre) = match reste.split_once('-') {
         Some((n, t)) => (n.trim(), t.trim()),
         None => (reste, ""),
@@ -531,6 +582,54 @@ mod tests {
     fn un_entete_mal_forme_est_refuse() {
         let err = decoupe("## Chapitre premier\n\nTexte.\n", None).unwrap_err();
         assert!(err.contains("NN - Titre"), "{err}");
+    }
+
+    /// Le mot fait la pièce, et la pièce fait sa place : l'auteur n'a rien à déclarer.
+    #[test]
+    fn une_preface_est_une_piece_liminaire_et_une_postface_une_annexe() {
+        let p = decoupe(
+            "## Préface\n\nA.\n\n## 01 - Un\n\nB.\n\n## Postface\n\nC.\n",
+            None,
+        )
+        .unwrap();
+        assert_eq!(p[0].sorte, Sorte::Liminaire);
+        assert_eq!(p[0].titre, "Préface");
+        assert_eq!(p[1].sorte, Sorte::Chapitre(1));
+        assert_eq!(p[2].sorte, Sorte::Annexe);
+        assert_eq!(p[2].titre, "Postface");
+    }
+
+    /// La casse tapée ne doit pas ressortir à l'impression : le titre composé est celui
+    /// de la liste. Les accents, eux, sont exigés — le projet est en français accentué,
+    /// et un mot désaccentué est plus probablement une faute qu'une intention.
+    #[test]
+    fn le_mot_cle_est_insensible_a_la_casse_mais_pas_aux_accents() {
+        let p = decoupe("## préface\n\nA.\n\n## 01 - Un\n\nB.\n", None).unwrap();
+        assert_eq!(p[0].titre, "Préface", "le titre composé suit la liste");
+
+        let err = decoupe("## Preface\n\nA.\n\n## 01 - Un\n\nB.\n", None).unwrap_err();
+        assert!(err.contains("NN - Titre"), "{err}");
+    }
+
+    /// « Avant-propos » porte un tiret : reconnu après le découpage « NN - Titre », il
+    /// deviendrait un chapitre de numéro « Avant ». La liste blanche passe donc avant.
+    #[test]
+    fn un_mot_cle_a_trait_d_union_n_est_pas_lu_comme_un_chapitre() {
+        let p = decoupe("## Avant-propos\n\nA.\n\n## 01 - Un\n\nB.\n", None).unwrap();
+        assert_eq!(p[0].sorte, Sorte::Liminaire);
+        assert_eq!(p[0].titre, "Avant-propos");
+    }
+
+    /// La position découle du mot **et** doit être tenue : pas de réordonnancement
+    /// silencieux d'un manuscrit dont l'auteur a mis la préface au milieu.
+    #[test]
+    fn une_piece_hors_de_sa_zone_est_refusee_avec_sa_ligne() {
+        let err = decoupe("## 01 - Un\n\nA.\n\n## Préface\n\nB.\n", None).unwrap_err();
+        assert!(err.contains("ligne 5"), "{err}");
+        assert!(err.contains("Préface"), "{err}");
+
+        let err = decoupe("## Postface\n\nA.\n\n## 01 - Un\n\nB.\n", None).unwrap_err();
+        assert!(err.contains("ligne 5"), "{err}");
     }
 
     /// L'échappement passe avant l'emphase : un `#` du texte ne doit pas ouvrir une
