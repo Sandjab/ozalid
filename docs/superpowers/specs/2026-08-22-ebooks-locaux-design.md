@@ -347,9 +347,22 @@ Ce qu'aucun test ne peut faire, et qu'il faut refaire après toute modification 
   faire des `#heading` avec une règle d'affichage identique demanderait de reprouver la
   pagination au témoin. Le gain — une table des matières dans le lecteur PDF — ne le
   vaut pas tant que l'EPUB en porte une.
-- **`epubcheck`.** On ne dépose sur aucune plateforme. L'archive vise la conformité
-  EPUB 3 et les tests en tiennent les points structurels, mais rien ne la valide
-  automatiquement. Le jour où un dépôt serait visé, ce serait le premier ajout.
+- **`epubcheck` en continu.** On ne dépose sur aucune plateforme. L'archive vise la
+  conformité EPUB 3 et les tests en tiennent les points structurels, mais rien ne la
+  valide automatiquement à chaque build. Le jour où un dépôt serait visé, ce serait le
+  premier ajout. *(L'archive a été passée à EPUBCheck 5.2.1 une fois, à la revue du lot
+  2 : c'est ce passage qui a révélé les crochets des noms de police et les caractères
+  de contrôle. Un examen ponctuel, pas un garde-fou permanent.)*
+- **Les métadonnées d'accessibilité.** `schema:accessMode`,
+  `schema:accessibilityFeature`, `schema:accessibilityHazard` et
+  `schema:accessibilitySummary` sont ce que les distributeurs de l'Union exigent depuis
+  l'entrée en application de l'European Accessibility Act, le 28 juin 2025. Elles ne
+  sont pas ici, et c'est délibéré : l'EAA vise la mise à disposition commerciale, aucune
+  plateforme n'est visée, et **déclarer des caractéristiques d'accessibilité qu'on n'a
+  pas vérifiées est pire que ne rien déclarer**. À reprendre en même temps qu'`epubcheck`,
+  le jour où un dépôt sera visé — l'archive produite est un texte linéaire à table des
+  matières navigable, donc les déclarations seront honnêtes ce jour-là, pour six `<meta>`
+  dans l'OPF.
 - **Un ebook par dédicataire.** L'envoi autographe est une affaire de tirage papier ;
   rien ici ne l'interdit plus tard, `interieur::source` prenant déjà sa `Trace`.
 - **Un format d'ebook réglable.** Le gabarit vient du destinataire pointé. Un réglage
