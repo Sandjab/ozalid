@@ -478,11 +478,24 @@ test('la planche marque la coupe avec les fractions que le Rust donne', async ()
 /**
  * La 1ère se compose au format rogné : il n'y a pas de bande à couper, et un trait sur
  * le bord même de l'image se lirait comme une coupe à zéro millimètre du texte.
+ *
+ * Le détour par la planche n'est pas une précaution de style : `#coupe` naît masqué
+ * dans le HTML, et sans lui ce test serait vrai d'avance — vrai même si tout le
+ * mécanisme avait disparu. Ce qu'il vérifie, c'est qu'une face rognée *éteint* un
+ * habillage allumé, pas qu'elle le laisse éteint.
  */
 test('une face sans fond perdu ne montre aucune coupe', async () => {
   const { els } = await ouvre(maquette());
   await attendreApercu();
   assert.strictEqual(els.get('coupe').hidden, true, 'coupe marquée sur la 1ère');
+
+  await face(els, 'Planche').declenche('click');
+  await attendreApercu();
+  assert.strictEqual(els.get('coupe').hidden, false, 'coupe non marquée sur la planche');
+
+  await face(els, '1ère').declenche('click');
+  await attendreApercu();
+  assert.strictEqual(els.get('coupe').hidden, true, 'habillage resté d\'une face à l\'autre');
 });
 
 /**
