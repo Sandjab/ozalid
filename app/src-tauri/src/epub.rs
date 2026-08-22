@@ -11,7 +11,11 @@
 //! ruptures de scène, son œil.
 
 use crate::manuscrit::{self, Bloc, Chapitre, Morceau};
+use std::io::{Cursor, Write};
 use std::time::SystemTime;
+
+use zip::write::SimpleFileOptions;
+use zip::{CompressionMethod, ZipWriter};
 
 /// Texte brut → contenu XML.
 ///
@@ -534,6 +538,74 @@ fn opf(livre: &Livre, entrees: &[Entree], modifie: &str) -> String {
     )
 }
 
+/// Le type MIME de l'EPUB, en clair et non compressé, en tête d'archive.
+const MIMETYPE: &str = "application/epub+zip";
+
+/// Le seul chemin fixe de la spec : c'est là que toute liseuse entre, et c'est lui qui
+/// désigne l'OPF.
+const CONTAINER: &str = r#"<?xml version="1.0" encoding="utf-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+<rootfiles>
+<rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+</rootfiles>
+</container>
+"#;
+
+/// Le livre en EPUB 3, en mémoire.
+///
+/// `modifie` est l'horodatage qu'EPUB 3 exige — voir [`horodatage`]. Il est passé plutôt
+/// que lu ici : ce module ne consulte pas d'horloge, sans quoi ses tests dépendraient
+/// du jour où on les lance.
+pub fn archive(
+    livre: &Livre,
+    chapitres: &[Chapitre],
+    couverture_png: &[u8],
+    polices: Option<&Polices>,
+    modifie: &str,
+) -> Result<Vec<u8>, String> {
+    if chapitres.is_empty() {
+        return Err("aucun chapitre : il n'y a pas de livre à mettre en EPUB.".into());
+    }
+    let entrees = contenu(livre, chapitres, couverture_png, polices);
+    let opf = opf(livre, &entrees, modifie);
+
+    let mut buf = Vec::new();
+    {
+        let mut zip = ZipWriter::new(Cursor::new(&mut buf));
+        let stocke = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+        let deflate = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+        // L'ordre des trois premières entrées n'est pas un style : la spec veut
+        // `mimetype` en tête, non compressé, et `META-INF/container.xml` est le seul
+        // chemin qu'une liseuse cherche sans qu'on le lui dise.
+        pose(&mut zip, "mimetype", MIMETYPE.as_bytes(), stocke)?;
+        pose(
+            &mut zip,
+            "META-INF/container.xml",
+            CONTAINER.as_bytes(),
+            deflate,
+        )?;
+        pose(&mut zip, "OEBPS/content.opf", opf.as_bytes(), deflate)?;
+        for e in &entrees {
+            let opts = if e.compresse { deflate } else { stocke };
+            pose(&mut zip, &format!("OEBPS/{}", e.nom), &e.octets, opts)?;
+        }
+        zip.finish()
+            .map_err(|e| format!("clôture de l'EPUB : {e}"))?;
+    }
+    Ok(buf)
+}
+
+fn pose<W: Write + std::io::Seek>(
+    zip: &mut ZipWriter<W>,
+    nom: &str,
+    contenu: &[u8],
+    opts: SimpleFileOptions,
+) -> Result<(), String> {
+    zip.start_file(nom, opts)
+        .map_err(|e| format!("{nom} : {e}"))?;
+    zip.write_all(contenu).map_err(|e| format!("{nom} : {e}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -907,5 +979,125 @@ mod tests {
             id_de("fonts/Cardo-Regular.ttf"),
             "f-fonts-Cardo-Regular-ttf"
         );
+    }
+
+    use std::io::Read;
+
+    fn relire(octets: &[u8]) -> zip::ZipArchive<Cursor<Vec<u8>>> {
+        zip::ZipArchive::new(Cursor::new(octets.to_vec())).expect("archive illisible")
+    }
+
+    /// `mimetype` doit être la **première** entrée et n'être pas compressée : c'est la
+    /// seule dont la spec de l'EPUB fixe la place et la méthode, et une liseuse stricte
+    /// refuse l'archive sinon. Le défaut est invisible tant qu'on n'ouvre le fichier que
+    /// dans Calibre, indulgent.
+    #[test]
+    fn le_mimetype_ouvre_l_archive_et_n_est_pas_compresse() {
+        let ch = chapitres_temoins();
+        let a = archive(
+            &livre_temoin(),
+            &ch,
+            b"\x89PNG",
+            None,
+            "2026-08-22T10:00:00Z",
+        )
+        .unwrap();
+        let mut z = relire(&a);
+        let e = z.by_index(0).unwrap();
+        assert_eq!(e.name(), "mimetype");
+        assert_eq!(e.compression(), zip::CompressionMethod::Stored);
+        drop(e);
+        let mut s = String::new();
+        z.by_name("mimetype")
+            .unwrap()
+            .read_to_string(&mut s)
+            .unwrap();
+        assert_eq!(s, "application/epub+zip");
+    }
+
+    /// Ce que l'archive porte sous `OEBPS/` et ce que le manifeste déclare doivent se
+    /// recouvrir **exactement**, `content.opf` excepté. C'est le défaut qui fait rejeter
+    /// un EPUB par une liseuse stricte sans qu'aucun autre test ne le voie.
+    #[test]
+    fn l_archive_et_le_manifeste_se_recouvrent_exactement() {
+        let ch = chapitres_temoins();
+        let p = Polices {
+            famille: "Cardo".into(),
+            romain: Face {
+                nom: "Cardo-Regular.ttf".into(),
+                octets: b"R".to_vec(),
+            },
+            italique: Some(Face {
+                nom: "Cardo-Italic.ttf".into(),
+                octets: b"I".to_vec(),
+            }),
+        };
+        let a = archive(
+            &livre_temoin(),
+            &ch,
+            b"\x89PNG",
+            Some(&p),
+            "2026-08-22T10:00:00Z",
+        )
+        .unwrap();
+        let mut z = relire(&a);
+
+        let dans_l_archive: std::collections::BTreeSet<String> = (0..z.len())
+            .map(|i| z.by_index(i).unwrap().name().to_string())
+            .filter(|n| n.starts_with("OEBPS/") && n != "OEBPS/content.opf")
+            .map(|n| n["OEBPS/".len()..].to_string())
+            .collect();
+
+        let mut opf = String::new();
+        z.by_name("OEBPS/content.opf")
+            .unwrap()
+            .read_to_string(&mut opf)
+            .unwrap();
+        let manifestes: std::collections::BTreeSet<String> = opf
+            .lines()
+            .filter_map(|l| l.split("href=\"").nth(1))
+            .filter_map(|l| l.split('"').next())
+            .map(str::to_string)
+            .collect();
+
+        assert_eq!(dans_l_archive, manifestes);
+        assert!(dans_l_archive.contains("fonts/Cardo-Italic.ttf"));
+    }
+
+    /// `META-INF/container.xml` désigne l'OPF : c'est par lui que toute liseuse entre dans
+    /// l'archive, et un chemin faux la rend illisible sans autre message.
+    #[test]
+    fn le_container_designe_l_opf() {
+        let ch = chapitres_temoins();
+        let a = archive(
+            &livre_temoin(),
+            &ch,
+            b"\x89PNG",
+            None,
+            "2026-08-22T10:00:00Z",
+        )
+        .unwrap();
+        let mut z = relire(&a);
+        let mut s = String::new();
+        z.by_name("META-INF/container.xml")
+            .unwrap()
+            .read_to_string(&mut s)
+            .unwrap();
+        assert!(s.contains(r#"full-path="OEBPS/content.opf""#), "{s}");
+    }
+
+    /// Un livre sans chapitre ne produit pas d'archive : ce serait une couverture et deux
+    /// pages liminaires, et le refus vaut mieux que le fichier qu'on découvrirait vide.
+    #[test]
+    fn un_livre_sans_chapitre_est_refuse() {
+        let err = archive(
+            &livre_temoin(),
+            &[],
+            b"\x89PNG",
+            None,
+            "2026-08-22T10:00:00Z",
+        )
+        .unwrap_err();
+        assert!(err.contains("chapitre"), "{err}");
     }
 }
