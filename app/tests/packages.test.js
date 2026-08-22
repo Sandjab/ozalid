@@ -23,6 +23,15 @@ const COOLLIBRI = {
   papiers: [{ cle: 'mesure', libelle: 'Dos relevé sur le gabarit' }],
 };
 
+/**
+ * La face par son libellé, et non par son rang : ces boutons se retrouvent par rang
+ * dans l'application — c'est ce que dit le commentaire de `FACES` — mais un test qui
+ * en fait autant se met à viser sa voisine le jour où une face s'ajoute. C'est
+ * exactement ce qu'a fait l'arrivée du Dos entre la 4ème et la Planche.
+ */
+const face = (els, libelle) =>
+  [...els.get('faces').children].find((b) => b.textContent === libelle);
+
 /** Un destinataire neuf chez un prestataire, comme le Rust en fabrique un. */
 const chez = (p) => ({
   provider: p.cle, papier: p.papiers[0].cle, dos_mm: null, fond_perdu_mm: null,
@@ -420,7 +429,7 @@ test('chaque package abouti montre sa planche en vignette', async () => {
  */
 test('l\'aperçu de planche n\'a pas de dos tant que l\'intérieur n\'est pas composé', async () => {
   const { els, appels } = await ouvre([LULU], {}, { couverture: {} });
-  await els.get('faces').children[2].declenche('click');
+  await face(els, 'Planche').declenche('click');
   await attendreApercu();
 
   const [, args] = dernier(appels, 'couverture_apercu');
@@ -434,7 +443,7 @@ test('l\'aperçu de planche n\'a pas de dos tant que l\'intérieur n\'est pas co
  */
 test('l\'aperçu ne transporte plus de gabarit', async () => {
   const { els, appels } = await ouvre([LULU], {}, { couverture: {} });
-  await els.get('faces').children[0].declenche('click');
+  await face(els, '1ère').declenche('click');
   await attendreApercu();
 
   assert.deepStrictEqual(
@@ -446,7 +455,7 @@ test('l\'aperçu ne transporte plus de gabarit', async () => {
 test('une fois l\'intérieur composé, l\'aperçu de planche reçoit ce dos-là', async () => {
   const { els, appels } = await ouvre([LULU], { composer: COMPOSITION }, { couverture: {} });
   await els.get('btComposer').declenche('click');
-  await els.get('faces').children[2].declenche('click');
+  await face(els, 'Planche').declenche('click');
   await attendreApercu();
 
   assert.strictEqual(dernier(appels, 'couverture_apercu')[1].dosMm, 16.513);
@@ -470,7 +479,7 @@ test('viser un autre destinataire périme le dos de l\'aperçu', async () => {
     couverture: {}, destinataires: [chez(LULU), chez(KDP)],
   });
   await els.get('btComposer').declenche('click');
-  await els.get('faces').children[2].declenche('click');
+  await face(els, 'Planche').declenche('click');
   await attendreApercu();
   assert.strictEqual(dernier(appels, 'couverture_apercu')[1].dosMm, 16.513);
 
@@ -492,7 +501,7 @@ test('viser un autre destinataire périme le dos de l\'aperçu', async () => {
 test('un dos calculé sur un autre papier ne vaut plus rien', async () => {
   const { els, appels } = await ouvre([KDP], { composer: COMPOSITION }, { couverture: {} });
   await els.get('btComposer').declenche('click');
-  await els.get('faces').children[2].declenche('click');
+  await face(els, 'Planche').declenche('click');
   await attendreApercu();
   assert.strictEqual(dernier(appels, 'couverture_apercu')[1].dosMm, 16.513);
 
@@ -514,7 +523,7 @@ test('un dos calculé sur un autre papier ne vaut plus rien', async () => {
 test('un dos calculé pour une autre police ne vaut plus rien', async () => {
   const { els, appels } = await ouvre([LULU], { composer: COMPOSITION }, { couverture: {} });
   await els.get('btComposer').declenche('click');
-  await els.get('faces').children[2].declenche('click');
+  await face(els, 'Planche').declenche('click');
   await attendreApercu();
   assert.strictEqual(dernier(appels, 'couverture_apercu')[1].dosMm, 16.513);
 
@@ -539,7 +548,7 @@ test('un dos calculé sur un autre manuscrit ne vaut plus rien', async () => {
   const dernierDos = () => dernier(appels, 'couverture_apercu')[1].dosMm;
 
   await els.get('btComposer').declenche('click');
-  await els.get('faces').children[2].declenche('click');
+  await face(els, 'Planche').declenche('click');
   await attendreApercu();
   assert.strictEqual(dernierDos(), 16.513);
 

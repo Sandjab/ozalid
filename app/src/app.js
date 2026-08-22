@@ -306,13 +306,10 @@ async function chargerProviders() {
   // L'accès au modèle appartient à la machine, pas au projet : il se lit une fois, au
   // démarrage, et il survit à tous les livres qu'on ouvrira ensuite.
   afficherDiffusion(await invoke('diffusion_lire'));
-  for (const m of await invoke('maquettes_liste')) {
-    const b = h('button', m.libelle);
-    b.type = 'button';
-    b.addEventListener('click', () => tente(async () =>
-      afficherProjet(await invoke('maquette_choisir', { cle: m.cle }))));
-    $('maquettes').append(b);
-  }
+  const sel = $('inMaquette');
+  sel.append(new Option('Repartir d\'une maquette…', ''));
+  for (const m of await invoke('maquettes_liste')) sel.append(new Option(m.libelle, m.cle));
+  sel.addEventListener('change', choisirMaquette);
   construireReglages();
 }
 
@@ -343,6 +340,8 @@ function afficherProjet(p) {
   projet = p;
   $('titreLivre').textContent = p.livre.titre || 'Sans titre';
   $('cheminProjet').textContent = p.chemin ?? 'projet non enregistré';
+  // Le chemin se tronque dans la bande : entier, il n'est plus qu'à un survol.
+  $('cheminProjet').title = p.chemin ?? '';
   $('etatEnregistrement').textContent = p.modifie
     ? 'modifié'
     : (p.chemin ? 'enregistré' : 'jamais enregistré');
@@ -376,15 +375,17 @@ function afficherProjet(p) {
   $('sourceManuscrit').textContent = p.manuscrit_source ?? 'aucune source mémorisée';
   $('btReimporter').disabled = !p.manuscrit_source;
 
-  $('etatImages').textContent = p.images.length
-    ? `Photos source : ${p.images.join(', ')}.`
-    : 'Aucune photo source : les modes Bandeau et Surimpression composeront sur le papier seul.';
+  // Dans la barre, à côté des deux boutons qui la changent : les noms suffisent, et
+  // l'absence se dit en deux mots. La phrase qui expliquait ce qu'une couverture sans
+  // photo compose — le papier seul — est partie avec le bloc : l'aperçu la montre.
+  $('etatImages').textContent = p.images.length ? p.images.join(', ') : 'aucune photo';
 
-  $('etatCouverture').textContent = p.couverture
-    ? ''
-    : 'Aucune maquette : en choisir une pour composer la couverture.';
-  $('reglages').hidden = !p.couverture;
+  // Le panneau, la face montrée et la disposition qu'elle demande sortent tous de
+  // `poserDisposition` : c'est la couverture qui les commande, et sans elle il n'y a
+  // rien à régler. L'invite à choisir une maquette, elle, s'écrit dans l'aperçu vide —
+  // à l'endroit où le manque se voit.
   if (p.couverture) afficherCouverture(p.couverture);
+  else poserDisposition(false);
   afficherDestinataires();
   afficherEnvois();
   demanderApercu();
@@ -495,6 +496,7 @@ async function afficherAucunProjet() {
   oublierLesSorties();
   $('titreLivre').textContent = 'Ozalid Studio';
   $('cheminProjet').textContent = 'aucun projet ouvert';
+  $('cheminProjet').title = '';
   $('etatEnregistrement').textContent = '';
   majEtapes();
   await afficherRecents();

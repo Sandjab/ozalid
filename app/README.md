@@ -69,7 +69,12 @@ Quatre bandes, et la fenêtre elle-même ne défile plus : une **entête** qui n
 livre ouvert, son chemin et son état d'enregistrement ; une rangée de cinq
 **onglets** — Livre, Intérieur, Couverture, Livraison, Envois — dans l'ordre où le
 livre se fait ; l'**étape** courante, seule ; un **pied** où l'on choisit pour qui
-l'on regarde, et qui dit ce que vaut le dos. Les Envois ont leur étape : la main du
+l'on regarde, et qui dit ce que vaut le dos.
+
+Les deux bandes du haut tiennent chacune sur **une ligne** : le chemin du `.ozalid` à
+côté du titre, tronqué s'il le faut et entier au survol ; l'état d'une étape à côté de
+son nom. Empilées, elles prenaient 176 px à toutes les étapes pour dire six choses
+courtes — et c'était la Couverture qui les payait, en aperçu. Les Envois ont leur étape : la main du
 livre, l'accès au modèle et la liste des dédicataires débordaient la Livraison de
 quatre défilements — elle ne garde que les destinataires et leurs packages. Ce qui
 ne tient pas se règle par la mise en page ; le panneau de réglages de la couverture
@@ -360,6 +365,13 @@ tout ce qui se voit se vérifie dans l'application.
   style, leur place — pied, centre ou tête — et leur rang, parce que les collections
   ne s'accordent pas là-dessus. Seule sa **largeur** échappe au réglage : elle vient
   de la pagination, et c'est tout l'objet de l'application.
+- **Le dos a sa face, et elle est couchée.** L'étape Couverture en compte quatre —
+  1ère, 4ème, Dos, Planche — et le Dos s'y compose seul, sans fond perdu, sur une page
+  d'un quart de tour. À sa taille : treize millimètres restent treize millimètres, et
+  c'est la page tournée qui les étale sur la largeur de la fenêtre. Debout, il n'aurait
+  tenu à l'écran que par sa hauteur, et se serait réglé dans trente-neuf pixels — trois
+  de plus que sur la planche. La **Planche**, elle, n'a plus aucun réglage : elle ne se
+  règle pas, elle se vérifie, et son panneau disparu lui rend la fenêtre entière.
 - **L'aperçu et le PDF sortent de la même source.** Il n'y a donc pas d'écart
   écran/export à surveiller — le piège que consignait le `CLAUDE.md` du projet
   n'existe plus ici.

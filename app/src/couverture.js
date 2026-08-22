@@ -61,7 +61,7 @@ const PLACES_DOS = [['pied', 'Pied'], ['centre', 'Centre'], ['tete', 'Tête']];
 function elementDos(cle, libelle) {
   return {
     ...style(`dos.${cle}.style`, `Dos — ${libelle}`),
-    face: 'planche',
+    face: 'dos',
     avant: [
       { chemin: `dos.${cle}.actif`, libelle: 'Afficher', type: 'case' },
       { chemin: `dos.${cle}.place`, libelle: 'Position', type: 'liste', options: PLACES_DOS },
@@ -197,7 +197,7 @@ const SCHEMA = [
     // seul réglage de la maquette que l'utilisateur ne peut pas toucher, et c'est
     // exactement ce que l'application apporte.
     titre: 'Dos — fond et espacements',
-    face: 'planche',
+    face: 'dos',
     champs: [
       { chemin: 'dos.fond_propre', libelle: 'Fond distinct du papier', type: 'case' },
       { chemin: 'dos.fond', libelle: 'Couleur du fond', type: 'couleur' },
@@ -265,6 +265,23 @@ function ecrire(obj, chemin, valeur) {
    ne s'exécute au chargement — le fichier reste requérable nu par les tests — et
    l'état partagé (`projet`, `face`, `dosCompose`…) est déclaré dans `app.js`, comme
    pour `livraison.js`. */
+
+/**
+ * Repart d'une maquette, et rend l'invite à son menu.
+ *
+ * Le menu ne montre pas un état : le projet ne garde pas de quelle maquette il est
+ * parti, et il n'aurait rien de vrai à dire une fois les réglages repris un par un. Il
+ * ne porte donc qu'un geste, et revient sur son invite — y laisser « Folio » affiché
+ * ferait passer pour un état ce qui est un bouton, et le geste, refait par mégarde,
+ * écrase tous les réglages.
+ */
+async function choisirMaquette() {
+  const sel = $('inMaquette');
+  const cle = sel.value;
+  sel.value = '';
+  if (!cle) return;
+  await tente(async () => afficherProjet(await invoke('maquette_choisir', { cle })));
+}
 
 /**
  * Remplace la photo d'une face.
@@ -343,6 +360,22 @@ function afficherCouverture(cv) {
   for (const b of blocs) {
     b.el.hidden = b.face !== face || (!!b.modes && !b.modes.includes(cv.mode));
   }
+  poserDisposition(blocs.some((b) => !b.el.hidden));
+}
+
+/**
+ * Dit à la feuille de style ce que la face demande de la fenêtre.
+ *
+ * Deux choses qu'un sélecteur ne peut pas déduire du balisage : quelle face est montrée
+ * — le dos couché prend la largeur en bandeau, ses réglages coulent en colonnes dessous —
+ * et si le panneau a quelque chose à montrer. La planche n'a plus de réglage à elle : la
+ * colonne qui l'attendait rendrait à l'aperçu une fenêtre amputée du tiers.
+ */
+function poserDisposition(panneau) {
+  const couv = $('couv');
+  couv.setAttribute('data-face', face);
+  couv.setAttribute('data-panneau', panneau ? 'oui' : 'non');
+  $('reglages').hidden = !panneau;
 }
 
 /**
@@ -445,7 +478,12 @@ async function rendreApercu() {
 }
 
 /**
- * Les trois faces de la couverture.
+ * Les quatre faces de la couverture.
+ *
+ * Le dos a la sienne depuis que la planche a cessé de la lui prêter : trois textes et
+ * leurs places se réglaient en regardant une bande de seize pixels. Séparés, chacun
+ * montre ce qu'il règle — et la planche, qui ne règle plus rien, devient ce qu'elle est :
+ * la vue de contrôle, sans panneau, sur la fenêtre entière.
  *
  * Rien à voir avec les onglets d'étape, malgré l'air de famille et le mot « onglets »
  * qu'ils partagent en CSS : ceux-là sont des `tab` d'un `tablist`, dont un seul est
@@ -457,7 +495,7 @@ async function rendreApercu() {
  * Les unifier serait un vrai travail, pas un nettoyage : il faudrait leur trouver un
  * pattern commun qu'aucun des deux n'a. Les croire déjà unifiés coûterait plus cher.
  */
-const FACES = [['une', '1ère'], ['quatre', '4ème'], ['planche', 'Planche']];
+const FACES = [['une', '1ère'], ['quatre', '4ème'], ['dos', 'Dos'], ['planche', 'Planche']];
 
 function construireFaces() {
   for (const [cle, libelle] of FACES) {
@@ -475,6 +513,7 @@ function choisirFace(v) {
     b.setAttribute('aria-pressed', String(FACES[i][0] === v));
   });
   if (projet?.couverture) afficherCouverture(projet.couverture);
+  else poserDisposition(false);
   demanderApercu();
 }
 

@@ -723,6 +723,14 @@ pub fn couverture_apercu(
         "quatre" => {
             couverture::source_quatre(cv, pr.format, quatre.as_ref(), une.as_ref(), dos_mm)?
         }
+        // Le dos seul se compose sans fond perdu : il ne réclame donc que la
+        // pagination, là où la planche réclame aussi le gabarit du prestataire.
+        "dos" => {
+            let dos = dos_mm.ok_or(
+                "dos : composer l'intérieur d'abord, c'est la pagination qui donne le dos.",
+            )?;
+            planche::source_dos(&o.projet.meta.livre, cv, pr.format, dos, une.as_ref())
+        }
         "planche" => {
             let dos = dos_mm.ok_or(
                 "planche : composer l'intérieur d'abord, c'est la pagination qui donne le dos.",

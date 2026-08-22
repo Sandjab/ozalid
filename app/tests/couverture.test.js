@@ -149,6 +149,14 @@ async function ouvre(couverture, sur = {}, dialogues = []) {
 /** Laisse passer le délai de grâce de l'aperçu. */
 const attendreApercu = () => new Promise((r) => setTimeout(r, 300));
 
+/**
+ * La face par son libellé, et non par son rang : l'application les retrouve par rang —
+ * c'est ce que dit le commentaire de `FACES` — mais un test qui en fait autant se met à
+ * viser sa voisine le jour où une face s'ajoute, comme l'a fait l'arrivée du Dos.
+ */
+const face = (els, libelle) =>
+  [...els.get('faces').children].find((b) => b.textContent === libelle);
+
 /* ---------- schéma ---------- */
 
 /**
@@ -220,16 +228,16 @@ test('basculer sur la 4ème change les groupes offerts', async () => {
   assert.ok(titres().includes('Cadre'));
   assert.ok(!titres().some((t) => t.startsWith('4ème')));
 
-  await els.get('faces').children[1].declenche('click');
+  await face(els, '4ème').declenche('click');
   assert.ok(titres().some((t) => t.startsWith('4ème')));
   assert.ok(!titres().includes('Cadre'));
 });
 
 /**
- * Les réglages du dos n'ont de sens que sur la planche : c'est là qu'il se voit. Les
- * offrir sur la 1ère donnerait à régler un élément absent de l'aperçu affiché.
+ * Les réglages du dos n'ont de sens que sur la face qui le montre. Les offrir sur la
+ * 1ère donnerait à régler un élément absent de l'aperçu affiché.
  */
-test('les trois éléments du dos ne sont offerts que sur la planche', async () => {
+test('les trois éléments du dos ne sont offerts que sur la face Dos', async () => {
   const { els } = await ouvre(maquette());
   const titres = () => [...els.get('reglages').children]
     .filter((g) => !g.hidden)
@@ -237,13 +245,41 @@ test('les trois éléments du dos ne sont offerts que sur la planche', async () 
 
   assert.ok(!titres().some((t) => t.startsWith('Dos')), 'dos offert sur la 1ère');
 
-  await els.get('faces').children[2].declenche('click');
+  await face(els, 'Dos').declenche('click');
   const t = titres();
   assert.ok(t.includes('Dos — auteur'));
   assert.ok(t.includes('Dos — titre'));
   assert.ok(t.includes('Dos — éditeur'));
   assert.ok(t.includes('Dos — fond et espacements'));
-  assert.ok(!t.includes('Cadre'), 'réglages de 1ère laissés sur la planche');
+  assert.ok(!t.includes('Cadre'), 'réglages de 1ère laissés sur la face Dos');
+});
+
+/**
+ * La planche ne se règle pas, elle se vérifie : c'est ce qui lui vaut la fenêtre
+ * entière. Un seul groupe qui y resterait rouvrirait la colonne de 22 rem, et l'aperçu
+ * qu'on est venu regarder perdrait le tiers de sa largeur pour un panneau presque vide.
+ */
+test('la planche n\'offre aucun réglage et rend sa colonne à l\'aperçu', async () => {
+  const { els } = await ouvre(maquette());
+  await face(els, 'Planche').declenche('click');
+
+  const offerts = [...els.get('reglages').children].filter((g) => !g.hidden);
+  assert.deepStrictEqual(offerts.map((g) => g.children[0].textContent), []);
+  assert.strictEqual(els.get('reglages').hidden, true);
+  assert.strictEqual(els.get('couv').getAttribute('data-panneau'), 'non');
+});
+
+/**
+ * Le dos couché a sa disposition à lui, et la feuille de style ne peut pas la deviner :
+ * seule la face montrée dit si l'aperçu est un bandeau ou une page.
+ */
+test('la face montrée est écrite sur la couverture pour la mise en page', async () => {
+  const { els } = await ouvre(maquette());
+  assert.strictEqual(els.get('couv').getAttribute('data-face'), 'une');
+
+  await face(els, 'Dos').declenche('click');
+  assert.strictEqual(els.get('couv').getAttribute('data-face'), 'dos');
+  assert.strictEqual(els.get('couv').getAttribute('data-panneau'), 'oui');
 });
 
 /**
@@ -343,13 +379,20 @@ test('viser un autre destinataire redemande un aperçu', async () => {
   assert.ok(apres > avant, 'aperçu non redemandé');
 });
 
+/**
+ * L'invite ne s'écrit qu'à un seul endroit, et c'est celui où le manque se voit : dans
+ * l'aperçu vide. Elle s'écrivait aussi en haut de l'étape, mot pour mot — deux fois la
+ * même phrase, dont l'une occupait une ligne à demeure sur un écran qui en manque.
+ */
 test('sans maquette, l\'aperçu le dit au lieu de rester vide', async () => {
   const { els } = await ouvre(null);
   await attendreApercu();
-  assert.match(els.get('etatCouverture').textContent, /Aucune maquette/);
-  assert.strictEqual(els.get('reglages').hidden, true);
   assert.match(els.get('etatApercu').textContent, /Choisir une maquette/);
   assert.strictEqual(els.get('apercu').hidden, true, 'cadre d\'image sans image');
+  // Rien à régler, donc pas de panneau — et la colonne qu'il occupait rendue à la scène
+  // qui porte l'invite.
+  assert.strictEqual(els.get('reglages').hidden, true);
+  assert.strictEqual(els.get('couv').getAttribute('data-panneau'), 'non');
 });
 
 /**

@@ -272,6 +272,62 @@ pub fn source(
     Ok(s)
 }
 
+/// Source Typst du dos seul, couché sur une page d'un quart de tour.
+///
+/// Un aperçu de réglage, pas une sortie : **pas de fond perdu**. Ce qui se règle ici est
+/// le dos rogné, celui qu'on aura sous les yeux le livre en main, et le gabarit fictif
+/// que voici le dit — un fond perdu nul, et le panorama calé sur cette planche-là. C'est
+/// aussi ce qui rend la face disponible chez un prestataire qui ne publie pas son fond
+/// perdu, là où la planche entière le réclame.
+///
+/// Le dos est **composé** à sa taille — treize millimètres restent treize millimètres —
+/// et c'est la page qui est couchée. Debout, il ne tiendrait à l'écran que par sa
+/// hauteur, et sa largeur, seule dimension qui compte pour régler trois textes, se
+/// retrouverait à trente-neuf pixels : trois de plus que sur la planche, pour une face
+/// entière. Couché, il prend la largeur de la fenêtre et en fait soixante-deux.
+///
+/// Coucher ici plutôt qu'à l'affichage n'est pas un détail de commodité : une image
+/// tournée en CSS garde la boîte de mise en page qu'elle avait debout, et la scène se
+/// dimensionnerait sur une hauteur que l'œil ne voit plus.
+///
+/// Le quart de tour est horaire, et c'est le seul qui remette le dos à l'endroit : ses
+/// textes se lisent de bas en haut — `bloc_dos` les tourne de -90° — et l'inverse les
+/// rendrait tête-bêche, à lire de droite à gauche. Pied à gauche, tête à droite.
+pub fn source_dos(
+    livre: &Livre,
+    cv: &Couverture,
+    format: (f64, f64),
+    dos: f64,
+    image_une: Option<&Ressource>,
+) -> String {
+    let g = Gabarit {
+        format,
+        dos,
+        fond_perdu: 0.0,
+    };
+    let hauteur = g.hauteur();
+    // Le box tourne autour de son coin haut-gauche : il part alors vers la gauche de la
+    // page, et `dx` l'y ramène entier. Aucune couture à prévoir — elle n'existe que là
+    // où deux zones se touchent.
+    format!(
+        "// Dos seul, couché — {} × {} mm\n\
+         #set page(width: {}, height: {}, margin: 0mm)\n\
+         #set text(lang: \"fr\", top-edge: 0.75em, bottom-edge: -0.25em)\n\
+         #set par(leading: 0em, spacing: 0em, justify: false)\n\n\
+         #place(top + left, dx: {}, dy: 0mm, \
+         rotate(90deg, origin: top + left, \
+         box(width: {}, height: {}, clip: true)[\n{}]))\n",
+        mm(dos),
+        mm(hauteur),
+        mm(hauteur),
+        mm(dos),
+        mm(hauteur),
+        mm(dos),
+        mm(hauteur),
+        bloc_dos(livre, cv, &g, image_une, 0.0),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -558,6 +614,95 @@ mod tests {
                 x[0]
             );
         }
+    }
+
+    /// Le dos s'aperçoit à sa taille, pas à une taille commode.
+    ///
+    /// Trois textes doivent tenir dans treize millimètres : c'est cette contrainte-là
+    /// qu'on regarde en réglant leur corps. Une boîte élargie « pour mieux voir » ferait
+    /// paraître composable un dos qui déborde au tirage. Le grossissement vient de la
+    /// page couchée et de l'écran qui l'étire, jamais de la composition.
+    #[test]
+    fn le_dos_seul_est_compose_a_la_largeur_du_dos() {
+        let g = gabarit("lulu", 244);
+        let s = source_dos(&livre(), &maquettes::folio(), g.format, g.dos, None);
+        let boite = format!("box(width: {}, height: {}", mm(g.dos), mm(g.format.1));
+        assert!(s.contains(&boite), "boîte attendue {boite} dans :\n{s}");
+        // La page, elle, est cette boîte couchée : le dos y court en largeur.
+        let page = format!("#set page(width: {}, height: {}", mm(g.format.1), mm(g.dos));
+        assert!(s.contains(&page), "page attendue {page} dans :\n{s}");
+    }
+
+    /// Le quart de tour emmène la boîte hors de la page, à gauche : sans le `dx` qui l'y
+    /// ramène, la face Dos serait une page blanche — et une page blanche ressemble
+    /// exactement à un dos dont on aurait éteint les trois textes.
+    ///
+    /// Ce que ce test ne dit pas, et qui se regarde à l'œil : que le dos couché se lise
+    /// dans le bon sens, pied à gauche et tête à droite.
+    #[test]
+    fn le_dos_couche_est_ramene_dans_sa_page() {
+        let g = gabarit("lulu", 244);
+        let s = source_dos(&livre(), &maquettes::folio(), g.format, g.dos, None);
+        let attendu = format!(
+            "dx: {}, dy: 0mm, rotate(90deg, origin: top + left",
+            mm(g.format.1)
+        );
+        assert!(s.contains(&attendu), "attendu {attendu} dans :\n{s}");
+    }
+
+    /// La face Dos n'a pas de fond perdu à montrer, et c'est ce qui la rend disponible
+    /// là où la planche ne l'est pas : chez un prestataire qui ne le publie pas. Si le
+    /// fond perdu revenait dans cette page, la face deviendrait aussi exigeante que la
+    /// planche, et pour rien — on ne règle pas des textes sur de la marge à couper.
+    #[test]
+    fn le_dos_seul_ignore_le_fond_perdu() {
+        let g = gabarit("lulu", 244);
+        assert!(g.fond_perdu > 0.0, "le gabarit de test doit en avoir un");
+        let s = source_dos(&livre(), &maquettes::folio(), g.format, g.dos, None);
+        assert!(
+            !s.contains(&mm(g.hauteur())),
+            "la hauteur de planche n'a rien à faire ici :\n{s}"
+        );
+    }
+
+    /// Le même couplage que pour la planche, redit sur cette face : c'est la pagination
+    /// qui donne le dos. Un aperçu du dos qui ne bougerait pas avec le manuscrit
+    /// laisserait régler des textes sur une largeur périmée.
+    #[test]
+    fn une_pagination_plus_longue_elargit_le_dos_seul() {
+        let court = gabarit("lulu", 244);
+        let long = gabarit("lulu", 400);
+        // La page est couchée : c'est sa hauteur qui porte le dos.
+        let page = |g: &Gabarit| {
+            let s = source_dos(&livre(), &maquettes::folio(), g.format, g.dos, None);
+            let i = s.find(", height: ").unwrap() + ", height: ".len();
+            s[i..].split("mm").next().unwrap().parse::<f64>().unwrap()
+        };
+        let ecart = long.dos - court.dos;
+        assert!(ecart > 0.0, "400 pages font un dos plus épais que 244");
+        assert!(
+            (page(&long) - page(&court) - ecart).abs() < 0.001,
+            "le dos seul doit s'élargir de {ecart} mm"
+        );
+    }
+
+    /// Le dos seul montre le dos de la planche, pas une seconde écriture du même dos.
+    /// Deux compositions distinctes dériveraient l'une de l'autre au premier réglage
+    /// ajouté, et la face servirait à régler ce que la planche ne rendrait pas.
+    #[test]
+    fn le_dos_seul_et_celui_de_la_planche_portent_la_meme_grille() {
+        let g = gabarit("lulu", 244);
+        let cv = maquettes::folio();
+        // La zone du dos est écrite en premier dans la planche : sa grille est donc la
+        // première des trois.
+        let grille = |s: &str| {
+            let i = s.find("#grid(columns:").expect("le dos porte une grille");
+            s[i..].split("]))").next().unwrap().to_string()
+        };
+        let planche = source(&livre(), &cv, &g, None, None).unwrap();
+        let seul = source_dos(&livre(), &cv, g.format, g.dos, None);
+        assert_eq!(grille(&seul), grille(&planche));
+        assert!(seul.contains("Les Heures creuses"), "{seul}");
     }
 
     /// Position absolue de chaque image sur la planche : abscisse de la zone de planche,

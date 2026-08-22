@@ -7,17 +7,17 @@
 </head>
 <body>
 
+<!-- L'identité tient sur une ligne : le titre, le chemin qui prend la place restante et
+     se tronque au besoin, puis les deux états, calés à droite. Empilés, ils coûtaient
+     110 px de hauteur à toutes les étapes pour dire trois choses courtes — et c'est la
+     Couverture qui les payait, en aperçu. -->
 <header id="entete">
-  <div class="identite">
-    <h1 id="titreLivre">Ozalid Studio</h1>
-    <p class="chemin" id="cheminProjet">aucun projet ouvert</p>
-  </div>
-  <div class="etats">
-    <p class="etat" id="etatEnregistrement"></p>
-    <!-- Le refus d'une saisie laisse le focus dans le champ refusé : sans `aria-live`,
-         l'erreur s'écrirait à l'autre bout de l'écran sans que rien ne l'annonce. -->
-    <p class="etat" id="alerte" aria-live="polite"></p>
-  </div>
+  <h1 id="titreLivre">Ozalid Studio</h1>
+  <p class="chemin" id="cheminProjet">aucun projet ouvert</p>
+  <p class="etat" id="etatEnregistrement"></p>
+  <!-- Le refus d'une saisie laisse le focus dans le champ refusé : sans `aria-live`,
+       l'erreur s'écrirait à l'autre bout de l'écran sans que rien ne l'annonce. -->
+  <p class="etat" id="alerte" aria-live="polite"></p>
 </header>
 
 <!-- Les onglets sont construits par app.js depuis la table ETAPES. La nav est écrite
@@ -105,23 +105,34 @@
   </section>
 
   <section id="etapeCouverture" class="etape" role="tabpanel" hidden>
-    <div class="bloc">
-      <div class="ligne">
-        <span class="lab">Maquette de départ</span>
-        <span id="maquettes" class="ligne"></span>
-      </div>
-      <div class="ligne">
-        <span class="lab">Photos</span>
-        <button id="btImageUne" type="button">Image de 1ère…</button>
-        <button id="btImageQuatre" type="button">Image de 4ème…</button>
-      </div>
-      <p class="note" id="etatImages"></p>
-      <p class="note" id="etatCouverture"></p>
+    <!-- Une seule barre au-dessus de l'aperçu : ce qu'on regarde à gauche, ce qui
+         alimente la maquette à droite. Elle tient sur une ligne à 900 px — la fenêtre
+         la plus étroite qu'on autorise — et c'est ce qui commande sa composition : le
+         choix d'une maquette de départ est un menu et non trois boutons, l'état des
+         photos une mention et non deux phrases.
+         Ce qui a disparu et qui ne manque pas : la note « Aucune maquette », que
+         l'aperçu vide disait déjà, mot pour mot, deux centimètres plus bas. -->
+    <div class="outils">
+      <div class="ligne onglets" id="faces"></div>
+      <span class="creux"></span>
+      <!-- Un menu d'action, pas un état : rien dans le projet ne dit de quelle maquette
+           on est parti, et le geste écrase les réglages. Il revient donc toujours sur
+           son invite — voir `choisirMaquette` dans `couverture.js`.
+           Sans étiquette visible, comme les deux selects d'ajout de la Livraison et des
+           Envois : c'est son invite qui porte le geste, et l'`aria-label` le dit à qui
+           ne la voit pas. Ici la raison est aussi la place — les deux mots qu'il aurait
+           fallu, la barre les prend sur la mention des photos, à 900 px. -->
+      <select id="inMaquette" aria-label="Repartir d'une maquette"></select>
+      <button id="btImageUne" type="button">Photo de 1ère…</button>
+      <button id="btImageQuatre" type="button">Photo de 4ème…</button>
+      <p class="note source" id="etatImages"></p>
     </div>
 
-    <div class="couv">
+    <!-- `data-face` et `data-panneau` sont posés par `afficherCouverture` : la
+         disposition du dos et la planche sans panneau en dépendent, et la feuille de
+         style ne peut pas les déduire seule. -->
+    <div class="couv" id="couv">
       <div class="face">
-        <div class="ligne onglets" id="faces"></div>
         <!-- L'aperçu est centré dans une scène qui, elle, a la hauteur disponible :
              l'image garde ses proportions et ne pousse jamais la fenêtre. -->
         <div class="scene"><img id="apercu" class="apercu" alt="Aperçu de la couverture"></div>

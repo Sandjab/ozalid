@@ -58,16 +58,33 @@ body {
 #contenu { grid-area: contenu; }
 #pied { grid-area: pied; }
 
+/* L'identité en une bande, à hauteur de ligne. Elle en prenait 110 px : le titre, le
+   chemin dessous avec ses marges de paragraphe, et les états dans une colonne à eux.
+   Trois choses courtes, dont aucune ne réclamait sa ligne — et la Couverture les payait
+   en aperçu, à toutes les tailles de fenêtre.
+   Le chemin prend la place qui reste et se tronque : c'est la seule des quatre dont la
+   longueur ne se prévoit pas, et la fin d'un chemin ne se lit pas de toute façon —
+   `title` la donne entière à qui la survole. */
 #entete {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 1.5rem;
-  padding: 1rem 2rem .8rem;
+  gap: 1rem;
+  padding: .45rem 2rem;
   border-bottom: 1px solid var(--trait);
 }
 
-#entete .etats { text-align: right; }
+#entete p { margin: 0; }
+
+#entete .chemin {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
+}
+
+#entete .etat { white-space: nowrap; }
 
 /* Les onglets des étapes. La disposition tient dans le flux de la grille : un rail
    vertical en changerait le sens, pas le balisage. */
@@ -76,20 +93,35 @@ body {
   grid-auto-flow: var(--onglets-flux);
   grid-auto-columns: 1fr;
   gap: .4rem;
-  padding: .5rem 2rem 0;
+  padding: .35rem 2rem 0;
   border-bottom: 1px solid var(--trait);
 }
 
+/* Le nom et l'état sur une ligne, et non l'un sous l'autre : la bande passe de 66 à
+   34 px sans rien perdre — le sous-libellé garde sa place, son témoin d'alerte aussi.
+   Ce qui cède quand l'onglet est trop étroit, c'est l'état, tronqué ; le nom, lui, ne
+   se coupe pas — la moitié d'un nom d'étape ne mène nulle part. */
 #etapes button {
-  display: grid;
-  gap: .1rem;
-  justify-items: start;
-  padding: .4rem .7rem;
+  display: flex;
+  align-items: baseline;
+  gap: .4rem;
+  padding: .28rem .7rem;
   background: transparent;
   color: var(--encre);
   border-color: transparent;
   border-bottom: 2px solid transparent;
   border-radius: 3px 3px 0 0;
+  text-align: left;
+  overflow: hidden;
+  min-width: 0;
+}
+
+#etapes .nom { white-space: nowrap; }
+
+#etapes .sous {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #etapes button[aria-selected="true"] {
@@ -129,11 +161,14 @@ body {
 
 #visee select { width: auto; padding: .1rem .3rem; font-size: .85rem; }
 
+/* Le titre du livre vit dans une bande à hauteur de ligne : sa graisse et son
+   interlettrage le distinguent, pas son corps. */
 h1 {
   margin: 0;
-  font-size: 1.3rem;
+  font-size: 1.05rem;
   font-weight: 600;
   letter-spacing: .02em;
+  white-space: nowrap;
 }
 
 main {
@@ -203,7 +238,7 @@ main {
   border-bottom: none;
 }
 
-/* L'étape Couverture donne sa hauteur au panneau : un bloc de réglages en haut, la
+/* L'étape Couverture donne sa hauteur à l'aperçu : une barre d'outils en haut, la
    couverture et son panneau dessous. */
 #etapeCouverture {
   display: grid;
@@ -365,19 +400,123 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
 
 .lab { color: var(--gris-fort); }
 
+/* La barre d'outils de la Couverture : les faces à gauche, ce qui alimente la maquette
+   à droite, et rien entre les deux qu'un ressort.
+   `nowrap` est délibéré, et c'est une contrainte, pas une négligence : la barre tient
+   sur une ligne à 900 px — la fenêtre la plus étroite qu'on autorise — et lui laisser le
+   droit de se replier ferait revenir en douce les deux rangs qu'on vient d'enlever. Ce
+   qui cède sous la pression, c'est la mention des photos, la seule dont la longueur ne
+   se prévoit pas. Ajouter un contrôle ici, c'est d'abord vérifier qu'il reste de la
+   place à 900. */
+.outils {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: .5rem .8rem;
+  padding: .5rem 0;
+  min-width: 0;
+}
+
+/* Rien ne se replie ni ne se comprime, sauf la mention des photos. `.ligne` autorise le
+   repli partout ailleurs, et à raison — mais les quatre faces s'y mettaient sur trois
+   rangs dès 900 px, rendant à la barre les deux étages qu'on venait de lui retirer.
+   Ce qui cède est donc désigné, et c'est le seul élément qui ne soit pas un contrôle.
+   Mesuré : les quatre faces, le menu et les deux boutons réclament 779 px, gouttières
+   comprises 830. La mention n'a donc de place qu'à partir de 1015 px de fenêtre, et
+   au-dessous elle s'efface — entièrement, pas tronquée. C'est assumé : à cette largeur,
+   l'alternative était de rendre à la barre un second rang permanent.
+   Les 6 px qui restent à 900 px sont toute la marge du calcul. Un libellé rallongé ici
+   ne se replie pas, il déborde. */
+.outils > * { flex: none; }
+.outils .onglets { flex-wrap: nowrap; }
+
+/* Le ressort qui sépare ce qu'on regarde de ce qui l'alimente. */
+.outils .creux { flex: 1; min-width: .5rem; }
+.outils .source { flex: 0 1 auto; }
+
+/* Le menu prend la largeur de son invite, pas celle de la barre : étiré, il se lirait
+   comme le sujet de l'étape au lieu du geste qu'il est — c'est le même parti que le
+   select d'ajout d'un destinataire. */
+.outils select { width: auto; }
+
+/* Les noms des photos source. Seul élément de la barre à céder de la place : ce qui
+   dépasse se tronque plutôt que de pousser un bouton hors de la ligne. */
+.outils .source {
+  margin: 0;
+  min-width: 0;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* L'aperçu prend la place, le panneau prend ce qu'il lui faut — et c'est l'inverse de
+   ce que faisait cette ligne. Elle plafonnait l'aperçu à 22 rem et donnait `1fr` au
+   panneau : agrandir la fenêtre n'agrandissait que les réglages, jusqu'à 1160 px de
+   large sur un écran ordinaire pour des champs qui en réclament 350.
+   22 rem est la largeur du panneau, pas son maximum : les 10 rem de libellé de `.groupe
+   label` plus le champ, plus la barre de défilement. La rétrécir tronque les libellés,
+   l'élargir ne remplit rien. */
 .couv {
   display: grid;
-  grid-template-columns: minmax(14rem, 22rem) 1fr;
+  grid-template-columns: minmax(0, 1fr) 22rem;
   gap: 1.5rem;
-  padding: 1rem 0;
+  padding: 0 0 .8rem;
   min-height: 0;
 }
 
-/* La face : ses onglets en haut, son état en bas, et l'aperçu qui prend le reste. */
+/* La planche ne se règle plus : sans panneau, la colonne qui l'attendait rendrait à
+   l'aperçu une fenêtre amputée du tiers. `data-panneau` est posé par
+   `poserDisposition` — la feuille de style ne peut pas le déduire d'un `[hidden]`. */
+.couv[data-panneau="non"] { grid-template-columns: minmax(0, 1fr); }
+
+/* Le dos est seize fois plus long que large : couché, il n'a que faire de la hauteur de
+   la scène, et ses trente et un réglages n'ont que faire d'une colonne étroite. L'aperçu
+   prend donc la largeur entière en bandeau, et les réglages s'étalent dessous.
+   Mesuré : le dos passe de 16 px de large sur la planche d'aujourd'hui à 62 px ici, et
+   97 en plein écran. Rangé dans la colonne étroite comme les trois autres faces, il en
+   ferait 39 — trois de plus que sur la planche sans panneau, et la face ne vaudrait pas
+   ce qu'elle coûte. */
+.couv[data-face="dos"] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: .9rem;
+}
+
+.couv[data-face="dos"] .scene { align-items: center; padding-bottom: 0; }
+
+/* La seule image de l'application qui prenne toute sa boîte : le bandeau du dos n'a pas
+   de hauteur à respecter, c'est sa largeur qui le dimensionne. */
+.couv[data-face="dos"] .apercu { width: 100%; max-height: none; }
+
+/* Une grille, et non le `columns` des étapes Livre et Intérieur — le fichier a déjà payé
+   la différence une fois, et le commentaire de `main` la raconte : un flux en colonnes
+   contraint en hauteur n'ouvre pas d'ascenseur vertical, il ouvre des colonnes de
+   débordement vers la droite. Le panneau garde ici l'`overflow-y` de `.reglages`, donc
+   la contrainte : « Dos — éditeur » partait hors écran derrière une barre horizontale.
+   Une grille remplit ses rangées et défile vers le bas, comme le reste du panneau.
+   `start` sur les rangées : sans lui, les quatre groupes s'étireraient à la hauteur du
+   plus long, et les libellés du plus court flotteraient au milieu de leur case. */
+.couv[data-face="dos"] .reglages {
+  display: grid;
+  /* 13,5 rem tient les quatre groupes du dos sur une seule rangée dès 1015 px de
+     fenêtre : tout le panneau se lit alors sans défiler, ce qui est le vrai gain de
+     cette face. Au-dessous, la grille retombe à trois colonnes et le panneau défile,
+     comme il le fait sur les trois autres faces. */
+  grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
+  gap: 0 1.2rem;
+  align-content: start;
+  align-items: start;
+  padding-right: 0;
+}
+
+/* La face : l'aperçu, et son état dessous. Les onglets sont partis dans la barre —
+   c'est la même bande que la maquette et les photos, et trois bandes pour quatre
+   contrôles était le vrai coût de la partie haute. */
 .face {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: .8rem;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: .5rem;
   min-height: 0;
 }
 
