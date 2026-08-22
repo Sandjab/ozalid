@@ -111,6 +111,37 @@ fn page(titre: &str, corps: &str) -> String {
     )
 }
 
+/// Les deux fichiers d'une famille que l'EPUB déclare.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Faces {
+    pub romain: String,
+    pub italique: Option<String>,
+}
+
+/// Le romain et l'italique parmi les fichiers d'une **même** famille.
+///
+/// Tout nom portant « Bold » est écarté d'abord : cela couvre `-Bold`, `-BoldItalic`,
+/// `-SemiBold` et `-SemiBoldItalic` d'un seul coup. Sans cette exclusion, Cardo
+/// donnerait « Cardo-Bold.ttf » pour romain — son fichier ordinaire s'appelle
+/// « Cardo-Regular.ttf », plus long — et le livre entier sortirait en gras.
+///
+/// Le gras n'est pas embarqué : sur un fichier variable l'axe `wght` le rend, sur un
+/// fichier statique la liseuse le synthétise. C'est le comportement d'un EPUB
+/// ordinaire, et `**mot**` reste rare dans un roman.
+pub fn faces(noms: &[String]) -> Option<Faces> {
+    let choisir = |italique: bool| -> Option<String> {
+        noms.iter()
+            .filter(|n| !n.contains("Bold"))
+            .filter(|n| n.contains("Italic") == italique)
+            .min_by_key(|n| n.len())
+            .cloned()
+    };
+    Some(Faces {
+        romain: choisir(false)?,
+        italique: choisir(true),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -204,5 +235,71 @@ mod tests {
             blocs: vec![],
         };
         assert!(chapitre_xhtml(&ch).contains("Pile &amp; face"));
+    }
+
+    /// Les noms de fichiers réellement posés par `app/outils/polices.sh`, groupés par
+    /// famille. C'est le seul endroit du projet où ils soient écrits : `fonts/` n'est pas
+    /// versionné, la règle de choix doit donc s'éprouver sur une liste, pas sur un
+    /// répertoire.
+    fn fichiers(famille: &str) -> Vec<String> {
+        let l: &[&str] = match famille {
+            "EB Garamond" => &["EBGaramond[wght].ttf", "EBGaramond-Italic[wght].ttf"],
+            "Crimson Pro" => &["CrimsonPro[wght].ttf", "CrimsonPro-Italic[wght].ttf"],
+            "Alegreya" => &["Alegreya[wght].ttf", "Alegreya-Italic[wght].ttf"],
+            "Cardo" => &["Cardo-Regular.ttf", "Cardo-Bold.ttf", "Cardo-Italic.ttf"],
+            "Vollkorn" => &["Vollkorn[wght].ttf", "Vollkorn-Italic[wght].ttf"],
+            "Spectral" => &[
+                "Spectral-Regular.ttf",
+                "Spectral-Italic.ttf",
+                "Spectral-Bold.ttf",
+                "Spectral-BoldItalic.ttf",
+                "Spectral-SemiBold.ttf",
+                "Spectral-SemiBoldItalic.ttf",
+            ],
+            "Libre Baskerville" => &[
+                "LibreBaskerville[wght].ttf",
+                "LibreBaskerville-Italic[wght].ttf",
+            ],
+            _ => &[],
+        };
+        l.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// Chacune des sept polices de labeur doit donner un romain et un italique. Une
+    /// famille qui n'en donnerait pas composerait l'EPUB dans l'écriture du lecteur sans
+    /// que rien d'autre ne le dise.
+    #[test]
+    fn les_sept_polices_de_labeur_donnent_un_romain_et_un_italique() {
+        for famille in crate::interieur::POLICES_TEXTE {
+            let f = faces(&fichiers(famille)).unwrap_or_else(|| panic!("{famille} : aucune face"));
+            assert!(!f.romain.contains("Italic"), "{famille} : {}", f.romain);
+            assert!(f.italique.is_some(), "{famille} : pas d'italique");
+        }
+    }
+
+    /// Le piège de la règle : Cardo livre son romain sous « Cardo-Regular.ttf », plus long
+    /// que « Cardo-Bold.ttf ». Choisir le nom le plus court sans écarter le gras
+    /// composerait tout le livre en gras — et cela ne se verrait qu'à la lecture.
+    #[test]
+    fn le_gras_n_est_jamais_pris_pour_le_romain() {
+        let f = faces(&fichiers("Cardo")).unwrap();
+        assert_eq!(f.romain, "Cardo-Regular.ttf");
+        assert_eq!(f.italique.as_deref(), Some("Cardo-Italic.ttf"));
+    }
+
+    /// Même piège du côté de l'italique : Spectral porte quatre fichiers en « Italic »,
+    /// dont deux gras.
+    #[test]
+    fn l_italique_gras_n_est_jamais_pris_pour_l_italique() {
+        let f = faces(&fichiers("Spectral")).unwrap();
+        assert_eq!(f.romain, "Spectral-Regular.ttf");
+        assert_eq!(f.italique.as_deref(), Some("Spectral-Italic.ttf"));
+    }
+
+    /// Aucun fichier, aucune face : c'est le cas « police introuvable dans `fonts/` », qui
+    /// n'est pas une erreur — l'EPUB se fait alors dans l'écriture du lecteur.
+    #[test]
+    fn sans_fichier_il_n_y_a_pas_de_face() {
+        assert!(faces(&[]).is_none());
     }
 }
