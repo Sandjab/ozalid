@@ -205,6 +205,45 @@ function main() {
 }
 
 /**
+ * Enregistre l'accès au modèle, et rend compte de ce qui est en place.
+ *
+ * `cle` vaut `null` pour laisser celle qui est enregistrée — le champ est vide à
+ * l'écran puisqu'on ne la lui redonne jamais, et corriger l'adresse ne doit pas
+ * l'effacer. La chaîne vide, elle, l'oublie pour de bon.
+ */
+async function reglerDiffusion(cle) {
+  await tente(async () => {
+    afficherDiffusion(await invoke('diffusion_regler', { url: $('inDiffusionUrl').value, cle }));
+    $('inDiffusionCle').value = '';
+  });
+}
+
+/** Ce que la machine sait du modèle : son adresse, et si une clé y est posée. */
+function afficherDiffusion(acces) {
+  $('inDiffusionUrl').value = acces.url;
+  $('etatDiffusion').textContent = acces.cle_posee
+    ? 'clé enregistrée sur cette machine'
+    : 'aucune clé : la génération sera refusée';
+}
+
+/**
+ * Choisit l'image écrite à la main d'un envoi.
+ *
+ * Elle est copiée dans le `.ozalid` sous `envois/`, à part de celles de la couverture :
+ * là-bas, une image dont le nom ne commence pas par `quatrieme` **devient** la première
+ * de couverture, et le mot manuscrit d'un lecteur remplacerait la couverture du livre.
+ */
+async function choisirImageEnvoi(index) {
+  const chemin = await open({
+    multiple: false,
+    filters: [{ name: 'Mot écrit à la main', extensions: ['jpg', 'jpeg', 'png'] }],
+  });
+  if (!chemin) return;
+  await tente(async () =>
+    afficherProjet(await invoke('envoi_image_choisir', { index, chemin })));
+}
+
+/**
  * Le choix de la main : les trois écritures de la maison, et celle de l'auteur.
  *
  * Le `select` est refait à chaque projet plutôt que rempli une fois au démarrage : la
