@@ -195,14 +195,16 @@ l'autre.
 |---|---|
 | `Chapitre { numero, titre }` | `<h1>` avec le numéro, `<h2>` avec le titre quand il existe |
 | `Bloc::Paragraphe` | `<p>` |
-| `Bloc::Scene` | `<p class="scene">` portant `manuscrit::SCENE` en clair |
+| `Bloc::Scene` | `<p class="scene">` portant trois astérisques séparées d'espaces insécables |
 | `*emph*` | `<em>` |
 | `**strong**` | `<strong>` |
 
 La rupture de scène est **trois astérisques ordinaires espacées**, le même caractère
-que sur le papier : `manuscrit::SCENE` les a choisies parce qu'elles sont les seules
-présentes dans tous les fichiers de `fonts/`. Ce qu'on relit doit être ce qui s'imprime,
-et l'écran ne fait pas exception. Seul l'espacement change, réglé en CSS.
+que sur le papier : `manuscrit::SCENE` l'a choisi parce qu'il est le seul présent dans
+tous les fichiers de `fonts/`. Ce qu'on relit doit être ce qui s'imprime, et l'écran ne
+fait pas exception. La constante elle-même n'est pas réutilisable — c'est du markup
+Typst, `\*#h(0.8em)\*#h(0.8em)\*` — donc l'EPUB écrit les trois astérisques séparées
+d'espaces insécables, et un test amarre les deux formes l'une à l'autre.
 
 L'échappement XML est **propre à `epub`** : il protège `<`, `>`, `&`, `"` et `'`.
 `manuscrit::echappe` protège le markup Typst, ce qui n'a rien à voir — les deux ne
@@ -216,11 +218,16 @@ familles de `POLICES_TEXTE` sont OFL, donc redistribuables.
 La règle de choix, sur les fichiers du répertoire de polices :
 
 1. ne retenir que ceux dont `police::examine` rend la famille de `Interieur::police` ;
-2. le **romain** est celui dont le nom ne contient pas « Italic », le plus court ;
-3. l'**italique** est celui dont le nom contient « Italic », le plus court.
+2. **écarter tout nom contenant « Bold »** — cela couvre `-Bold`, `-BoldItalic`,
+   `-SemiBold` et `-SemiBoldItalic` d'un seul coup ;
+3. le **romain** est celui qui reste et ne contient pas « Italic » ;
+4. l'**italique** est celui qui reste et contient « Italic ».
 
-Le « plus court » écarte `-BoldItalic` et `-SemiBold` sans avoir à connaître leurs
-noms. Deux `@font-face` sont déclarés, avec `font-weight: 100 900` sur les fichiers
+L'exclusion de « Bold » n'est pas un raffinement : sans elle, la règle prendrait
+`Cardo-Bold.ttf` pour romain de Cardo, dont le fichier ordinaire s'appelle
+`Cardo-Regular.ttf`. À égalité improbable, le nom le plus court l'emporte.
+
+Deux `@font-face` sont déclarés, avec `font-weight: 100 900` sur les fichiers
 variables — l'axe sert alors le gras réel ; sur les fichiers statiques (Cardo,
 Spectral), le lecteur le synthétise, ce qui est le comportement d'un EPUB ordinaire.
 
