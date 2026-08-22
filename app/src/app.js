@@ -421,23 +421,47 @@ async function tente(fn) {
 }
 
 /**
- * Efface ce que le projet précédent avait laissé à l'écran.
+ * Efface ce que la composition du texte précédent avait laissé à l'écran.
  *
- * Pagination, dos, chemins de fichiers : ces chiffres ne valent que pour le livre
- * qui les a produits. Les laisser en place pendant qu'on en ouvre un autre donnerait
- * à lire la pagination du mauvais livre — précisément l'erreur que l'application
- * existe pour supprimer.
+ * Pagination, dos, chemins de fichiers : ces chiffres ne valent que pour le manuscrit
+ * qui les a produits. Les laisser en place quand le texte est remplacé donnerait à lire
+ * la pagination du mauvais livre — précisément l'erreur que l'application existe pour
+ * supprimer. Les envois y sont : un exemplaire dédicacé porte son propre compte de pages
+ * et son dos, sortis du même texte.
+ *
+ * Deux chemins y mènent, et ce sont les deux façons de périmer une composition : ouvrir
+ * un autre projet, et remplacer le manuscrit de celui qui est ouvert.
  */
-function oublierLesSorties() {
+function oublierLaComposition() {
   dosCompose = null;
-  // L'étape courante est une sortie comme une autre : elle appartenait au projet qu'on
-  // regardait. Rester sur la Livraison en ouvrant un autre livre donnerait à lire ses
-  // packages sous le titre du nouveau.
-  etape = 'livre';
   for (const id of ['resultat', 'packages', 'resultatEnvois']) {
     $(id).replaceChildren();
     $(id).hidden = true;
   }
+  $('cheminEpreuve').textContent = '';
+  // Les canaux de compte rendu qui vont avec, et pas seulement celui de la composition :
+  // un message rouge appartient au texte qui l'a provoqué autant que le chiffre qu'il
+  // commente. Effacer le chemin de l'épreuve en laissant l'erreur qui disait pourquoi
+  // elle avait échoué donnerait à lire l'échec de l'ancien texte sous le nouveau.
+  for (const id of ['etat', 'etatEpreuve', 'etatPackages', 'etatEnvois']) {
+    $(id).textContent = '';
+    $(id).className = 'etat';
+  }
+}
+
+/**
+ * Efface ce que le projet précédent avait laissé à l'écran.
+ *
+ * Ses sorties de composition d'abord, puis ce qui n'appartient qu'à lui : l'étape où
+ * l'on était, ses destinataires, ses envois, sa couverture. C'est ce partage qui sépare
+ * les deux fonctions — remplacer le texte d'un livre n'est pas en ouvrir un autre.
+ */
+function oublierLesSorties() {
+  oublierLaComposition();
+  // L'étape courante est une sortie comme une autre : elle appartenait au projet qu'on
+  // regardait. Rester sur la Livraison en ouvrant un autre livre donnerait à lire ses
+  // packages sous le titre du nouveau.
+  etape = 'livre';
   // La liste des destinataires appartient au projet, pas à l'écran : sans projet, elle
   // n'a personne à nommer, et `afficherProjet` la refait entièrement pour le suivant.
   $('destinataires').replaceChildren();
@@ -449,15 +473,9 @@ function oublierLesSorties() {
   $('envois').replaceChildren();
   $('apercuEnvoi').removeAttribute('src');
   $('apercuEnvoi').hidden = true;
-  $('cheminEpreuve').textContent = '';
-  // Les cinq canaux de compte rendu, et pas seulement celui de la composition : un
-  // message rouge appartient au livre qui l'a provoqué autant que le chiffre qu'il
-  // commente. Effacer le chemin de l'épreuve en laissant l'erreur qui disait pourquoi
-  // elle avait échoué donnerait à lire l'échec du livre A sous le titre du livre B.
-  for (const id of ['etat', 'etatEpreuve', 'etatPackages', 'etatEnvois']) {
-    $(id).textContent = '';
-    $(id).className = 'etat';
-  }
+  // L'entête par-dessus les canaux qu'`oublierLaComposition` vient d'éteindre : une
+  // saisie refusée y est écrite au nom du livre qu'on quitte, et elle y resterait seule
+  // à parler de lui.
   alerter('');
   // L'aperçu est une sortie comme les autres, et la seule qu'on lise sans la lire :
   // une couverture laissée en place est le genre d'erreur qui ne se remarque qu'une
@@ -624,15 +642,19 @@ async function majLivre() {
 
 /**
  * Le manuscrit vient d'être remplacé : le texte fait la pagination, donc le dos. Celui
- * de la dernière composition ne vaut plus rien, et rien dans le panneau ne permettrait
- * de s'en apercevoir — le gabarit, le papier et la police, eux, n'ont pas bougé.
+ * de la dernière composition ne vaut plus rien, ni la pagination, ni les packages, ni
+ * l'épreuve, ni les envois — et rien dans le panneau ne permettrait de s'en apercevoir,
+ * le gabarit, le papier et la police, eux, n'ayant pas bougé.
+ *
+ * Les sorties, et elles seules : le projet est le même, avec ses destinataires, ses
+ * envois à écrire et l'étape où l'on travaillait.
  *
  * Périmé sans regarder si le texte a réellement changé : réimporter un manuscrit
  * identique coûte une recomposition pour rien, comparer deux fois un roman entier à
  * chaque clic coûterait davantage, et se tromper de ce côté-là n'imprime rien de faux.
  */
 function manuscritRemplace(p) {
-  dosCompose = null;
+  oublierLaComposition();
   afficherProjet(p);
 }
 

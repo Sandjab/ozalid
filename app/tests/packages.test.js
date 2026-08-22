@@ -555,3 +555,56 @@ test('un dos calculé sur un autre manuscrit ne vaut plus rien', async () => {
   await attendreApercu();
   assert.strictEqual(dernierDos(), null, 'dos gardé après un changement de manuscrit');
 });
+
+/**
+ * Le dos n'est pas seul à sortir du texte, et il est le seul qui ne se lise nulle part :
+ * la pagination, les chemins des fichiers composés et les envois déjà écrits en parlent
+ * aussi, sous les yeux et en chiffres. Une application dont l'objet est que le nombre de
+ * pages soit vrai ne peut pas afficher celui d'un manuscrit qu'on vient de remplacer.
+ */
+test('réimporter le manuscrit efface ce que l\'ancien texte avait fait afficher', async () => {
+  const { els } = await ouvre([LULU], {
+    composer: COMPOSITION,
+    packager: [paquet()],
+    epreuve_tirer: '/livres/LHC/epreuve.pdf',
+  }, { couverture: {} });
+
+  await els.get('btComposer').declenche('click');
+  await els.get('btPackager').declenche('click');
+  await els.get('btEpreuve').declenche('click');
+  // Un envoi porte lui aussi un compte de pages et un dos ; le composer demanderait une
+  // liste de dédicataires que ce projet-là n'a pas, et c'est ce qu'il laisse qui compte.
+  els.get('resultatEnvois').textContent = 'Rex — envois/rex/ — 262 pages, dos 16,51 mm';
+  els.get('resultatEnvois').hidden = false;
+  assert.strictEqual(els.get('resultat').hidden, false, 'rien à effacer, test sans objet');
+
+  await els.get('btReimporter').declenche('click');
+
+  assert.strictEqual(els.get('resultat').hidden, true,
+    'la pagination de l\'ancien texte reste à lire');
+  assert.strictEqual(els.get('packages').hidden, true,
+    'les packages de l\'ancien texte restent à lire');
+  assert.strictEqual(els.get('resultatEnvois').hidden, true,
+    'les envois de l\'ancien texte restent à lire');
+  assert.strictEqual(els.get('cheminEpreuve').textContent, '',
+    'l\'épreuve de l\'ancien texte reste désignée');
+});
+
+/**
+ * Remplacer le texte n'est pas changer de livre : le projet, ses destinataires et
+ * l'étape où l'on travaille sont les mêmes avant et après. Oublier les sorties du
+ * précédent — celles qui renvoient à l'accueil et vident la liste — renverrait au Livre
+ * quelqu'un qui venait de réimporter depuis la Livraison.
+ */
+test('réimporter le manuscrit ne quitte pas l\'étape où l\'on travaille', async () => {
+  const { els } = await ouvre([LULU], { composer: COMPOSITION }, { couverture: {} });
+  await els.get('onglet-livraison').declenche('click');
+  assert.strictEqual(els.get('etapeLivraison').hidden, false);
+
+  await els.get('btReimporter').declenche('click');
+
+  assert.strictEqual(els.get('etapeLivraison').hidden, false,
+    'un réimport a renvoyé au Livre');
+  assert.ok(els.get('destinataires').textes('span').includes('Lulu — poche 108 × 175'),
+    'un réimport a vidé la liste des destinataires');
+});
