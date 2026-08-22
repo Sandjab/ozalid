@@ -711,15 +711,6 @@ fn poser_image(images: &mut BTreeMap<String, Vec<u8>>, nom: String, octets: Vec<
     images.insert(nom, octets);
 }
 
-/// Aperçu d'une face de couverture ou de la planche entière, en PNG encodé dans une
-/// URL `data:`.
-///
-/// L'aperçu sort du **même** moteur et de la même source que le PDF final : il n'y a
-/// donc pas d'écart écran/export à surveiller, contrairement à l'atelier HTML.
-///
-/// `dos_mm` vient de la dernière composition de l'intérieur ; il n'est jamais saisi.
-/// Sans lui, la planche ne s'aperçoit pas — c'est voulu : une planche dont le dos
-/// serait deviné donnerait à voir un livre qui n'existe pas.
 /// Ce qu'un aperçu de face donne à voir : l'image, et où la couper s'il y a lieu.
 #[derive(Serialize)]
 pub struct Apercu {
@@ -738,6 +729,15 @@ pub struct Coupe {
     pub y: f64,
 }
 
+/// Aperçu d'une face de couverture ou de la planche entière, en PNG encodé dans une
+/// URL `data:`.
+///
+/// L'aperçu sort du **même** moteur et de la même source que le PDF final : il n'y a
+/// donc pas d'écart écran/export à surveiller, contrairement à l'atelier HTML.
+///
+/// `dos_mm` vient de la dernière composition de l'intérieur ; il n'est jamais saisi.
+/// Sans lui, la planche ne s'aperçoit pas — c'est voulu : une planche dont le dos
+/// serait deviné donnerait à voir un livre qui n'existe pas.
 #[tauri::command]
 pub fn couverture_apercu(
     face: String,
