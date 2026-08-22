@@ -10,7 +10,7 @@
 //! seulement ce qui appartient au livre : son texte, sa coupure en chapitres, ses
 //! ruptures de scène, son œil.
 
-use crate::manuscrit::{self, Bloc, Chapitre, Morceau};
+use crate::manuscrit::{self, Bloc, Morceau, Piece, Sorte};
 use std::io::{Cursor, Write};
 use std::time::SystemTime;
 
@@ -99,11 +99,14 @@ fn paragraphe(s: &str) -> String {
 }
 
 /// Le titre d'un chapitre tel qu'il paraît dans la table des matières.
-fn intitule(ch: &Chapitre) -> String {
+fn intitule(ch: &Piece) -> String {
+    let Sorte::Chapitre(numero) = &ch.sorte else {
+        unreachable!("les autres sortes arrivent à la tâche 5")
+    };
     if ch.titre.is_empty() {
-        ch.numero.to_string()
+        numero.to_string()
     } else {
-        format!("{} — {}", ch.numero, ch.titre)
+        format!("{} — {}", numero, ch.titre)
     }
 }
 
@@ -112,9 +115,12 @@ fn intitule(ch: &Chapitre) -> String {
 /// Un seul `<h1>`, qui porte le numéro et le titre : c'est lui que la table des
 /// matières vise, et deux titres de rang 1 par fichier dérouteraient les liseuses qui
 /// bâtissent leur sommaire sur la structure plutôt que sur le `nav`.
-fn chapitre_xhtml(ch: &Chapitre) -> String {
+fn chapitre_xhtml(ch: &Piece) -> String {
+    let Sorte::Chapitre(numero) = &ch.sorte else {
+        unreachable!("les autres sortes arrivent à la tâche 5")
+    };
     let mut corps = String::from("<h1>");
-    corps.push_str(&format!(r#"<span class="numero">{}</span>"#, ch.numero));
+    corps.push_str(&format!(r#"<span class="numero">{}</span>"#, numero));
     if !ch.titre.is_empty() {
         corps.push_str(&format!(
             r#"<span class="titre">{}</span>"#,
@@ -325,7 +331,7 @@ fn nom_chapitre(rang: usize) -> String {
 /// liste et ne peut donc pas s'y décrire lui-même.
 fn contenu(
     livre: &Livre,
-    chapitres: &[Chapitre],
+    chapitres: &[Piece],
     couverture_png: &[u8],
     polices: Option<&Polices>,
 ) -> Vec<Entree> {
@@ -439,7 +445,7 @@ fn lignes(s: &str) -> String {
         .collect()
 }
 
-fn nav_xhtml(chapitres: &[Chapitre]) -> String {
+fn nav_xhtml(chapitres: &[Piece]) -> String {
     let mut l = String::new();
     for (i, ch) in chapitres.iter().enumerate() {
         l.push_str(&format!(
@@ -461,7 +467,7 @@ fn nav_xhtml(chapitres: &[Chapitre]) -> String {
 
 /// La même table, au format des liseuses antérieures à EPUB 3. Elle ne coûte que
 /// quelques centaines d'octets et évite un sommaire vide sur les appareils anciens.
-fn ncx(livre: &Livre, chapitres: &[Chapitre]) -> String {
+fn ncx(livre: &Livre, chapitres: &[Piece]) -> String {
     let mut points = String::new();
     for (i, ch) in chapitres.iter().enumerate() {
         points.push_str(&format!(
@@ -671,7 +677,7 @@ const CONTAINER: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 /// du jour où on les lance.
 pub fn archive(
     livre: &Livre,
-    chapitres: &[Chapitre],
+    chapitres: &[Piece],
     couverture_png: &[u8],
     polices: Option<&Polices>,
     modifie: &str,
@@ -714,7 +720,7 @@ pub fn archive(
 /// traitement de texte avait posé sans rien montrer. `ebook::generer` les pose donc en
 /// tête, et `archive` continue de les poser aussi : un module qui ne peut produire une
 /// archive invalide que si son appelant a oublié de vérifier n'est pas une garde.
-pub fn verifie(livre: &Livre, chapitres: &[Chapitre]) -> Result<(), String> {
+pub fn verifie(livre: &Livre, chapitres: &[Piece]) -> Result<(), String> {
     if chapitres.is_empty() {
         return Err("aucun chapitre : il n'y a pas de livre à mettre en EPUB.".into());
     }
@@ -737,7 +743,10 @@ pub fn verifie(livre: &Livre, chapitres: &[Chapitre]) -> Result<(), String> {
         verifie_xml(d, "la dédicace")?;
     }
     for ch in chapitres {
-        let ou = format!("chapitre {}", ch.numero);
+        let Sorte::Chapitre(numero) = &ch.sorte else {
+            unreachable!("les autres sortes arrivent à la tâche 5")
+        };
+        let ou = format!("chapitre {numero}");
         verifie_xml(&ch.titre, &ou)?;
         for b in &ch.blocs {
             if let Bloc::Paragraphe(p) = b {
@@ -808,8 +817,8 @@ mod tests {
     /// blocs dans l'ordre. Deux `<h1>` par fichier dérouteraient la table des matières.
     #[test]
     fn un_chapitre_rend_un_titre_unique_puis_ses_blocs() {
-        let ch = Chapitre {
-            numero: 12,
+        let ch = Piece {
+            sorte: Sorte::Chapitre(12),
             titre: "Le seuil".into(),
             blocs: vec![
                 Bloc::Paragraphe("Premier.".into()),
@@ -832,8 +841,8 @@ mod tests {
     /// afficherait une ligne blanche dans sa table des matières.
     #[test]
     fn un_chapitre_sans_titre_n_ecrit_pas_de_titre_vide() {
-        let ch = Chapitre {
-            numero: 1,
+        let ch = Piece {
+            sorte: Sorte::Chapitre(1),
             titre: String::new(),
             blocs: vec![],
         };
@@ -846,8 +855,8 @@ mod tests {
     /// échappé — et le manuscrit en admet une, c'est du texte ordinaire.
     #[test]
     fn un_titre_de_chapitre_est_echappe() {
-        let ch = Chapitre {
-            numero: 3,
+        let ch = Piece {
+            sorte: Sorte::Chapitre(3),
             titre: "Pile & face".into(),
             blocs: vec![],
         };
@@ -1009,15 +1018,15 @@ mod tests {
         }
     }
 
-    fn chapitres_temoins() -> Vec<Chapitre> {
+    fn chapitres_temoins() -> Vec<Piece> {
         vec![
-            Chapitre {
-                numero: 1,
+            Piece {
+                sorte: Sorte::Chapitre(1),
                 titre: "Le seuil".into(),
                 blocs: vec![Bloc::Paragraphe("Premier.".into())],
             },
-            Chapitre {
-                numero: 2,
+            Piece {
+                sorte: Sorte::Chapitre(2),
                 titre: String::new(),
                 blocs: vec![Bloc::Paragraphe("Second.".into())],
             },

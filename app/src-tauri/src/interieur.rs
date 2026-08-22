@@ -10,7 +10,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::manuscrit::{echappe, echappe_chaine, inline, Bloc, Chapitre, SCENE};
+use crate::manuscrit::{echappe, echappe_chaine, inline, Bloc, Piece, Sorte, SCENE};
 use crate::projet::Livre;
 use crate::providers::Provider;
 use crate::typst::MARQUEUR;
@@ -146,7 +146,7 @@ fn assemble(
     int: &Interieur,
     pr: &Provider,
     r: &Reglage,
-    chapitres: &[Chapitre],
+    pieces: &[Piece],
     envoi: Option<Trace>,
     avant: Option<&str>,
 ) -> String {
@@ -203,24 +203,27 @@ fn assemble(
     //   quand le livre porte une dédicace. —
     s.push_str(&format!("#set page(footer: {folio})\n"));
 
-    for (i, ch) in chapitres.iter().enumerate() {
+    for (i, p) in pieces.iter().enumerate() {
         // Le premier chapitre suit le dernier saut de page des liminaires : ne pas en
         // ajouter un.
         if i > 0 {
             s.push_str("#pagebreak()\n");
         }
+        let Sorte::Chapitre(numero) = &p.sorte else {
+            unreachable!("les autres sortes arrivent à la tâche 5")
+        };
         s.push_str(&format!(
             "#v(22mm)\n#align(center, text(size: 13pt)[{}])\n",
-            ch.numero
+            numero
         ));
-        if !ch.titre.is_empty() {
+        if !p.titre.is_empty() {
             s.push_str(&format!(
                 "#v(3.5mm)\n#align(center, text(size: 10pt, tracking: 0.14em)[{}])\n",
-                majuscules(&ch.titre)
+                majuscules(&p.titre)
             ));
         }
         s.push_str("#v(11mm)\n");
-        for b in &ch.blocs {
+        for b in &p.blocs {
             match b {
                 Bloc::Paragraphe(p) => {
                     s.push_str(&inline(p));
@@ -255,10 +258,10 @@ pub fn source(
     int: &Interieur,
     pr: &Provider,
     r: &Reglage,
-    chapitres: &[Chapitre],
+    pieces: &[Piece],
     envoi: Option<Trace>,
 ) -> String {
-    assemble(livre, int, pr, r, chapitres, envoi, None)
+    assemble(livre, int, pr, r, pieces, envoi, None)
 }
 
 /// L'intérieur du livre précédé de sa couverture, **sans imposition**.
@@ -273,14 +276,14 @@ pub fn source_ebook(
     livre: &Livre,
     int: &Interieur,
     pr: &Provider,
-    chapitres: &[Chapitre],
+    pieces: &[Piece],
     couverture: &str,
 ) -> String {
     let r = Reglage {
         gouttiere: pr.exterieur,
         blanche: false,
     };
-    assemble(livre, int, pr, &r, chapitres, None, Some(couverture))
+    assemble(livre, int, pr, &r, pieces, None, Some(couverture))
 }
 
 /// Les pages liminaires : faux-titre, blanche, page de titre, copyright, et — quand le
@@ -405,9 +408,9 @@ mod tests {
         }
     }
 
-    fn chapitres() -> Vec<Chapitre> {
-        vec![Chapitre {
-            numero: 1,
+    fn chapitres() -> Vec<Piece> {
+        vec![Piece {
+            sorte: Sorte::Chapitre(1),
             titre: "Un".into(),
             blocs: vec![Bloc::Paragraphe("Texte.".into())],
         }]
@@ -717,16 +720,16 @@ mod tests {
             blanche: false,
         };
         let int = Interieur::default();
-        let sans = vec![Chapitre {
-            numero: 1,
+        let sans = vec![Piece {
+            sorte: Sorte::Chapitre(1),
             titre: "Un".into(),
             blocs: vec![
                 Bloc::Paragraphe("Avant.".into()),
                 Bloc::Paragraphe("Après.".into()),
             ],
         }];
-        let avec = vec![Chapitre {
-            numero: 1,
+        let avec = vec![Piece {
+            sorte: Sorte::Chapitre(1),
             titre: "Un".into(),
             blocs: vec![
                 Bloc::Paragraphe("Avant.".into()),
@@ -749,13 +752,13 @@ mod tests {
     fn le_premier_chapitre_n_ajoute_pas_de_saut_de_page() {
         let pr = provider("lulu").unwrap();
         let chs = vec![
-            Chapitre {
-                numero: 1,
+            Piece {
+                sorte: Sorte::Chapitre(1),
                 titre: "Un".into(),
                 blocs: vec![Bloc::Paragraphe("A.".into())],
             },
-            Chapitre {
-                numero: 2,
+            Piece {
+                sorte: Sorte::Chapitre(2),
                 titre: "Deux".into(),
                 blocs: vec![Bloc::Paragraphe("B.".into())],
             },

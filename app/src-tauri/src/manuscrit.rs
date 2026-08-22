@@ -40,11 +40,33 @@ pub enum Bloc {
 /// Les `\*` sont échappés : en markup Typst, `*` ouvre une emphase.
 pub const SCENE: &str = r"\*#h(0.8em)\*#h(0.8em)\*";
 
+/// Ce qu'une pièce est, et où elle se compose. La position découle de la sorte : aucun
+/// appelant n'a à la déduire du titre.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Chapitre {
-    pub numero: u32,
+pub enum Sorte {
+    /// Un chapitre et son numéro, tel que le manuscrit l'écrit.
+    Chapitre(u32),
+    /// Une pièce qui précède le corps : préface, avant-propos, prologue.
+    Liminaire,
+    /// Une pièce qui le suit : épilogue, postface, remerciements.
+    Annexe,
+    /// Une page de partie et son romain, réimprimé tel qu'écrit.
+    Partie(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Piece {
+    pub sorte: Sorte,
     pub titre: String,
     pub blocs: Vec<Bloc>,
+}
+
+impl Piece {
+    /// Le compte d'intégrité du projet et celui qu'affiche l'interface ne comptent que
+    /// les chapitres : une préface n'est pas un chapitre en moins ni en plus.
+    pub fn est_chapitre(&self) -> bool {
+        matches!(self.sorte, Sorte::Chapitre(_))
+    }
 }
 
 /// Caractères qui ouvrent une syntaxe Typst dans du texte brut. Tout ce qui vient du
@@ -230,7 +252,7 @@ fn romain(s: &str) -> Option<u32> {
 /// `decoupe` laisserait un `Bloc::Scene` orphelin en fin de chaque chapitre — invisible
 /// tant que l'intérieur ignore les `Scene`, mais que l'épreuve afficherait comme une
 /// astérisque parasite avant chaque saut de page.
-fn elague_rupture_finale(ch: Option<&mut Chapitre>) {
+fn elague_rupture_finale(ch: Option<&mut Piece>) {
     if let Some(ch) = ch {
         if matches!(ch.blocs.last(), Some(Bloc::Scene)) {
             ch.blocs.pop();
@@ -240,8 +262,8 @@ fn elague_rupture_finale(ch: Option<&mut Chapitre>) {
 
 /// Découpe le manuscrit. `attendu` est le contrôle d'intégrité facultatif du
 /// `projet.toml` : il n'a de sens qu'au gel, quand le compte ne doit plus bouger.
-pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Chapitre>, String> {
-    let mut chapitres: Vec<Chapitre> = Vec::new();
+pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Piece>, String> {
+    let mut pieces: Vec<Piece> = Vec::new();
     for (no, ligne) in md.lines().enumerate() {
         let no = no + 1;
         let t = ligne.trim();
@@ -253,14 +275,14 @@ pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Chapitre>, String> 
         if let Some(reste) = t.strip_prefix("## ") {
             // Le chapitre qui se ferme ne doit pas garder de rupture en dernière
             // position : elle ne séparerait rien.
-            elague_rupture_finale(chapitres.last_mut());
-            chapitres.push(entete(reste.trim(), no)?);
+            elague_rupture_finale(pieces.last_mut());
+            pieces.push(entete(reste.trim(), no)?);
         } else if t == "---" {
             // Hors chapitre, la rupture appartient aux liminaires : rien à garder. Dans
             // un chapitre, elle n'est gardée qu'à la suite d'un paragraphe : ni en tête
             // de chapitre, ni après une rupture déjà posée (deux `---` consécutifs ne
             // séparent qu'une fois).
-            if let Some(courant) = chapitres.last_mut() {
+            if let Some(courant) = pieces.last_mut() {
                 if matches!(courant.blocs.last(), Some(Bloc::Paragraphe(_))) {
                     courant.blocs.push(Bloc::Scene);
                 }
@@ -268,7 +290,7 @@ pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Chapitre>, String> 
         } else if t.starts_with("# ") || t.is_empty() {
             // Titre du livre : le projet fait foi, pas le manuscrit.
             continue;
-        } else if let Some(courant) = chapitres.last_mut() {
+        } else if let Some(courant) = pieces.last_mut() {
             courant.blocs.push(Bloc::Paragraphe(t.to_string()));
         } else {
             // Avant le premier « ## » : liminaires du manuscrit, composés par le projet.
@@ -277,22 +299,22 @@ pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Chapitre>, String> 
     }
     // Le dernier chapitre du manuscrit n'a pas de « ## » suivant pour déclencher
     // l'élagage : il faut le faire une dernière fois en sortie de boucle.
-    elague_rupture_finale(chapitres.last_mut());
-    if chapitres.is_empty() {
+    elague_rupture_finale(pieces.last_mut());
+    if pieces.is_empty() {
         return Err("aucun chapitre trouvé (attendu : « ## NN - Titre »).".into());
     }
     if let Some(n) = attendu {
-        let trouves = chapitres.len() as u32;
+        let trouves = pieces.len() as u32;
         if trouves != n {
             return Err(format!(
                 "{n} chapitres attendus (projet), {trouves} trouvés."
             ));
         }
     }
-    Ok(chapitres)
+    Ok(pieces)
 }
 
-fn entete(reste: &str, no: usize) -> Result<Chapitre, String> {
+fn entete(reste: &str, no: usize) -> Result<Piece, String> {
     let (num, titre) = match reste.split_once('-') {
         Some((n, t)) => (n.trim(), t.trim()),
         None => (reste, ""),
@@ -300,8 +322,8 @@ fn entete(reste: &str, no: usize) -> Result<Chapitre, String> {
     let numero: u32 = num.parse().map_err(|_| {
         format!("ligne {no} : titre de chapitre « {reste} » (attendu : « NN - Titre »).")
     })?;
-    Ok(Chapitre {
-        numero,
+    Ok(Piece {
+        sorte: Sorte::Chapitre(numero),
         titre: titre.to_string(),
         blocs: Vec::new(),
     })
@@ -384,7 +406,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(ch.len(), 1);
-        assert_eq!(ch[0].numero, 1);
+        assert_eq!(ch[0].sorte, Sorte::Chapitre(1));
         assert_eq!(ch[0].titre, "Vingt centimes");
         assert_eq!(ch[0].blocs.len(), 2);
     }
@@ -392,7 +414,7 @@ mod tests {
     #[test]
     fn un_chapitre_sans_titre_est_admis() {
         let ch = decoupe("## 7\n\nTexte.\n", None).unwrap();
-        assert_eq!(ch[0].numero, 7);
+        assert_eq!(ch[0].sorte, Sorte::Chapitre(7));
         assert_eq!(ch[0].titre, "");
     }
 
@@ -544,7 +566,7 @@ mod tests {
     fn le_manuscrit_temoin_est_composable() {
         let chapitres = decoupe(TEMOIN, Some(30)).expect("le témoin doit être composable");
         assert_eq!(chapitres.len(), 30);
-        assert_eq!(chapitres[0].numero, 1);
+        assert_eq!(chapitres[0].sorte, Sorte::Chapitre(1));
         assert!(
             !chapitres[0].titre.is_empty(),
             "un chapitre sans titre : la conversion a mangé l'en-tête"

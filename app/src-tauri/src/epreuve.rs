@@ -12,7 +12,7 @@
 //! personne, et son compte de pages n'intéresse personne.
 
 use crate::interieur::Interieur;
-use crate::manuscrit::{echappe, echappe_chaine, inline, Bloc, Chapitre, SCENE};
+use crate::manuscrit::{echappe, echappe_chaine, inline, Bloc, Piece, Sorte, SCENE};
 use crate::projet::Livre;
 
 /// Format de la page, en mm. La marge de droite est celle où l'on écrit.
@@ -22,7 +22,7 @@ const MARGE_GAUCHE: f64 = 30.0;
 const MARGE_DROITE: f64 = 50.0;
 
 /// Source Typst complète de l'épreuve.
-pub fn source(livre: &Livre, int: &Interieur, chapitres: &[Chapitre], corps_pt: f64) -> String {
+pub fn source(livre: &Livre, int: &Interieur, chapitres: &[Piece], corps_pt: f64) -> String {
     let titre = echappe(&livre.titre);
     let auteur = echappe(&livre.auteur);
     // Les mêmes, cités et non composés : la ligne de commentaire qui ouvre la source et
@@ -127,10 +127,13 @@ pub fn source(livre: &Livre, int: &Interieur, chapitres: &[Chapitre], corps_pt: 
         if i > 0 {
             s.push_str("\n#pagebreak()\n");
         }
+        let Sorte::Chapitre(numero) = &ch.sorte else {
+            unreachable!("les autres sortes arrivent à la tâche 5")
+        };
         let titre_ch = if ch.titre.is_empty() {
-            ch.numero.to_string()
+            numero.to_string()
         } else {
-            format!("{} — {}", ch.numero, echappe(&ch.titre))
+            format!("{} — {}", numero, echappe(&ch.titre))
         };
         s.push_str(&format!("= {titre_ch}\n"));
         for b in &ch.blocs {
@@ -165,10 +168,10 @@ mod tests {
         }
     }
 
-    fn chapitres() -> Vec<Chapitre> {
+    fn chapitres() -> Vec<Piece> {
         vec![
-            Chapitre {
-                numero: 12,
+            Piece {
+                sorte: Sorte::Chapitre(12),
                 titre: "Le quai".into(),
                 blocs: vec![
                     Bloc::Paragraphe("Avant.".into()),
@@ -176,8 +179,8 @@ mod tests {
                     Bloc::Paragraphe("Après.".into()),
                 ],
             },
-            Chapitre {
-                numero: 13,
+            Piece {
+                sorte: Sorte::Chapitre(13),
                 titre: "Ce qu'on garde".into(),
                 blocs: vec![Bloc::Paragraphe("Suite.".into())],
             },
