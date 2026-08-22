@@ -222,6 +222,14 @@ fn assemble(
     for (i, p) in corps.iter().enumerate() {
         match &p.sorte {
             Sorte::Partie(r) => {
+                // Une ouverture de partie est une belle page. Le verso blanc, lui, est
+                // acquis par le second `#page` — mais le recto ne l'est pas : au milieu
+                // du corps, la parité dépend de la longueur du chapitre précédent, donc
+                // d'un texte que l'auteur retouche. Sans ce saut, trois paragraphes
+                // ajoutés au chapitre d'avant retournent le dispositif, et cela ne se
+                // découvre qu'après tirage. La page que le saut insère parfois porte le
+                // folio du corps, comme la blanche de parité du livre.
+                s.push_str("#pagebreak(to: \"odd\")\n");
                 s.push_str(&format!(
                     "#page(footer: none)[\n#v(22mm)\n\
                      #align(center, text(size: 13pt)[{r}])\n"
@@ -990,7 +998,49 @@ mod tests {
             sans.matches("#pagebreak()").count(),
             "le chapitre qui suit la partie ne doit pas ajouter de saut"
         );
-        assert!(avec.contains("AVANT CLÉMENT") || avec.contains("Avant Clément"));
+        // La casse est laissée à Typst (`#upper`), pour qu'elle suive la langue du
+        // document : c'est le titre passé à `majuscules` qu'on vérifie, pas son rendu.
+        assert!(
+            avec.contains("#upper[Avant Clément]"),
+            "titre de partie absent : {avec}"
+        );
+    }
+
+    /// Une ouverture de partie est une belle page — un recto, jamais un verso. La parité,
+    /// au milieu du corps, dépend de la longueur du chapitre qui précède, donc d'un texte
+    /// que l'auteur retouche : sans saut de parité, trois paragraphes ajoutés au chapitre
+    /// d'avant font paraître la partie au verso et sa blanche au recto, le dispositif
+    /// exactement à l'envers. Le compte de pages ne le dit pas — les deux cas coûtent deux
+    /// pages — et cela ne se découvrirait qu'après tirage.
+    #[test]
+    fn une_page_de_partie_est_forcee_sur_une_belle_page() {
+        let pieces = vec![
+            Piece {
+                sorte: Sorte::Chapitre(1),
+                titre: "Un".into(),
+                blocs: vec![Bloc::Paragraphe("Texte.".into())],
+            },
+            Piece {
+                sorte: Sorte::Partie("I".into()),
+                titre: "Avant Clément".into(),
+                blocs: Vec::new(),
+            },
+        ];
+        let s = source(
+            &livre(),
+            &Interieur::default(),
+            provider("lulu").unwrap(),
+            &Reglage {
+                gouttiere: 25.0,
+                blanche: false,
+            },
+            &pieces,
+            None,
+        );
+        assert!(
+            s.contains("#pagebreak(to: \"odd\")\n#page(footer: none)["),
+            "la page de partie n'est pas calée sur un recto : {s}"
+        );
     }
 
     /// Le folio appartient au corps : une postface n'en porte pas, comme la préface.
