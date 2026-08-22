@@ -401,16 +401,22 @@ function afficherProjet(p) {
  * n'est nulle part — la laisser à l'écran donnerait à lire un projet qui n'existe pas,
  * et tout ce qui se calcule depuis le panneau, à commencer par le dos de l'aperçu de
  * planche, vaudrait pour ce livre-là.
+ *
+ * Rend vrai quand `fn` a abouti. La plupart des appelants n'en font rien — un geste de
+ * réglage est fini quand il est fini — mais la garde des modifications, elle, doit
+ * savoir si l'enregistrement a réellement écrit avant de laisser fermer.
  */
 async function tente(fn) {
   try {
     alerter('');
     await fn();
+    return true;
   } catch (e) {
     alerter(String(e));
     // `afficherProjet` ne touche pas à l'alerte : le message qu'on vient d'écrire y
     // survit au redessin.
     if (projet) afficherProjet(projet);
+    return false;
   }
 }
 
@@ -512,19 +518,12 @@ async function garde() {
 /** Enregistre en place si le projet a un chemin, sinon demande où. Rend vrai si écrit. */
 async function enregistrerQuelquePart() {
   // Enregistrer n'est plus qu'un geste de menu, et le menu offre toujours ses entrées
-  // sans savoir si un projet est ouvert : c'est ici que la protection doit vivre.
+  // sans savoir si un projet est ouvert : c'est ici que la protection doit vivre. Avant
+  // `tente()`, et non dedans : un geste inerte n'a rien à raconter, donc rien à effacer
+  // dans l'entête — le message qu'un ⌘S en échec y a laissé dit encore vrai.
   if (!projet) return false;
-  // Ce geste-là n'entre pas dans `tente()` : à lui d'ouvrir sur une ardoise propre,
-  // faute de quoi l'échec d'un premier ⌘S survivrait au second, qui a abouti.
-  alerter('');
   if (projet.chemin) {
-    try {
-      afficherProjet(await invoke('projet_enregistrer'));
-      return true;
-    } catch (e) {
-      alerter(String(e));
-      return false;
-    }
+    return tente(async () => afficherProjet(await invoke('projet_enregistrer')));
   }
   return enregistrerSous();
 }
@@ -580,22 +579,17 @@ async function importer() {
 
 /** « Enregistrer sous… » : demande où poser le projet. Rend vrai si écrit. */
 async function enregistrerSous() {
-  // Le menu y mène directement, sans passer par « Enregistrer » : la garde s'y répète,
-  // et l'ardoise propre avec elle.
+  // Le menu y mène directement, sans passer par « Enregistrer » : la garde s'y répète.
   if (!projet) return false;
-  alerter('');
   const choix = await save({
     defaultPath: `${projet.livre.titre || 'projet'}.ozalid`,
     filters: [{ name: 'Projet Ozalid', extensions: ['ozalid'] }],
   });
+  // Un sélecteur refermé sans choisir n'a pas plus écrit qu'un geste sans projet : rien
+  // à dire, et rien à effacer de ce qui était dit.
   if (!choix) return false;
-  try {
-    afficherProjet(await invoke('projet_enregistrer_sous', { chemin: choix }));
-    return true;
-  } catch (e) {
-    alerter(String(e));
-    return false;
-  }
+  return tente(async () =>
+    afficherProjet(await invoke('projet_enregistrer_sous', { chemin: choix })));
 }
 
 /* ---------- livre et manuscrit ---------- */

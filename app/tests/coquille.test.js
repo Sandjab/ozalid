@@ -359,9 +359,9 @@ test('un geste réussi efface l\'erreur du précédent', async () => {
 });
 
 /**
- * Les deux gestes d'enregistrement écrivent dans l'entête sans passer par `tente()` :
- * à eux d'effacer ce qu'ils y ont mis. Un « disque plein » laissé en place après le
- * ⌘S qui a fini par aboutir dit le contraire de ce qui vient de se passer.
+ * Les deux gestes d'enregistrement écrivent dans l'entête : à eux d'effacer ce qu'ils y
+ * ont mis. Un « disque plein » laissé en place après le ⌘S qui a fini par aboutir dit
+ * le contraire de ce qui vient de se passer.
  *
  * Les deux, et non le seul premier : « Enregistrer sous… » a son entrée de menu propre
  * et ne passe pas toujours par « Enregistrer ». Une ardoise qu'un seul des deux nettoie
@@ -417,6 +417,32 @@ test('un enregistrement sans projet n\'efface pas ce qu\'il ne remplace pas', as
 
   assert.match(els.get('alerte').textContent, /démarrage impossible/,
     'un geste inerte a emporté le message qui disait pourquoi');
+});
+
+/**
+ * Le même principe une porte plus loin : un sélecteur de fichiers refermé sans choisir
+ * n'a rien fait non plus, et l'échec qu'il laisse derrière lui dit toujours vrai — le
+ * projet est encore là où le disque plein l'avait laissé.
+ *
+ * C'est ce test qui retient l'ardoise du côté de l'écriture : ouvert avant le sélecteur,
+ * `alerter('')` effacerait le message pour un geste abandonné.
+ */
+test('« Enregistrer sous… » abandonné garde l\'échec qui dit encore vrai', async () => {
+  const a = atelier();
+  const invoke = async (cmd, args) => {
+    if (cmd === 'projet_enregistrer') throw new Error('disque plein');
+    return a.invoke(cmd, args);
+  };
+  const { els, menu } = await charge({ invoke, save: async () => null });
+  await els.get('btNouveau').declenche('click');
+
+  await menu('fichier.enregistrer');
+  assert.match(els.get('alerte').textContent, /disque plein/);
+
+  await menu('fichier.enregistrer_sous');
+
+  assert.match(els.get('alerte').textContent, /disque plein/,
+    'un sélecteur refermé sans choisir a emporté le message');
 });
 
 /**
