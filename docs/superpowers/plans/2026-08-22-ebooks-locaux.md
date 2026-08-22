@@ -687,7 +687,7 @@ pub fn faces(noms: &[String]) -> Option<Faces> {
 cd app/src-tauri && cargo test --lib epub
 ```
 
-Attendu : SUCCÈS, 12 tests.
+Attendu : SUCCÈS, 11 tests.
 
 - [ ] **Step 5 : commit**
 
@@ -784,7 +784,7 @@ fn civil(z: i64) -> (i64, u32, u32) {
 cd app/src-tauri && cargo test --lib epub
 ```
 
-Attendu : SUCCÈS, 13 tests.
+Attendu : SUCCÈS, 12 tests.
 
 - [ ] **Step 5 : commit**
 
@@ -1217,7 +1217,7 @@ fn identifiant(livre: &Livre) -> String {
 cd app/src-tauri && cargo test --lib epub
 ```
 
-Attendu : SUCCÈS, 19 tests.
+Attendu : SUCCÈS, 18 tests.
 
 - [ ] **Step 5 : fmt**
 
@@ -1393,7 +1393,7 @@ fn opf(livre: &Livre, entrees: &[Entree], modifie: &str) -> String {
 cd app/src-tauri && cargo test --lib epub
 ```
 
-Attendu : SUCCÈS, 22 tests.
+Attendu : SUCCÈS, 21 tests.
 
 - [ ] **Step 5 : commit**
 
@@ -1581,7 +1581,7 @@ fn pose<W: Write + std::io::Seek>(
 cd app/src-tauri && cargo test --lib epub
 ```
 
-Attendu : SUCCÈS, 26 tests.
+Attendu : SUCCÈS, 25 tests.
 
 - [ ] **Step 5 : clippy et fmt**
 
