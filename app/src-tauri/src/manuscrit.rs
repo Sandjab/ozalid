@@ -2,10 +2,9 @@
 //!
 //! Le format admis est celui du projet, et lui seul : titre en `# `, chapitres en
 //! `## NN - Titre`, coupures `---` (marquée) et `___` (muette), emphase `*…*` et
-//! `**…**`. Tout le
-//! reste est **refusé** avec son numéro de ligne plutôt que composé de travers :
-//! une liste ou un lien silencieusement aplati donnerait un livre imprimé faux,
-//! découvert après tirage.
+//! `**…**`. Tout le reste est **refusé** avec son numéro de ligne plutôt que composé
+//! de travers : une liste ou un lien silencieusement aplati donnerait un livre imprimé
+//! faux, découvert après tirage.
 //!
 //! Ce n'est donc pas un convertisseur Markdown général. Si le besoin apparaît, la
 //! bascule vers un vrai parseur (`pulldown-cmark`) se fera derrière la même API.
@@ -72,6 +71,15 @@ impl Piece {
     /// les chapitres : une préface n'est pas un chapitre en moins ni en plus.
     pub fn est_chapitre(&self) -> bool {
         matches!(self.sorte, Sorte::Chapitre(_))
+    }
+}
+
+impl Bloc {
+    /// Une coupure entre deux passages, marquée ou muette. Ce que les deux ont en
+    /// commun tient ici : elles ne valent qu'entre deux passages, et n'importe quelle
+    /// règle de position les traite ensemble.
+    fn est_rupture(&self) -> bool {
+        matches!(self, Bloc::Scene | Bloc::Blanc)
     }
 }
 
@@ -283,14 +291,6 @@ fn mot_cle(titre: &str) -> Option<(Sorte, &'static str)> {
         .map(|m| (Sorte::Annexe, *m))
 }
 
-/// Une rupture de scène sépare deux passages d'un même chapitre ; une rupture qui
-/// ouvre ou ferme un chapitre ne sépare rien. Cet invariant vaut quel que soit l'usage
-/// que l'auteur fait de `---` dans son manuscrit — y compris l'usage réel observé sur
-/// *WIP7* (build/in/texts/WIP7.md) : ses 64 `---` précèdent chacun un `## `, comme un
-/// filet de fin de chapitre plutôt qu'une séparation de scène. Sans cet élagage,
-/// `decoupe` laisserait un `Bloc::Scene` orphelin en fin de chaque chapitre — invisible
-/// tant que l'intérieur ignore les `Scene`, mais que l'épreuve afficherait comme une
-/// astérisque parasite avant chaque saut de page.
 /// Les deux marques de coupure du format, et rien d'autre. `---` se voit sur la page,
 /// `___` non ; tout le reste — position, élagage, doublons — leur est commun, et c'est
 /// pour cela qu'elles se lisent au même endroit.
@@ -306,9 +306,20 @@ fn rupture(t: &str) -> Option<Bloc> {
     }
 }
 
+/// Une rupture de scène sépare deux passages d'un même chapitre ; une rupture qui
+/// ouvre ou ferme un chapitre ne sépare rien. Cet invariant vaut quel que soit l'usage
+/// que l'auteur fait de `---` dans son manuscrit — y compris l'usage réel observé sur
+/// *WIP7* (build/in/texts/WIP7.md) : ses 64 `---` précèdent chacun un `## `, comme un
+/// filet de fin de chapitre plutôt qu'une séparation de scène. Sans cet élagage,
+/// `decoupe` laisserait un `Bloc::Scene` orphelin en fin de chaque chapitre — invisible
+/// tant que l'intérieur ignore les `Scene`, mais que l'épreuve afficherait comme une
+/// astérisque parasite avant chaque saut de page.
+///
+/// La règle vaut pour les deux marques : un `___` en fin de chapitre ne sépare pas
+/// davantage qu'un `---`.
 fn elague_rupture_finale(ch: Option<&mut Piece>) {
     if let Some(ch) = ch {
-        if matches!(ch.blocs.last(), Some(Bloc::Scene)) {
+        if ch.blocs.last().is_some_and(Bloc::est_rupture) {
             ch.blocs.pop();
         }
     }
@@ -638,6 +649,60 @@ mod tests {
                 Bloc::Paragraphe("Après.".into()),
             ]
         );
+    }
+
+    /// Un blanc qui ferme un chapitre ne sépare rien : le chapitre suivant commence sur
+    /// sa propre page. Sans élagage, l'épreuve afficherait un filet parasite avant
+    /// chaque saut de page — exactement le défaut corrigé pour la rupture de scène.
+    #[test]
+    fn un_blanc_en_fin_de_chapitre_ne_laisse_pas_de_bloc() {
+        let ch = decoupe(
+            "## 01 - Un\n\nTexte.\n\n___\n\n## 02 - Deux\n\nTexte.\n",
+            None,
+        )
+        .unwrap();
+        assert_eq!(ch[0].blocs, vec![Bloc::Paragraphe("Texte.".into())]);
+        assert_eq!(ch[1].blocs, vec![Bloc::Paragraphe("Texte.".into())]);
+    }
+
+    /// Un blanc qui ouvre un chapitre n'a pas de passage précédent à séparer du suivant.
+    #[test]
+    fn un_blanc_en_tete_de_chapitre_ne_laisse_pas_de_bloc() {
+        let ch = decoupe("## 01 - Un\n\n___\n\nTexte.\n", None).unwrap();
+        assert_eq!(ch[0].blocs, vec![Bloc::Paragraphe("Texte.".into())]);
+    }
+
+    /// Deux coupures consécutives ne séparent qu'une fois, et c'est la première qui
+    /// vaut — quelles que soient les deux marques. L'auteur qui hésite et laisse les
+    /// deux ne creuse pas sa page pour autant, et la règle se retient sans exception :
+    /// c'est l'ordre d'écriture qui tranche, pas une priorité entre marques.
+    #[test]
+    fn deux_coupures_consecutives_ne_separent_qu_une_fois() {
+        for (md, attendu) in [
+            ("## 01 - Un\n\nA.\n\n___\n\n___\n\nB.\n", Bloc::Blanc),
+            ("## 01 - Un\n\nA.\n\n---\n\n___\n\nB.\n", Bloc::Scene),
+            ("## 01 - Un\n\nA.\n\n___\n\n---\n\nB.\n", Bloc::Blanc),
+        ] {
+            let ch = decoupe(md, None).unwrap();
+            assert_eq!(
+                ch[0].blocs,
+                vec![
+                    Bloc::Paragraphe("A.".into()),
+                    attendu.clone(),
+                    Bloc::Paragraphe("B.".into()),
+                ],
+                "{md}"
+            );
+        }
+    }
+
+    /// Un `___` avant le premier chapitre appartient aux liminaires du manuscrit, que
+    /// le projet compose lui-même : il ne doit ouvrir aucun chapitre fantôme.
+    #[test]
+    fn un_blanc_avant_le_premier_chapitre_est_ignore() {
+        let ch = decoupe("# Le Livre\n\n___\n\n## 01 - Un\n\nTexte.\n", None).unwrap();
+        assert_eq!(ch.len(), 1);
+        assert_eq!(ch[0].blocs, vec![Bloc::Paragraphe("Texte.".into())]);
     }
 
     /// Un `---` avant le premier chapitre appartient aux liminaires du manuscrit, que
