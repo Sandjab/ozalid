@@ -181,6 +181,290 @@ fn civil(z: i64) -> (i64, u32, u32) {
     (if mois <= 2 { an + 1 } else { an }, mois, jour)
 }
 
+/// Ce qu'un EPUB porte du livre. Les emprunts évitent de recopier le projet pour le
+/// traverser ; ce module ne garde rien.
+#[derive(Debug, Clone)]
+pub struct Livre<'a> {
+    pub titre: &'a str,
+    pub auteur: &'a str,
+    pub genre: &'a str,
+    pub copyright: &'a str,
+    pub dedicace: Option<&'a str>,
+}
+
+/// Un fichier de police, prêt à entrer dans l'archive.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Face {
+    /// Nom du fichier, sans répertoire : il devient `OEBPS/fonts/<nom>`.
+    pub nom: String,
+    pub octets: Vec<u8>,
+}
+
+/// L'écriture du livre, telle que l'EPUB l'embarque.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Polices {
+    /// La famille, telle que le CSS la nommera.
+    pub famille: String,
+    pub romain: Face,
+    pub italique: Option<Face>,
+}
+
+/// Une entrée de l'archive, sous `OEBPS/`.
+///
+/// C'est la **seule** liste des fichiers du livre : le manifeste de l'OPF en découle,
+/// le contenu du ZIP aussi. Un fichier qu'on ajouterait à l'un sans l'autre ferait
+/// rejeter l'archive par une liseuse stricte, et rien d'autre ne le dirait.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Entree {
+    pub nom: String,
+    pub octets: Vec<u8>,
+    pub media: &'static str,
+    /// `properties` de l'OPF : « nav » pour la table des matières, « cover-image »
+    /// pour la couverture. Ce sont les deux seules dont EPUB 3 ait besoin.
+    pub proprietes: Option<&'static str>,
+    /// Vrai si l'entrée est une page du fil de lecture.
+    pub spine: bool,
+    /// Faux pour ce qui est déjà compressé — le PNG, les polices.
+    pub compresse: bool,
+}
+
+impl Entree {
+    fn xhtml(nom: &str, corps: String, spine: bool, proprietes: Option<&'static str>) -> Self {
+        Self {
+            nom: nom.into(),
+            octets: corps.into_bytes(),
+            media: "application/xhtml+xml",
+            proprietes,
+            spine,
+            compresse: true,
+        }
+    }
+}
+
+/// Nom de fichier d'un chapitre. Trois chiffres : un roman dépasse rarement 999
+/// chapitres, et l'ordre alphabétique des noms reste celui de la lecture.
+fn nom_chapitre(rang: usize) -> String {
+    format!("ch{:03}.xhtml", rang + 1)
+}
+
+/// Tout ce que l'archive porte sous `OEBPS/`, sauf `content.opf` — qui décrit cette
+/// liste et ne peut donc pas s'y décrire lui-même.
+fn contenu(
+    livre: &Livre,
+    chapitres: &[Chapitre],
+    couverture_png: &[u8],
+    polices: Option<&Polices>,
+) -> Vec<Entree> {
+    let mut e = vec![
+        Entree::xhtml("couverture.xhtml", couverture_xhtml(), true, None),
+        Entree::xhtml("liminaires.xhtml", liminaires_xhtml(livre), true, None),
+    ];
+    for (i, ch) in chapitres.iter().enumerate() {
+        e.push(Entree::xhtml(
+            &nom_chapitre(i),
+            chapitre_xhtml(ch),
+            true,
+            None,
+        ));
+    }
+    e.push(Entree::xhtml(
+        "nav.xhtml",
+        nav_xhtml(chapitres),
+        false,
+        Some("nav"),
+    ));
+    e.push(Entree {
+        nom: "toc.ncx".into(),
+        octets: ncx(livre, chapitres).into_bytes(),
+        media: "application/x-dtbncx+xml",
+        proprietes: None,
+        spine: false,
+        compresse: true,
+    });
+    e.push(Entree {
+        nom: "style.css".into(),
+        octets: css(polices).into_bytes(),
+        media: "text/css",
+        proprietes: None,
+        spine: false,
+        compresse: true,
+    });
+    e.push(Entree {
+        nom: "images/couverture.png".into(),
+        octets: couverture_png.to_vec(),
+        media: "image/png",
+        proprietes: Some("cover-image"),
+        spine: false,
+        // Un PNG est déjà compressé : le repasser en deflate ne gagne rien.
+        compresse: false,
+    });
+    if let Some(p) = polices {
+        for f in std::iter::once(&p.romain).chain(p.italique.iter()) {
+            e.push(Entree {
+                nom: format!("fonts/{}", f.nom),
+                octets: f.octets.clone(),
+                media: "font/ttf",
+                proprietes: None,
+                spine: false,
+                compresse: false,
+            });
+        }
+    }
+    e
+}
+
+fn couverture_xhtml() -> String {
+    page(
+        "Couverture",
+        "<div class=\"couverture\"><img src=\"images/couverture.png\" alt=\"Couverture\"/></div>\n",
+    )
+}
+
+/// La page de titre, le copyright et — quand le livre en porte une — la dédicace.
+///
+/// Le faux-titre et les blanches du papier ne passent pas : ils n'ont de sens que sur
+/// une feuille pliée. Le reste est du livre.
+fn liminaires_xhtml(livre: &Livre) -> String {
+    let mut c = format!(
+        "<div class=\"titre-page\">\n\
+         <p class=\"auteur\">{}</p>\n\
+         <h1 class=\"grand-titre\">{}</h1>\n\
+         <p class=\"genre\">{}</p>\n\
+         </div>\n",
+        echappe(livre.auteur),
+        echappe(livre.titre),
+        echappe(livre.genre),
+    );
+    c.push_str(&format!(
+        "<div class=\"copyright\">{}</div>\n",
+        lignes(livre.copyright)
+    ));
+    if let Some(d) = livre.dedicace {
+        c.push_str(&format!("<div class=\"dedicace\">{}</div>\n", lignes(d)));
+    }
+    page("Titre", &c)
+}
+
+/// Texte à sauts de ligne → paragraphes XHTML. Les lignes vides sont écartées : elles
+/// espaçaient un pavé Typst, le CSS s'en charge ici.
+fn lignes(s: &str) -> String {
+    s.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(|l| format!("<p>{}</p>", echappe(l)))
+        .collect()
+}
+
+fn nav_xhtml(chapitres: &[Chapitre]) -> String {
+    let mut l = String::new();
+    for (i, ch) in chapitres.iter().enumerate() {
+        l.push_str(&format!(
+            "<li><a href=\"{}\">{}</a></li>\n",
+            nom_chapitre(i),
+            echappe(&intitule(ch))
+        ));
+    }
+    page(
+        "Table des matières",
+        &format!(
+            "<nav epub:type=\"toc\" id=\"toc\">\n\
+             <h1>Table des matières</h1>\n\
+             <ol>\n{l}</ol>\n\
+             </nav>\n"
+        ),
+    )
+}
+
+/// La même table, au format des liseuses antérieures à EPUB 3. Elle ne coûte que
+/// quelques centaines d'octets et évite un sommaire vide sur les appareils anciens.
+fn ncx(livre: &Livre, chapitres: &[Chapitre]) -> String {
+    let mut points = String::new();
+    for (i, ch) in chapitres.iter().enumerate() {
+        points.push_str(&format!(
+            "<navPoint id=\"nav{n}\" playOrder=\"{n}\">\
+             <navLabel><text>{}</text></navLabel>\
+             <content src=\"{}\"/></navPoint>\n",
+            echappe(&intitule(ch)),
+            nom_chapitre(i),
+            n = i + 1
+        ));
+    }
+    format!(
+        r#"<?xml version="1.0" encoding="utf-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+<head><meta name="dtb:uid" content="{}"/></head>
+<docTitle><text>{}</text></docTitle>
+<navMap>
+{points}</navMap>
+</ncx>
+"#,
+        echappe(&identifiant(livre)),
+        echappe(livre.titre)
+    )
+}
+
+/// Le CSS du livre. Court à dessein : ce qui n'est pas dit reste au réglage du lecteur,
+/// et c'est ce qu'on attend d'un EPUB.
+fn css(polices: Option<&Polices>) -> String {
+    let mut s = String::new();
+    let famille = match polices {
+        Some(p) => {
+            for (f, style) in std::iter::once((&p.romain, "normal"))
+                .chain(p.italique.iter().map(|i| (i, "italic")))
+            {
+                s.push_str(&format!(
+                    "@font-face {{\n  font-family: \"{}\";\n  font-style: {style};\n  \
+                     font-weight: 100 900;\n  src: url(\"fonts/{}\");\n}}\n",
+                    p.famille, f.nom
+                ));
+            }
+            format!("\"{}\", serif", p.famille)
+        }
+        None => "serif".into(),
+    };
+    s.push_str(&format!(
+        r#"
+body {{ font-family: {famille}; margin: 0 5%; line-height: 1.45;
+       text-align: justify; hyphens: auto; -webkit-hyphens: auto; }}
+p {{ margin: 0; text-indent: 1.2em; }}
+/* Le premier paragraphe d'un chapitre n'a pas d'alinéa — comme sur le papier, où
+   Typst n'indente pas le paragraphe qui ouvre un bloc. Après une rupture de scène,
+   en revanche, l'alinéa revient : c'est ce qui a été relevé sur la page composée. */
+h1 + p {{ text-indent: 0; }}
+h1 {{ margin: 2.5em 0 2em; text-align: center; font-weight: normal; }}
+h1 .numero {{ display: block; font-size: 1.2em; }}
+h1 .titre {{ display: block; margin-top: 0.6em; font-size: 0.85em;
+             letter-spacing: 0.14em; text-transform: uppercase; }}
+p.scene {{ text-align: center; text-indent: 0; margin: 1em 0; word-spacing: 0.5em; }}
+.couverture {{ margin: 0; text-align: center; }}
+.couverture img {{ max-width: 100%; }}
+.titre-page {{ margin-top: 25%; text-align: center; }}
+.titre-page p, .titre-page h1 {{ text-indent: 0; }}
+.grand-titre {{ font-size: 1.6em; font-weight: normal; letter-spacing: 0.06em; }}
+.genre {{ font-style: italic; }}
+.copyright {{ margin-top: 40%; font-size: 0.8em; text-align: center; }}
+.copyright p {{ text-indent: 0; }}
+.dedicace {{ margin-top: 25%; font-style: italic; text-align: center; }}
+.dedicace p {{ text-indent: 0; }}
+"#
+    ));
+    s
+}
+
+/// L'identifiant unique du livre.
+///
+/// Tiré du titre et de l'auteur, non d'un tirage au sort : deux générations du même
+/// livre doivent porter le même identifiant, sans quoi une liseuse y verrait deux
+/// ouvrages et garderait les deux. `envoi::assaini` est déjà la fonction du projet qui
+/// décide ce qu'un titre devient quand il sert de nom.
+fn identifiant(livre: &Livre) -> String {
+    format!(
+        "urn:ozalid:{}-{}",
+        crate::envoi::assaini(livre.titre),
+        crate::envoi::assaini(livre.auteur)
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -354,5 +638,135 @@ mod tests {
         assert_eq!(horodatage(t(0)), "1970-01-01T00:00:00Z");
         assert_eq!(horodatage(t(1_755_000_000)), "2025-08-12T12:00:00Z");
         assert_eq!(horodatage(t(1_709_164_800)), "2024-02-29T00:00:00Z");
+    }
+
+    fn livre_temoin() -> Livre<'static> {
+        Livre {
+            titre: "Les Heures creuses",
+            auteur: "Ivan Pjig",
+            genre: "roman",
+            copyright: "© 2026 Ivan Pjig\nTous droits réservés",
+            dedicace: Some("À R."),
+        }
+    }
+
+    fn chapitres_temoins() -> Vec<Chapitre> {
+        vec![
+            Chapitre {
+                numero: 1,
+                titre: "Le seuil".into(),
+                blocs: vec![Bloc::Paragraphe("Premier.".into())],
+            },
+            Chapitre {
+                numero: 2,
+                titre: String::new(),
+                blocs: vec![Bloc::Paragraphe("Second.".into())],
+            },
+        ]
+    }
+
+    /// L'inventaire porte, dans l'ordre, la couverture, les liminaires puis un fichier par
+    /// chapitre. C'est cet ordre qui devient celui de la lecture.
+    #[test]
+    fn l_inventaire_ouvre_sur_la_couverture_et_suit_les_chapitres() {
+        let ch = chapitres_temoins();
+        let e = contenu(&livre_temoin(), &ch, b"\x89PNG", None);
+        let lisibles: Vec<&str> = e
+            .iter()
+            .filter(|x| x.spine)
+            .map(|x| x.nom.as_str())
+            .collect();
+        assert_eq!(
+            lisibles,
+            vec![
+                "couverture.xhtml",
+                "liminaires.xhtml",
+                "ch001.xhtml",
+                "ch002.xhtml"
+            ]
+        );
+    }
+
+    /// Le `nav` est un document XHTML, mais il n'est pas une page du livre : le laisser
+    /// dans le fil de lecture ferait tourner une table des matières entre la couverture et
+    /// le premier chapitre.
+    #[test]
+    fn la_table_des_matieres_n_est_pas_une_page_du_livre() {
+        let ch = chapitres_temoins();
+        let e = contenu(&livre_temoin(), &ch, b"\x89PNG", None);
+        let nav = e.iter().find(|x| x.nom == "nav.xhtml").expect("pas de nav");
+        assert!(!nav.spine);
+        assert_eq!(nav.proprietes, Some("nav"));
+    }
+
+    /// Le PNG de couverture est **stocké** tel quel : il est déjà compressé, et le
+    /// repasser en deflate ne gagne rien pour un livre qui pèse déjà quelques mégaoctets.
+    #[test]
+    fn la_couverture_entre_dans_l_archive_sans_etre_recompressee() {
+        let ch = chapitres_temoins();
+        let e = contenu(&livre_temoin(), &ch, b"\x89PNG", None);
+        let img = e
+            .iter()
+            .find(|x| x.nom == "images/couverture.png")
+            .expect("pas d'image");
+        assert!(!img.compresse);
+        assert_eq!(img.media, "image/png");
+        assert_eq!(img.proprietes, Some("cover-image"));
+        assert_eq!(img.octets, b"\x89PNG");
+    }
+
+    /// Sans police embarquée, l'inventaire n'en porte aucune et le CSS retombe sur
+    /// `serif`. Ce n'est pas une erreur : le livre reste juste, seul son œil change.
+    #[test]
+    fn sans_police_l_inventaire_n_en_porte_aucune() {
+        let ch = chapitres_temoins();
+        let e = contenu(&livre_temoin(), &ch, b"\x89PNG", None);
+        assert!(!e.iter().any(|x| x.nom.starts_with("fonts/")));
+        let css = e.iter().find(|x| x.nom == "style.css").unwrap();
+        let css = String::from_utf8(css.octets.clone()).unwrap();
+        assert!(!css.contains("@font-face"), "{css}");
+        assert!(css.contains("serif"), "{css}");
+    }
+
+    /// Avec une police, les deux faces entrent dans l'archive et le CSS les déclare.
+    #[test]
+    fn les_deux_faces_entrent_dans_l_archive_et_le_css_les_declare() {
+        let ch = chapitres_temoins();
+        let p = Polices {
+            famille: "Cardo".into(),
+            romain: Face {
+                nom: "Cardo-Regular.ttf".into(),
+                octets: b"R".to_vec(),
+            },
+            italique: Some(Face {
+                nom: "Cardo-Italic.ttf".into(),
+                octets: b"I".to_vec(),
+            }),
+        };
+        let e = contenu(&livre_temoin(), &ch, b"\x89PNG", Some(&p));
+        assert!(e.iter().any(|x| x.nom == "fonts/Cardo-Regular.ttf"));
+        assert!(e.iter().any(|x| x.nom == "fonts/Cardo-Italic.ttf"));
+        let css = e.iter().find(|x| x.nom == "style.css").unwrap();
+        let css = String::from_utf8(css.octets.clone()).unwrap();
+        assert_eq!(css.matches("@font-face").count(), 2, "{css}");
+        assert!(css.contains("font-style: italic"), "{css}");
+        assert!(css.contains(r#"url("fonts/Cardo-Regular.ttf")"#), "{css}");
+    }
+
+    /// La dédicace ne paraît que si le livre en porte une : une page vide se verrait.
+    #[test]
+    fn la_dedicace_ne_parait_que_si_le_livre_en_porte_une() {
+        let ch = chapitres_temoins();
+        let avec = contenu(&livre_temoin(), &ch, b"\x89PNG", None);
+        let lim = |e: &[Entree]| {
+            let x = e.iter().find(|x| x.nom == "liminaires.xhtml").unwrap();
+            String::from_utf8(x.octets.clone()).unwrap()
+        };
+        assert!(lim(&avec).contains("À R."));
+
+        let mut l = livre_temoin();
+        l.dedicace = None;
+        let sans = contenu(&l, &ch, b"\x89PNG", None);
+        assert!(!lim(&sans).contains("dedicace"), "{}", lim(&sans));
     }
 }
