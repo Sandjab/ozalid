@@ -41,6 +41,39 @@ fn echappe(s: &str) -> String {
     out
 }
 
+/// Le premier caractère qu'XML 1.0 n'admet pas, s'il y en a un.
+///
+/// L'échappement ne peut rien pour ceux-là : XML n'a de représentation ni pour le
+/// caractère nu, ni pour son entité numérique. La règle est écrite en positif — `#x9`,
+/// `#xA`, `#xD`, puis tout ce qui va au-delà de `#x20` sauf les non-caractères `#xFFFE`
+/// et `#xFFFF` — parce qu'énumérer les interdits en oublie, et qu'un oubli ne se
+/// verrait qu'à l'ouverture du livre. Les demi-codets, l'autre trou de la production
+/// `Char`, ne peuvent pas exister dans un `char` de Rust.
+fn caractere_interdit(s: &str) -> Option<char> {
+    s.chars().find(|&c| {
+        !(c == '\t' || c == '\n' || c == '\r' || (c >= ' ' && c != '\u{fffe}' && c != '\u{ffff}'))
+    })
+}
+
+/// Refuse un texte que l'archive ne saurait pas porter, en disant d'où il vient.
+///
+/// Un refus, jamais un nettoyage : retirer le caractère donnerait un livre que personne
+/// n'a écrit, et le manuscrit garderait le défaut pour la génération suivante. Le
+/// chemin d'impression, lui, compose ce caractère sans broncher — c'est l'EPUB qui ne
+/// sait pas le représenter, c'est donc lui qui refuse, et `manuscrit` ne bouge pas.
+///
+/// `ou` doit permettre d'aller le corriger : un numéro de chapitre, un nom de champ.
+fn verifie_xml(s: &str, ou: &str) -> Result<(), String> {
+    match caractere_interdit(s) {
+        Some(c) => Err(format!(
+            "{ou} : le caractère U+{:04X} ne s'écrit pas en XML, et l'EPUB en est fait. \
+             À retirer du manuscrit — un traitement de texte en pose sans rien montrer.",
+            c as u32
+        )),
+        None => Ok(()),
+    }
+}
+
 /// La rupture de scène telle que l'EPUB l'écrit.
 ///
 /// Le même caractère que sur le papier — `manuscrit::SCENE` l'a choisi parce qu'il est
@@ -131,8 +164,9 @@ pub struct Faces {
 /// « Cardo-Regular.ttf », plus long — et le livre entier sortirait en gras.
 ///
 /// Le gras n'est pas embarqué : sur un fichier variable l'axe `wght` le rend, sur un
-/// fichier statique la liseuse le synthétise. C'est le comportement d'un EPUB
-/// ordinaire, et `**mot**` reste rare dans un roman.
+/// fichier statique la liseuse le synthétise — à condition que le CSS ne lui annonce pas
+/// une plage de graisses que le fichier ne couvre pas, ce dont [`variable`] décide.
+/// C'est le comportement d'un EPUB ordinaire, et `**mot**` reste rare dans un roman.
 pub fn faces(noms: &[String]) -> Option<Faces> {
     let choisir = |italique: bool| -> Option<String> {
         noms.iter()
@@ -190,6 +224,10 @@ fn civil(z: i64) -> (i64, u32, u32) {
 #[derive(Debug, Clone)]
 pub struct Livre<'a> {
     pub titre: &'a str,
+    /// Le titre tel qu'il paraît sur la page de titre, avec les sauts de ligne que
+    /// l'auteur a écrits. Distinct de `titre`, qui est la métadonnée : une liseuse range
+    /// le livre sous celui-là, et un saut de ligne n'a rien à y faire.
+    pub titre_page: &'a str,
     pub auteur: &'a str,
     pub genre: &'a str,
     pub copyright: &'a str,
@@ -199,7 +237,9 @@ pub struct Livre<'a> {
 /// Un fichier de police, prêt à entrer dans l'archive.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Face {
-    /// Nom du fichier, sans répertoire : il devient `OEBPS/fonts/<nom>`.
+    /// Nom du fichier sur le disque, sans répertoire. Ce n'est pas celui de l'archive :
+    /// [`nom_dans_l_archive`] en dérive un que le `href` du manifeste et l'`url()` du
+    /// CSS puissent porter.
     pub nom: String,
     pub octets: Vec<u8>,
 }
@@ -243,6 +283,36 @@ impl Entree {
             compresse: true,
         }
     }
+}
+
+/// Nom de fichier du disque → nom sous lequel l'archive le porte.
+///
+/// Le `href` du manifeste et l'`url()` du CSS sont des URL, pas des chemins : les
+/// crochets du bloc d'axes de Google Fonts — `EBGaramond[wght].ttf`, que cinq des sept
+/// familles de labeur portent — sont des *gen-delims* de la RFC 3986, interdits dans un
+/// segment. EPUBCheck refuse l'archive entière, et une liseuse indulgente ne résout pas
+/// la police : le livre retombe sans un mot sur l'écriture du lecteur.
+///
+/// Le nom dans l'archive n'a aucune raison d'être celui du disque, c'est donc lui qui
+/// cède. Seul le radical est repris en main, l'extension porte le type et ne se
+/// réécrit pas. Un nom déjà sobre — `Cardo-Regular.ttf` — en ressort intact.
+fn nom_dans_l_archive(nom: &str) -> String {
+    let (radical, ext) = match nom.rsplit_once('.') {
+        Some((r, e)) => (r, format!(".{e}")),
+        None => (nom, String::new()),
+    };
+    let brut: String = radical
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let propre: Vec<&str> = brut.split('-').filter(|s| !s.is_empty()).collect();
+    format!("{}{ext}", propre.join("-"))
 }
 
 /// Nom de fichier d'un chapitre. Trois chiffres : un roman dépasse rarement 999
@@ -305,7 +375,7 @@ fn contenu(
     if let Some(p) = polices {
         for f in std::iter::once(&p.romain).chain(p.italique.iter()) {
             e.push(Entree {
-                nom: format!("fonts/{}", f.nom),
+                nom: format!("fonts/{}", nom_dans_l_archive(&f.nom)),
                 octets: f.octets.clone(),
                 media: "font/ttf",
                 proprietes: None,
@@ -336,7 +406,7 @@ fn liminaires_xhtml(livre: &Livre) -> String {
          <p class=\"genre\">{}</p>\n\
          </div>\n",
         echappe(livre.auteur),
-        echappe(livre.titre),
+        titre_coupe(livre.titre_page),
         echappe(livre.genre),
     );
     c.push_str(&format!(
@@ -347,6 +417,16 @@ fn liminaires_xhtml(livre: &Livre) -> String {
         c.push_str(&format!("<div class=\"dedicace\">{}</div>\n", lignes(d)));
     }
     page("Titre", &c)
+}
+
+/// Le titre de la page de titre, ses coupures rendues.
+///
+/// XHTML replie tout blanc : sans `<br/>`, le titre que l'auteur a coupé se recollerait,
+/// là où le papier honore la coupure par le `\` de Typst. Les lignes vides ne sont pas
+/// écartées comme dans [`lignes`] : dans un titre, une ligne sautée est un espacement
+/// voulu, non un reste de pavé.
+fn titre_coupe(s: &str) -> String {
+    s.lines().map(echappe).collect::<Vec<_>>().join("<br/>")
 }
 
 /// Texte à sauts de ligne → paragraphes XHTML. Les lignes vides sont écartées : elles
@@ -407,6 +487,23 @@ fn ncx(livre: &Livre, chapitres: &[Chapitre]) -> String {
     )
 }
 
+/// Ce fichier porte-t-il un axe variable, au vu de son nom **sur le disque** ?
+///
+/// C'est la convention de nommage de Google Fonts, que suit `app/outils/polices.sh` :
+/// le bloc d'axes entre crochets, `EBGaramond[wght].ttf`. Ce n'est pas une lecture de
+/// la table `fvar` — il faudrait ouvrir la police, et ce module ne lit que des octets
+/// qu'on lui tend. Le nom du disque, non celui de l'archive : [`nom_dans_l_archive`] a
+/// justement pour tâche de faire disparaître ces crochets.
+///
+/// Se tromper coûte peu dans les deux sens : croire statique une variable fait perdre
+/// un vrai gras au profit d'un gras synthétique, croire variable une statique ne coûte
+/// rien tant que le fichier couvre la plage. Les deux dégradations sont douces, là où
+/// annoncer `100 900` sur une statique supprime le gras purement et simplement — la
+/// liseuse prend la face telle quelle et ne synthétise plus rien.
+fn variable(nom: &str) -> bool {
+    nom.contains('[')
+}
+
 /// Le CSS du livre. Court à dessein : ce qui n'est pas dit reste au réglage du lecteur,
 /// et c'est ce qu'on attend d'un EPUB.
 fn css(polices: Option<&Polices>) -> String {
@@ -418,8 +515,14 @@ fn css(polices: Option<&Polices>) -> String {
             {
                 s.push_str(&format!(
                     "@font-face {{\n  font-family: \"{}\";\n  font-style: {style};\n  \
-                     font-weight: 100 900;\n  src: url(\"fonts/{}\");\n}}\n",
-                    p.famille, f.nom
+                     font-weight: {};\n  src: url(\"fonts/{}\");\n}}\n",
+                    p.famille,
+                    if variable(&f.nom) {
+                        "100 900"
+                    } else {
+                        "normal"
+                    },
+                    nom_dans_l_archive(&f.nom)
                 ));
             }
             format!("\"{}\", serif", p.famille)
@@ -478,9 +581,19 @@ fn identifiant(livre: &Livre) -> String {
 /// Nom de fichier → `id` XML.
 ///
 /// Un `id` ne peut ni commencer par un chiffre ni porter de barre oblique ou de point ;
-/// un nom de fichier peut les trois. Le préfixe règle le chiffre, la substitution
-/// règle le reste, et la bijection tient parce que deux entrées ne portent jamais le
-/// même nom.
+/// un nom de fichier peut les trois. Le préfixe règle le chiffre, la substitution règle
+/// le reste.
+///
+/// La fonction n'est **pas** injective : elle écrase toute ponctuation sur un même
+/// tiret, et `Foo_1.ttf` comme `Foo-1.ttf` donnent `f-Foo-1-ttf`. Ce qui garantit
+/// l'unicité des `id` du manifeste n'est donc pas elle, c'est l'inventaire : ses noms
+/// sont tous écrits ici, en nombre fixe — les pages, le CSS, le PNG — ou numérotés
+/// — les chapitres —, et les deux seules faces qui viennent du disque diffèrent par
+/// « Italic », des lettres qu'aucune substitution ne touche.
+///
+/// Ce qui la romprait : une entrée dont le nom viendrait du disque sans cette
+/// contrainte, et qui ne différerait d'une autre que par un caractère non alphanumérique.
+/// `deux_entrees_ne_partagent_jamais_un_id` monte cette garde.
 fn id_de(nom: &str) -> String {
     let corps: String = nom
         .chars()
@@ -503,7 +616,7 @@ fn opf(livre: &Livre, entrees: &[Entree], modifie: &str) -> String {
         manifeste.push_str(&format!(
             "<item id=\"{}\" href=\"{}\" media-type=\"{}\"{props}/>\n",
             id_de(&e.nom),
-            e.nom,
+            echappe(&e.nom),
             e.media
         ));
     }
@@ -565,6 +678,33 @@ pub fn archive(
 ) -> Result<Vec<u8>, String> {
     if chapitres.is_empty() {
         return Err("aucun chapitre : il n'y a pas de livre à mettre en EPUB.".into());
+    }
+    // `dc:title` doit porter au moins un caractère, sans quoi l'archive est rejetée à
+    // l'ingestion. Des blancs la passeraient, mais laisseraient une ligne muette dans la
+    // bibliothèque du lecteur : ils ne font pas un titre.
+    if livre.titre.trim().is_empty() {
+        return Err(
+            "aucun titre : une liseuse range le livre sous ce nom, et une archive \
+                    qui n'en porte pas est refusée à l'ingestion."
+                .into(),
+        );
+    }
+    verifie_xml(livre.titre, "le titre du livre")?;
+    verifie_xml(livre.titre_page, "le titre de la page de titre")?;
+    verifie_xml(livre.auteur, "l'auteur")?;
+    verifie_xml(livre.genre, "le genre")?;
+    verifie_xml(livre.copyright, "le copyright")?;
+    if let Some(d) = livre.dedicace {
+        verifie_xml(d, "la dédicace")?;
+    }
+    for ch in chapitres {
+        let ou = format!("chapitre {}", ch.numero);
+        verifie_xml(&ch.titre, &ou)?;
+        for b in &ch.blocs {
+            if let Bloc::Paragraphe(p) = b {
+                verifie_xml(p, &ou)?;
+            }
+        }
     }
     let entrees = contenu(livre, chapitres, couverture_png, polices);
     let opf = opf(livre, &entrees, modifie);
@@ -767,6 +907,25 @@ mod tests {
         assert!(faces(&[]).is_none());
     }
 
+    /// Les crochets du bloc d'axes sont des *gen-delims* de la RFC 3986 : un segment de
+    /// chemin ne peut pas les porter, et EPUBCheck rejette l'archive entière pour ce seul
+    /// motif. Cinq des sept familles de labeur les portent sur le disque, donc le nom du
+    /// disque ne peut pas être celui de l'archive. Les deux autres, elles, ne doivent pas
+    /// bouger : un assainissement qui renommerait tout ferait perdre le nom d'origine sans
+    /// rien gagner.
+    #[test]
+    fn le_nom_d_une_police_perd_ce_qu_une_url_interdit() {
+        assert_eq!(
+            nom_dans_l_archive("EBGaramond[wght].ttf"),
+            "EBGaramond-wght.ttf"
+        );
+        assert_eq!(nom_dans_l_archive("Cardo-Regular.ttf"), "Cardo-Regular.ttf");
+        assert_eq!(
+            nom_dans_l_archive("Libre Baskerville & Cie.ttf"),
+            "Libre-Baskerville-Cie.ttf"
+        );
+    }
+
     use std::time::Duration;
 
     /// EPUB 3 exige un `dcterms:modified` en ISO 8601 UTC à la seconde. Les trois valeurs
@@ -784,6 +943,7 @@ mod tests {
     fn livre_temoin() -> Livre<'static> {
         Livre {
             titre: "Les Heures creuses",
+            titre_page: "Les Heures creuses",
             auteur: "Ivan Pjig",
             genre: "roman",
             copyright: "© 2026 Ivan Pjig\nTous droits réservés",
@@ -894,6 +1054,86 @@ mod tests {
         assert!(css.contains(r#"url("fonts/Cardo-Regular.ttf")"#), "{css}");
     }
 
+    /// L'écriture que cinq familles sur sept portent réellement sur le disque : un nom à
+    /// bloc d'axes. C'est le jeu d'essai qui manquait — les deux témoins précédents,
+    /// Cardo et Spectral, sont justement les deux seules familles épargnées.
+    fn polices_temoins() -> Polices {
+        Polices {
+            famille: "EB Garamond".into(),
+            romain: Face {
+                nom: "EBGaramond[wght].ttf".into(),
+                octets: b"R".to_vec(),
+            },
+            italique: Some(Face {
+                nom: "EBGaramond-Italic[wght].ttf".into(),
+                octets: b"I".to_vec(),
+            }),
+        }
+    }
+
+    /// Le nom assaini sert aux trois endroits qui doivent s'accorder : le chemin dans
+    /// l'archive, le `href` du manifeste — qui en découle — et l'`url()` du CSS. Un seul
+    /// des trois resté sur le nom du disque, et la liseuse ne résout plus la police : elle
+    /// retombe sans un mot sur l'écriture du lecteur.
+    #[test]
+    fn le_css_et_l_archive_visent_le_meme_nom_assaini() {
+        let ch = chapitres_temoins();
+        let p = polices_temoins();
+        let e = contenu(&livre_temoin(), &ch, b"\x89PNG", Some(&p));
+        let noms: Vec<&str> = e.iter().map(|x| x.nom.as_str()).collect();
+        assert!(noms.contains(&"fonts/EBGaramond-wght.ttf"), "{noms:?}");
+        assert!(
+            noms.contains(&"fonts/EBGaramond-Italic-wght.ttf"),
+            "{noms:?}"
+        );
+        let css = e.iter().find(|x| x.nom == "style.css").unwrap();
+        let css = String::from_utf8(css.octets.clone()).unwrap();
+        assert!(css.contains(r#"url("fonts/EBGaramond-wght.ttf")"#), "{css}");
+        assert!(!css.contains('['), "{css}");
+    }
+
+    /// `font-weight: 100 900` sur un fichier statique dit à la liseuse que cette face
+    /// couvre déjà 700 : elle la prend telle quelle et ne synthétise rien. Mesuré dans
+    /// Chromium sur `Cardo-Regular.ttf`, la même chaîne à 64 px rend 2449 pixels opaques
+    /// en gras comme en normal — `**mot**` sort identique au texte courant. Avec
+    /// `font-weight: normal`, 2832 : le gras revient. Les deux familles statiques des
+    /// sept, Cardo et Spectral, en dépendent.
+    #[test]
+    fn seule_une_police_variable_annonce_la_plage_des_graisses() {
+        let statique = Polices {
+            famille: "Cardo".into(),
+            romain: Face {
+                nom: "Cardo-Regular.ttf".into(),
+                octets: b"R".to_vec(),
+            },
+            italique: Some(Face {
+                nom: "Cardo-Italic.ttf".into(),
+                octets: b"I".to_vec(),
+            }),
+        };
+        let s = css(Some(&statique));
+        assert_eq!(graisses_des_faces(&s), ["normal", "normal"], "{s}");
+
+        let v = css(Some(&polices_temoins()));
+        assert_eq!(graisses_des_faces(&v), ["100 900", "100 900"], "{v}");
+    }
+
+    /// La graisse déclarée par chaque `@font-face`, et elle seule : le CSS du livre en
+    /// porte d'autres pour ses titres, et les compter avec fausserait la mesure.
+    fn graisses_des_faces(css: &str) -> Vec<String> {
+        css.split("@font-face")
+            .skip(1)
+            .map(|bloc| {
+                bloc.split("font-weight:")
+                    .nth(1)
+                    .and_then(|g| g.split(';').next())
+                    .expect("un @font-face sans graisse")
+                    .trim()
+                    .to_string()
+            })
+            .collect()
+    }
+
     /// La dédicace ne paraît que si le livre en porte une : une page vide se verrait.
     #[test]
     fn la_dedicace_ne_parait_que_si_le_livre_en_porte_une() {
@@ -909,6 +1149,28 @@ mod tests {
         l.dedicace = None;
         let sans = contenu(&l, &ch, b"\x89PNG", None);
         assert!(!lim(&sans).contains("dedicace"), "{}", lim(&sans));
+    }
+
+    /// Le blanc que l'auteur a écrit dans son titre atteint le papier — `interieur` le
+    /// rend par le `\` de Typst. Ici, XHTML replie tout blanc : sans `<br/>`, le titre
+    /// que l'auteur avait coupé se recolle, et les deux sorties du même livre ne montrent
+    /// plus la même page de titre.
+    ///
+    /// `dc:title` ne suit pas : c'est une métadonnée, la liseuse range le livre sous ce
+    /// nom dans sa bibliothèque, et un saut de ligne n'y a rien à faire.
+    #[test]
+    fn le_titre_de_page_garde_ses_sauts_de_ligne_la_metadonnee_non() {
+        let l = Livre {
+            titre_page: "Les Heures\ncreuses",
+            ..livre_temoin()
+        };
+        let x = liminaires_xhtml(&l);
+        assert!(x.contains("Les Heures<br/>creuses"), "{x}");
+
+        let e = contenu(&l, &chapitres_temoins(), b"\x89PNG", None);
+        let o = opf(&l, &e, "2026-08-22T10:00:00Z");
+        assert!(o.contains("<dc:title>Les Heures creuses</dc:title>"), "{o}");
+        assert!(!o.contains("<br/>"), "{o}");
     }
 
     /// Le manifeste porte exactement les entrées de l'inventaire, et le fil de lecture ne
@@ -981,6 +1243,24 @@ mod tests {
         );
     }
 
+    /// Deux entrées qui partageraient un `id` donneraient un manifeste où le fil de
+    /// lecture viserait la mauvaise page, sans qu'aucune liseuse ne le dise. Ce n'est pas
+    /// `id_de` qui l'empêche — elle écrase toute ponctuation sur un tiret, et deux noms
+    /// qui n'en diffèrent que là se confondent : c'est l'inventaire, dont les noms sont
+    /// tous écrits ici. La garde est donc sur l'inventaire, pas sur la fonction.
+    #[test]
+    fn deux_entrees_ne_partagent_jamais_un_id() {
+        let e = contenu(
+            &livre_temoin(),
+            &chapitres_temoins(),
+            b"\x89PNG",
+            Some(&polices_temoins()),
+        );
+        let ids: std::collections::BTreeSet<String> = e.iter().map(|x| id_de(&x.nom)).collect();
+        assert_eq!(ids.len(), e.len(), "{ids:?}");
+        assert_eq!(id_de("Foo_1.ttf"), id_de("Foo-1.ttf"));
+    }
+
     use std::io::Read;
 
     fn relire(octets: &[u8]) -> zip::ZipArchive<Cursor<Vec<u8>>> {
@@ -1018,20 +1298,13 @@ mod tests {
     /// Ce que l'archive porte sous `OEBPS/` et ce que le manifeste déclare doivent se
     /// recouvrir **exactement**, `content.opf` excepté. C'est le défaut qui fait rejeter
     /// un EPUB par une liseuse stricte sans qu'aucun autre test ne le voie.
+    ///
+    /// Le témoin porte un nom à bloc d'axes, celui de cinq familles sur sept : recouvrir
+    /// ne suffit pas, encore faut-il que le nom commun aux deux soit une URL légale.
     #[test]
     fn l_archive_et_le_manifeste_se_recouvrent_exactement() {
         let ch = chapitres_temoins();
-        let p = Polices {
-            famille: "Cardo".into(),
-            romain: Face {
-                nom: "Cardo-Regular.ttf".into(),
-                octets: b"R".to_vec(),
-            },
-            italique: Some(Face {
-                nom: "Cardo-Italic.ttf".into(),
-                octets: b"I".to_vec(),
-            }),
-        };
+        let p = polices_temoins();
         let a = archive(
             &livre_temoin(),
             &ch,
@@ -1061,7 +1334,12 @@ mod tests {
             .collect();
 
         assert_eq!(dans_l_archive, manifestes);
-        assert!(dans_l_archive.contains("fonts/Cardo-Italic.ttf"));
+        assert!(dans_l_archive.contains("fonts/EBGaramond-Italic-wght.ttf"));
+        // Aucun nom d'entrée ne peut porter un caractère qu'un segment d'URL interdit :
+        // le `href` du manifeste et l'`url()` du CSS sont des URL, pas des chemins.
+        for n in &dans_l_archive {
+            assert!(!n.contains('[') && !n.contains(']'), "{n}");
+        }
     }
 
     /// `META-INF/container.xml` désigne l'OPF : c'est par lui que toute liseuse entre dans
@@ -1084,6 +1362,153 @@ mod tests {
             .read_to_string(&mut s)
             .unwrap();
         assert!(s.contains(r#"full-path="OEBPS/content.opf""#), "{s}");
+    }
+
+    /// `dc:title` doit porter au moins un caractère : EPUBCheck le dit `ERROR` et
+    /// l'ingestion s'arrête là. Or un projet neuf s'ouvre sur un titre vide, et rien ne
+    /// gardait ce champ nulle part. Le refus va où est déjà celui du livre sans chapitre —
+    /// et des blancs ne font pas un titre : ils passeraient la validation en laissant une
+    /// ligne muette dans la bibliothèque du lecteur.
+    #[test]
+    fn un_livre_sans_titre_est_refuse() {
+        for t in ["", "   ", "\n\t"] {
+            let l = Livre {
+                titre: t,
+                ..livre_temoin()
+            };
+            let err = archive(
+                &l,
+                &chapitres_temoins(),
+                b"\x89PNG",
+                None,
+                "2026-08-22T10:00:00Z",
+            )
+            .unwrap_err();
+            assert!(err.contains("titre"), "{t:?} : {err}");
+        }
+    }
+
+    /// XML 1.0 n'a aucune représentation pour un caractère de contrôle : ni le caractère
+    /// nu, ni une entité numérique. Un manuscrit collé depuis Word en porte — un saut de
+    /// page manuel y devient U+000C —, et la liseuse n'ouvre alors pas le chapitre du
+    /// tout : EPUBCheck le dit `FATAL`. Le message doit nommer le chapitre et le
+    /// caractère, sans quoi il n'y a rien à aller corriger dans le manuscrit.
+    #[test]
+    fn un_caractere_interdit_en_xml_fait_refuser_l_archive() {
+        let mut ch = chapitres_temoins();
+        ch[1].blocs = vec![Bloc::Paragraphe("Un saut\u{c} de page".into())];
+        let err = archive(
+            &livre_temoin(),
+            &ch,
+            b"\x89PNG",
+            None,
+            "2026-08-22T10:00:00Z",
+        )
+        .unwrap_err();
+        assert!(err.contains("U+000C"), "{err}");
+        assert!(err.contains("chapitre 2"), "{err}");
+    }
+
+    /// Le titre d'un chapitre entre dans l'archive au même titre que ses blocs — dans le
+    /// `<h1>`, dans le `nav` et dans le NCX, trois fois plutôt qu'une.
+    #[test]
+    fn un_titre_de_chapitre_de_controle_est_refuse() {
+        let mut ch = chapitres_temoins();
+        ch[0].titre = "Le seuil\u{1}".into();
+        let err = archive(
+            &livre_temoin(),
+            &ch,
+            b"\x89PNG",
+            None,
+            "2026-08-22T10:00:00Z",
+        )
+        .unwrap_err();
+        assert!(err.contains("U+0001"), "{err}");
+        assert!(err.contains("chapitre 1"), "{err}");
+    }
+
+    /// Le refus balaie **tout** ce qui entre dans l'archive, pas seulement les chapitres :
+    /// le titre, l'auteur, le genre, le copyright et la dédicace paraissent aux
+    /// liminaires, dans l'OPF ou dans le NCX. Un contrôle dans l'un d'eux est tout aussi
+    /// fatal, et le message doit dire lequel.
+    #[test]
+    fn aucun_champ_du_livre_n_echappe_au_refus() {
+        let sale = "gêne\u{b}ici";
+        let cas: Vec<(&str, Livre)> = vec![
+            (
+                "titre",
+                Livre {
+                    titre: sale,
+                    ..livre_temoin()
+                },
+            ),
+            (
+                "page de titre",
+                Livre {
+                    titre_page: sale,
+                    ..livre_temoin()
+                },
+            ),
+            (
+                "auteur",
+                Livre {
+                    auteur: sale,
+                    ..livre_temoin()
+                },
+            ),
+            (
+                "genre",
+                Livre {
+                    genre: sale,
+                    ..livre_temoin()
+                },
+            ),
+            (
+                "copyright",
+                Livre {
+                    copyright: sale,
+                    ..livre_temoin()
+                },
+            ),
+            (
+                "dédicace",
+                Livre {
+                    dedicace: Some(sale),
+                    ..livre_temoin()
+                },
+            ),
+        ];
+        for (champ, l) in cas {
+            let err = archive(
+                &l,
+                &chapitres_temoins(),
+                b"\x89PNG",
+                None,
+                "2026-08-22T10:00:00Z",
+            )
+            .unwrap_err();
+            assert!(err.contains("U+000B"), "{champ} : {err}");
+            assert!(err.contains(champ), "{champ} : {err}");
+        }
+    }
+
+    /// La tabulation, le saut de ligne et le retour chariot sont légaux en XML 1.0, et le
+    /// copyright en porte : un refus qui les prendrait pour des contrôles rendrait tout
+    /// livre inexportable. La règle est écrite en positif pour cette raison.
+    #[test]
+    fn les_blancs_legaux_en_xml_ne_sont_pas_refuses() {
+        let l = Livre {
+            copyright: "© 2026\tIvan Pjig\r\nTous droits réservés",
+            ..livre_temoin()
+        };
+        assert!(archive(
+            &l,
+            &chapitres_temoins(),
+            b"\x89PNG",
+            None,
+            "2026-08-22T10:00:00Z"
+        )
+        .is_ok());
     }
 
     /// Un livre sans chapitre ne produit pas d'archive : ce serait une couverture et deux

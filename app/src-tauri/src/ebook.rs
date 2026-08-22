@@ -104,6 +104,7 @@ pub fn generer(
     let arch = epub::archive(
         &epub::Livre {
             titre: &livre.titre,
+            titre_page: livre.titre_page(),
             auteur: &livre.auteur,
             genre: &livre.genre,
             copyright: &livre.copyright,
