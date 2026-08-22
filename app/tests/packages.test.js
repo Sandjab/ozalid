@@ -138,7 +138,7 @@ async function ouvre(
     if (cmd === 'mains_liste') return ['Caveat', 'Dancing Script'];
     if (cmd === 'maquettes_liste') return [{ cle: 'folio', libelle: 'Folio' }];
     if (cmd === 'projet_ouvrir') return projet;
-    if (cmd === 'couverture_apercu') return 'data:image/png;base64,QUJD';
+    if (cmd === 'couverture_apercu') return { image: 'data:image/png;base64,QUJD', coupe: null };
     if (cmd === 'destinataire_viser') return maj({ courant: args.providerCle });
     if (cmd === 'destinataire_regler') {
       return maj({

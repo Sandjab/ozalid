@@ -438,11 +438,11 @@ function dosCourant() {
  * rectangle-là ne se distingue pas d'une couverture vide — il donne à voir un livre
  * là où le message dit qu'il n'y en a pas.
  */
-function poserApercu(data) {
+function poserApercu(a) {
   const img = $('apercu');
-  if (data) img.src = data;
+  if (a) img.src = a.image;
   else img.removeAttribute('src');
-  img.hidden = !data;
+  img.hidden = !a;
 }
 
 async function rendreApercu() {

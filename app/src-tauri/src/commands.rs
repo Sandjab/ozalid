@@ -720,12 +720,30 @@ fn poser_image(images: &mut BTreeMap<String, Vec<u8>>, nom: String, octets: Vec<
 /// `dos_mm` vient de la dernière composition de l'intérieur ; il n'est jamais saisi.
 /// Sans lui, la planche ne s'aperçoit pas — c'est voulu : une planche dont le dos
 /// serait deviné donnerait à voir un livre qui n'existe pas.
+/// Ce qu'un aperçu de face donne à voir : l'image, et où la couper s'il y a lieu.
+#[derive(Serialize)]
+pub struct Apercu {
+    pub image: String,
+    /// Absente sur les faces qui se composent au format rogné, sans fond perdu — la
+    /// 1ère, la 4ème et le dos. C'est le Rust qui l'affirme plutôt que la fenêtre qui
+    /// le déduise d'un nom de face : le jour où une face gagne du fond perdu, elle
+    /// gagne sa coupe sans qu'on y pense.
+    pub coupe: Option<Coupe>,
+}
+
+/// La part du fond perdu sur chaque dimension de la planche, en fraction de celle-ci.
+#[derive(Serialize)]
+pub struct Coupe {
+    pub x: f64,
+    pub y: f64,
+}
+
 #[tauri::command]
 pub fn couverture_apercu(
     face: String,
     dos_mm: Option<f64>,
     atelier: State<Atelier>,
-) -> Result<String, String> {
+) -> Result<Apercu, String> {
     let garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_ref().ok_or_else(aucun_projet)?;
     let cv = o
@@ -746,6 +764,9 @@ pub fn couverture_apercu(
     std::fs::create_dir_all(&dossier).map_err(|e| format!("aperçu impossible : {e}"))?;
 
     let (une, quatre) = ecrire_images(&o.projet, &dossier)?;
+    // Seule la planche se compose avec du fond perdu : les trois autres faces n'ont
+    // rien à faire marquer.
+    let mut coupe = None;
     let src = match face.as_str() {
         "une" => couverture::source_une(&o.projet.meta.livre, cv, pr.format, une.as_ref(), dos_mm),
         "quatre" => {
@@ -774,6 +795,8 @@ pub fn couverture_apercu(
                 dos,
                 fond_perdu: fp,
             };
+            let (x, y) = g.part_fond_perdu();
+            coupe = Some(Coupe { x, y });
             planche::source(&o.projet.meta.livre, cv, &g, une.as_ref(), quatre.as_ref())?
         }
         autre => return Err(format!("face inconnue : {autre}")),
@@ -784,7 +807,10 @@ pub fn couverture_apercu(
     ecrire(&typ, &src)?;
     typst()?.apercu(&typ, &png, 1, 150)?;
 
-    donnee_png(&png)
+    Ok(Apercu {
+        image: donnee_png(&png)?,
+        coupe,
+    })
 }
 
 /// Un PNG du disque, en donnée `data:` : la fenêtre ne lit pas les fichiers, une image

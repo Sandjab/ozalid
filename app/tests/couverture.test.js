@@ -125,7 +125,14 @@ async function ouvre(couverture, sur = {}, dialogues = []) {
       ];
     }
     if (cmd === 'projet_ouvrir') return projet(couverture);
-    if (cmd === 'couverture_apercu') return 'data:image/png;base64,QUJD';
+    // La planche est la seule face qui se compose avec du fond perdu : elle seule
+    // rend une coupe. Les fractions sont celles d'une poche Lulu à 3,175 mm.
+    if (cmd === 'couverture_apercu') {
+      return {
+        image: 'data:image/png;base64,QUJD',
+        coupe: args.face === 'planche' ? { x: 0.0129, y: 0.0175 } : null,
+      };
+    }
     // Viser un autre destinataire est un des gestes qui redemandent un aperçu : le
     // format de la page vient de lui. Le projet de ce fichier n'en déclare qu'un, et
     // c'est assez — ce qui est vérifié ici, c'est que l'aperçu reparte.
@@ -406,7 +413,7 @@ test('un aperçu qui échoue efface l\'image et affiche la cause', async () => {
   const { els } = await ouvre(maquette(), {
     couverture_apercu: () => {
       if (casse) throw 'prolongement panoramique : la largeur du dos est inconnue';
-      return 'data:image/png;base64,QUJD';
+      return { image: 'data:image/png;base64,QUJD', coupe: null };
     },
   });
   await attendreApercu();
