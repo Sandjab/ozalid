@@ -141,6 +141,7 @@ fn blocs_xhtml(blocs: &[Bloc]) -> String {
         match b {
             Bloc::Paragraphe(p) => s.push_str(&format!("<p>{}</p>\n", paragraphe(p))),
             Bloc::Scene => s.push_str(&format!("<p class=\"scene\">{SCENE_XHTML}</p>\n")),
+            Bloc::Blanc => {}
         }
     }
     s

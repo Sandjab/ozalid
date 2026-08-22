@@ -1,7 +1,8 @@
 //! Manuscrit Markdown → chapitres → source Typst.
 //!
 //! Le format admis est celui du projet, et lui seul : titre en `# `, chapitres en
-//! `## NN - Titre`, séparateurs de scène `---`, emphase `*…*` et `**…**`. Tout le
+//! `## NN - Titre`, coupures `---` (marquée) et `___` (muette), emphase `*…*` et
+//! `**…**`. Tout le
 //! reste est **refusé** avec son numéro de ligne plutôt que composé de travers :
 //! une liste ou un lien silencieusement aplati donnerait un livre imprimé faux,
 //! découvert après tirage.
@@ -15,10 +16,15 @@
 /// coupure que l'auteur a écrite. Elle est typée pour que chaque composition décide
 /// quoi en faire — l'épreuve et l'intérieur la rendent tous deux, chacun avec son
 /// espace autour de la même marque.
+///
+/// Le blanc de respiration est la même coupure, muette : l'auteur sépare deux passages
+/// sans vouloir que la page l'annonce. Les deux suivent les mêmes règles de position ;
+/// seul le rendu les distingue.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Bloc {
     Paragraphe(String),
     Scene,
+    Blanc,
 }
 
 /// Marque de rupture de scène : trois astérisques espacées.
@@ -285,6 +291,21 @@ fn mot_cle(titre: &str) -> Option<(Sorte, &'static str)> {
 /// `decoupe` laisserait un `Bloc::Scene` orphelin en fin de chaque chapitre — invisible
 /// tant que l'intérieur ignore les `Scene`, mais que l'épreuve afficherait comme une
 /// astérisque parasite avant chaque saut de page.
+/// Les deux marques de coupure du format, et rien d'autre. `---` se voit sur la page,
+/// `___` non ; tout le reste — position, élagage, doublons — leur est commun, et c'est
+/// pour cela qu'elles se lisent au même endroit.
+///
+/// `___` est la jumelle de `---` dans le Markdown standard : un manuscrit ouvert dans
+/// n'importe quel éditeur y montre déjà une ligne, et aucune faute de frappe ne
+/// transforme l'une en l'autre.
+fn rupture(t: &str) -> Option<Bloc> {
+    match t {
+        "---" => Some(Bloc::Scene),
+        "___" => Some(Bloc::Blanc),
+        _ => None,
+    }
+}
+
 fn elague_rupture_finale(ch: Option<&mut Piece>) {
     if let Some(ch) = ch {
         if matches!(ch.blocs.last(), Some(Bloc::Scene)) {
@@ -363,14 +384,14 @@ pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Piece>, String> {
                 Sorte::Chapitre(_) => vu_corps = true,
             }
             pieces.push(piece);
-        } else if t == "---" {
+        } else if let Some(rupture) = rupture(t) {
             // Hors chapitre, la rupture appartient aux liminaires : rien à garder. Dans
             // un chapitre, elle n'est gardée qu'à la suite d'un paragraphe : ni en tête
-            // de chapitre, ni après une rupture déjà posée (deux `---` consécutifs ne
-            // séparent qu'une fois).
+            // de chapitre, ni après une rupture déjà posée (deux marques consécutives ne
+            // séparent qu'une fois, quelles qu'elles soient).
             if let Some(courant) = pieces.last_mut() {
                 if matches!(courant.blocs.last(), Some(Bloc::Paragraphe(_))) {
-                    courant.blocs.push(Bloc::Scene);
+                    courant.blocs.push(rupture);
                 }
             }
         } else if t.starts_with("# ") || t.is_empty() {
@@ -598,6 +619,22 @@ mod tests {
             vec![
                 Bloc::Paragraphe("Avant.".into()),
                 Bloc::Scene,
+                Bloc::Paragraphe("Après.".into()),
+            ]
+        );
+    }
+
+    /// Le blanc est une coupure que l'auteur a écrite, au même titre que la rupture de
+    /// scène : typé, il traverse la découpe sans se confondre avec un paragraphe dont
+    /// le texte serait « ___ » — qui, lui, s'imprimerait tel quel.
+    #[test]
+    fn un_blanc_de_respiration_est_garde_comme_bloc() {
+        let ch = decoupe("## 01 - Un\n\nAvant.\n\n___\n\nAprès.\n", None).unwrap();
+        assert_eq!(
+            ch[0].blocs,
+            vec![
+                Bloc::Paragraphe("Avant.".into()),
+                Bloc::Blanc,
                 Bloc::Paragraphe("Après.".into()),
             ]
         );

@@ -478,6 +478,7 @@ fn blocs_typst(blocs: &[Bloc]) -> String {
             // blanc : relevé sur la page composée, pas déduit. La marque le rend
             // sans conséquence — c'est elle qui dit la coupure, pas le retrait.
             Bloc::Scene => s.push_str(&format!("#v(1em)\n#align(center)[{SCENE}]\n#v(1em)\n\n")),
+            Bloc::Blanc => {}
         }
     }
     s

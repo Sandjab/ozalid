@@ -43,7 +43,7 @@ pub fn source(livre: &Livre, int: &Interieur, pieces: &[Piece], corps_pt: f64) -
         .flat_map(|c| &c.blocs)
         .filter_map(|b| match b {
             Bloc::Paragraphe(p) => Some(p.split_whitespace().count()),
-            Bloc::Scene => None,
+            Bloc::Scene | Bloc::Blanc => None,
         })
         .sum();
 
@@ -146,6 +146,7 @@ pub fn source(livre: &Livre, int: &Interieur, pieces: &[Piece], corps_pt: f64) -
                 Bloc::Scene => s.push_str(&format!(
                     "#v(5mm)\n#align(center)[#text(fill: rgb(\"#808080\"))[{SCENE}]]\n#v(5mm)\n\n"
                 )),
+                Bloc::Blanc => {}
             }
         }
     }
