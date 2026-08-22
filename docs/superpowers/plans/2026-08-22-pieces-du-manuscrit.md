@@ -377,6 +377,10 @@ et, juste après `let piece = entete(reste.trim(), no)?;` (remplaçant le `push`
                     piece.titre
                 ));
             }
+            // Une pièce liminaire précède le corps sans l'ouvrir : deux liminaires se
+            // suivent, et c'est le premier chapitre qui ferme la zone. Sans ce bras, un
+            // liminaire légitime tomberait dans le `_` final et poserait `vu_corps`.
+            Sorte::Liminaire => {}
             Sorte::Annexe => vu_annexe = true,
             _ if vu_annexe => {
                 return Err(format!(
@@ -389,8 +393,24 @@ et, juste après `let piece = entete(reste.trim(), no)?;` (remplaçant le `push`
         pieces.push(piece);
 ```
 
-Note : le bras `Sorte::Liminaire` ne met à jour aucun drapeau — un liminaire n'ouvre ni
-le corps ni les annexes.
+Le test qui protège ce bras :
+
+```rust
+    /// Une pièce liminaire n'ouvre pas le corps : elle le précède. Sans quoi une
+    /// préface suivie d'un prologue — un manuscrit parfaitement ordinaire — serait
+    /// refusée au motif que le prologue « suit un chapitre » qui n'existe pas.
+    #[test]
+    fn deux_pieces_liminaires_se_suivent() {
+        let p = decoupe(
+            "## Préface\n\nA.\n\n## Prologue\n\nB.\n\n## 01 - Un\n\nC.\n",
+            None,
+        )
+        .unwrap();
+        assert_eq!(p[0].sorte, Sorte::Liminaire);
+        assert_eq!(p[1].sorte, Sorte::Liminaire);
+        assert_eq!(p[2].sorte, Sorte::Chapitre(1));
+    }
+```
 
 - [ ] **Step 4: Vérifier qu'ils passent**
 
@@ -450,7 +470,7 @@ git commit -m "Une préface entre dans le manuscrit sans ouvrir le format"
         let md = "## Partie I - Un\n\n## 01 - Un\n\nA.\n\n## Partie IV - Quatre\n\n\
                   ## 02 - Deux\n\nB.\n";
         let err = decoupe(md, None).unwrap_err();
-        assert!(err.contains("ligne 5"), "{err}");
+        assert!(err.contains("ligne 7"), "{err}");
         assert!(err.contains("II"), "l'erreur doit dire ce qui était attendu : {err}");
 
         let err = decoupe("## Partie X - Dix\n\n## 01 - Un\n\nA.\n", None).unwrap_err();
