@@ -310,6 +310,9 @@ pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Piece>, String> {
                         piece.titre
                     ));
                 }
+                // Une pièce liminaire précède le corps sans l'ouvrir : deux liminaires
+                // se suivent, et c'est le premier chapitre qui ferme la zone.
+                Sorte::Liminaire => {}
                 Sorte::Annexe => vu_annexe = true,
                 _ if vu_annexe => {
                     return Err(format!(
@@ -630,6 +633,21 @@ mod tests {
 
         let err = decoupe("## Postface\n\nA.\n\n## 01 - Un\n\nB.\n", None).unwrap_err();
         assert!(err.contains("ligne 5"), "{err}");
+    }
+
+    /// Une pièce liminaire n'ouvre pas le corps : elle le précède. Sans quoi une
+    /// préface suivie d'un prologue — un manuscrit parfaitement ordinaire — serait
+    /// refusée au motif que le prologue « suit un chapitre » qui n'existe pas.
+    #[test]
+    fn deux_pieces_liminaires_se_suivent() {
+        let p = decoupe(
+            "## Préface\n\nA.\n\n## Prologue\n\nB.\n\n## 01 - Un\n\nC.\n",
+            None,
+        )
+        .unwrap();
+        assert_eq!(p[0].sorte, Sorte::Liminaire);
+        assert_eq!(p[1].sorte, Sorte::Liminaire);
+        assert_eq!(p[2].sorte, Sorte::Chapitre(1));
     }
 
     /// L'échappement passe avant l'emphase : un `#` du texte ne doit pas ouvrir une
