@@ -9,7 +9,7 @@
 //! personne, et son compte de pages n'intéresse personne.
 
 use crate::interieur::Interieur;
-use crate::manuscrit::{echappe, inline, Bloc, Chapitre};
+use crate::manuscrit::{echappe, echappe_chaine, inline, Bloc, Chapitre};
 use crate::projet::Livre;
 
 /// Marque de rupture de scène : trois astérisques espacées.
@@ -37,6 +37,11 @@ const MARGE_DROITE: f64 = 50.0;
 pub fn source(livre: &Livre, int: &Interieur, chapitres: &[Chapitre], corps_pt: f64) -> String {
     let titre = echappe(&livre.titre);
     let auteur = echappe(&livre.auteur);
+    // Les mêmes, cités et non composés : la ligne de commentaire qui ouvre la source et
+    // la chaîne de `#set document` ne sont pas du markup, et l'échappement du markup n'y
+    // protège de rien.
+    let titre_cite = echappe_chaine(&livre.titre);
+    let auteur_cite = echappe_chaine(&livre.auteur);
     // Interpolée brute, comme dans `interieur::source` : l'appelant doit l'avoir
     // validée par `Interieur::verifie`, qui seul connaît les polices admises.
     let police = &int.police;
@@ -55,8 +60,8 @@ pub fn source(livre: &Livre, int: &Interieur, chapitres: &[Chapitre], corps_pt: 
         .sum();
 
     let mut s = format!(
-        r##"// Épreuve de relecture — {titre}
-#set document(title: "{titre}", author: "{auteur}")
+        r##"// Épreuve de relecture — {titre_cite}
+#set document(title: "{titre_cite}", author: "{auteur_cite}")
 #set page(
   width: 210mm, height: 297mm,
   margin: (top: {MARGE_HAUT}mm, bottom: {MARGE_BAS}mm,
@@ -211,6 +216,31 @@ mod tests {
     fn chaque_chapitre_s_ouvre_sur_une_page_neuve() {
         // Deux chapitres, un seul saut : le premier suit la garde, qui saute déjà.
         assert_eq!(src().matches("#pagebreak()").count(), 2);
+    }
+
+    /// Le même défaut qu'à l'intérieur, et pour la même raison : le titre entre ici
+    /// aussi dans la chaîne de `#set document` et dans la ligne de commentaire qui ouvre
+    /// la source. Un guillemet droit referme la chaîne, un saut de ligne fait sortir du
+    /// commentaire ce qui suit — et l'épreuve est justement ce qu'on tire d'un livre
+    /// dont le titre n'est pas encore arrêté.
+    #[test]
+    fn un_titre_a_guillemets_ne_referme_pas_la_chaine_du_document() {
+        let mut l = livre();
+        l.titre = "Le \"quai\"\nnord".into();
+        let s = source(&l, &Interieur::default(), &chapitres(), 12.0);
+        let doc = s
+            .lines()
+            .find(|l| l.starts_with("#set document"))
+            .expect("ligne #set document");
+        assert_eq!(
+            doc,
+            r#"#set document(title: "Le \"quai\"\nnord", author: "Ivan Pjig")"#
+        );
+        let entete = s.lines().next().expect("ligne de commentaire");
+        assert!(
+            entete.starts_with("// Épreuve") && entete.contains(r"quai\"),
+            "commentaire d'en-tête coupé par le titre : {entete}"
+        );
     }
 
     /// Une ligne d'épreuve doit tenir au texte, pas à la mise en page. Justifier

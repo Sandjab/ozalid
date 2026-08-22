@@ -10,7 +10,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::manuscrit::{echappe, inline, Bloc, Chapitre};
+use crate::manuscrit::{echappe, echappe_chaine, inline, Bloc, Chapitre};
 use crate::projet::Livre;
 use crate::providers::Provider;
 use crate::typst::MARQUEUR;
@@ -174,10 +174,12 @@ pub fn source(
 #set par(justify: true, leading: {lead}em, spacing: {lead}em, first-line-indent: 1.2em)
 
 "#,
-        echappe(&livre.titre),
+        // Ces trois-là sont cités, non composés : la ligne de commentaire et la chaîne
+        // de `#set document` demandent l'échappement de chaîne, pas celui du markup.
+        echappe_chaine(&livre.titre),
         pr.cle,
-        echappe(&livre.titre),
-        echappe(&livre.auteur),
+        echappe_chaine(&livre.titre),
+        echappe_chaine(&livre.auteur),
         pr.marge_haut,
         pr.marge_bas,
         r.gouttiere,
@@ -499,6 +501,44 @@ mod tests {
         );
         assert!(s.contains(r"Les Heures \ creuses"), "saut de ligne perdu");
         assert!(s.contains(r"Ivan \#Pjig"), "auteur non échappé");
+    }
+
+    /// Le titre et l'auteur n'arrivent pas qu'en markup : ils entrent aussi *dans une
+    /// chaîne* Typst, celle de `#set document`, et dans la ligne de commentaire qui
+    /// ouvre la source. Un guillemet droit y referme la chaîne — le compilateur répond
+    /// `expected comma` — et un saut de ligne fait sortir du commentaire ce qui suit,
+    /// qui s'imprime alors en tête du livre. L'échappement du markup ne protège ni de
+    /// l'un ni de l'autre : il laisse passer le `"` et ne touche pas aux sauts de ligne.
+    #[test]
+    fn un_titre_a_guillemets_ne_referme_pas_la_chaine_du_document() {
+        let pr = provider("lulu").unwrap();
+        let mut l = livre();
+        l.titre = "Le \"quai\"\nnord".into();
+        l.auteur = "Ivan \"Pjig\"".into();
+        let s = source(
+            &l,
+            &Interieur::default(),
+            pr,
+            &Reglage {
+                gouttiere: 25.0,
+                blanche: false,
+            },
+            &[],
+            None,
+        );
+        let doc = s
+            .lines()
+            .find(|l| l.starts_with("#set document"))
+            .expect("ligne #set document");
+        assert_eq!(
+            doc,
+            r#"#set document(title: "Le \"quai\"\nnord", author: "Ivan \"Pjig\"")"#
+        );
+        let entete = s.lines().next().expect("ligne de commentaire");
+        assert!(
+            entete.starts_with("// Intérieur") && entete.contains(r"quai\"),
+            "commentaire d'en-tête coupé par le titre : {entete}"
+        );
     }
 
     /// Une police que Typst ne connaît pas ne lève aucune erreur à la composition : il

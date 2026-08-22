@@ -44,6 +44,29 @@ pub fn echappe(s: &str) -> String {
     out
 }
 
+/// Texte brut → contenu d'une chaîne Typst, entre guillemets droits.
+///
+/// Rien à voir avec [`echappe`], qui protège le *markup* : ici le texte n'est pas
+/// composé, il est cité — `#set document(title: "…")` et la ligne de commentaire qui
+/// ouvre chaque source. Le `#` y est un caractère comme un autre, mais le `"` referme
+/// la chaîne et le saut de ligne fait sortir du commentaire ce qui le suit.
+///
+/// Les sauts de ligne deviennent la séquence `\n`, pas un espace : la chaîne dit
+/// toujours le titre entier, et le commentaire tient sur sa ligne.
+pub fn echappe_chaine(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str(r"\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str(r"\n"),
+            '\r' => out.push_str(r"\r"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 /// Texte d'un paragraphe → contenu Typst. L'emphase est restituée après échappement,
 /// jamais avant : sinon les `*` du texte deviendraient des marqueurs.
 pub fn inline(s: &str) -> String {
@@ -201,6 +224,19 @@ fn entete(reste: &str, no: usize) -> Result<Chapitre, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// La contre-oblique était sauve par accident : `echappe` la doublait pour le
+    /// markup, et la chaîne s'en trouvait bien. Cité, le titre ne passe plus par lui —
+    /// une contre-oblique laissée nue ouvrirait une séquence d'échappement, et le `\n`
+    /// qu'un titre porte en toutes lettres deviendrait un vrai saut de ligne.
+    #[test]
+    fn une_contre_oblique_citee_reste_doublee() {
+        assert_eq!(echappe_chaine(r"Le quai \ nord"), r"Le quai \\ nord");
+        assert_eq!(echappe_chaine("quai\r\nnord"), r"quai\r\nnord");
+        // Le `#` ouvre une expression en markup, jamais dans une chaîne : l'échapper
+        // ici l'imprimerait dans les métadonnées du PDF.
+        assert_eq!(echappe_chaine("Ivan #Pjig"), "Ivan #Pjig");
+    }
 
     #[test]
     fn un_chapitre_numerote_et_titre_est_decoupe() {
