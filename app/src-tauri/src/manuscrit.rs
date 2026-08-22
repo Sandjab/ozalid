@@ -87,11 +87,27 @@ pub fn echappe_chaine(s: &str) -> String {
     out
 }
 
-/// Texte d'un paragraphe → contenu Typst. L'emphase est restituée après échappement,
-/// jamais avant : sinon les `*` du texte deviendraient des marqueurs.
-pub fn inline(s: &str) -> String {
+/// Un morceau de paragraphe : du texte, ou du texte sous emphase.
+///
+/// La coupure du texte est ici, le rendu chez l'appelant : l'intérieur en fait du
+/// markup Typst, l'EPUB des balises XHTML, et les deux ne peuvent plus diverger sur
+/// ce qu'ils ont lu. Le texte porté est **brut** — c'est à chaque sortie de
+/// l'échapper dans son langage, et les deux langages n'ont pas un caractère dangereux
+/// en commun.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Morceau {
+    Brut(String),
+    Emph(String),
+    Fort(String),
+}
+
+/// Texte d'un paragraphe → suite de morceaux.
+///
+/// Les segments bruts consécutifs sont recollés : un paragraphe sans emphase ne fait
+/// qu'un morceau.
+pub fn morceaux(s: &str) -> Vec<Morceau> {
     let chars: Vec<char> = s.chars().collect();
-    let mut out = String::new();
+    let mut out = Vec::new();
     let mut brut = String::new();
     let mut i = 0;
     while i < chars.len() {
@@ -100,11 +116,15 @@ pub fn inline(s: &str) -> String {
         if double || simple {
             let ouvre = if double { 2 } else { 1 };
             if let Some(fin) = ferme(&chars, i + ouvre, ouvre) {
-                out.push_str(&echappe(&brut));
-                brut.clear();
+                if !brut.is_empty() {
+                    out.push(Morceau::Brut(std::mem::take(&mut brut)));
+                }
                 let dedans: String = chars[i + ouvre..fin].iter().collect();
-                let balise = if double { "strong" } else { "emph" };
-                out.push_str(&format!("#{balise}[{}]", echappe(&dedans)));
+                out.push(if double {
+                    Morceau::Fort(dedans)
+                } else {
+                    Morceau::Emph(dedans)
+                });
                 i = fin + ouvre;
                 continue;
             }
@@ -112,8 +132,23 @@ pub fn inline(s: &str) -> String {
         brut.push(chars[i]);
         i += 1;
     }
-    out.push_str(&echappe(&brut));
+    if !brut.is_empty() {
+        out.push(Morceau::Brut(brut));
+    }
     out
+}
+
+/// Texte d'un paragraphe → contenu Typst. L'emphase est restituée après échappement,
+/// jamais avant : sinon les `*` du texte deviendraient des marqueurs.
+pub fn inline(s: &str) -> String {
+    morceaux(s)
+        .into_iter()
+        .map(|m| match m {
+            Morceau::Brut(t) => echappe(&t),
+            Morceau::Emph(t) => format!("#emph[{}]", echappe(&t)),
+            Morceau::Fort(t) => format!("#strong[{}]", echappe(&t)),
+        })
+        .collect()
 }
 
 /// Position du marqueur fermant, à condition qu'il tienne sur la même ligne et que
@@ -244,6 +279,43 @@ fn entete(reste: &str, no: usize) -> Result<Chapitre, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// La coupure de l'emphase est typée pour que l'intérieur et l'EPUB rendent la
+    /// **même** lecture du manuscrit. Ce test est le contrat entre les deux : il dit ce
+    /// qui a été lu, pas ce qui en est fait.
+    #[test]
+    fn l_emphase_est_coupee_en_morceaux_types() {
+        assert_eq!(
+            morceaux("un *mot* et **deux** mots"),
+            vec![
+                Morceau::Brut("un ".into()),
+                Morceau::Emph("mot".into()),
+                Morceau::Brut(" et ".into()),
+                Morceau::Fort("deux".into()),
+                Morceau::Brut(" mots".into()),
+            ]
+        );
+    }
+
+    /// Une astérisque qui ne ferme pas reste un caractère du texte : c'est ce que fait
+    /// `inline` depuis toujours, et le passage par `morceaux` ne doit pas le changer.
+    #[test]
+    fn une_asterisque_isolee_reste_du_texte_brut() {
+        assert_eq!(
+            morceaux("3 * 4 = 12"),
+            vec![Morceau::Brut("3 * 4 = 12".into())]
+        );
+    }
+
+    /// Un manuscrit sans emphase ne produit qu'un morceau : les segments bruts se
+    /// recollent au lieu de sortir caractère par caractère.
+    #[test]
+    fn le_texte_sans_emphase_ne_fait_qu_un_morceau() {
+        assert_eq!(
+            morceaux("rien à signaler"),
+            vec![Morceau::Brut("rien à signaler".into())]
+        );
+    }
 
     /// La contre-oblique était sauve par accident : `echappe` la doublait pour le
     /// markup, et la chaîne s'en trouvait bien. Cité, le titre ne passe plus par lui —
