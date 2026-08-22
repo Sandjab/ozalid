@@ -122,10 +122,11 @@ police. La boîte de ligne vaut 1 em par construction (`top-edge: 0.75em, bottom
 -0.25em`, README « pièges connus »), donc une ligne complète vaut `1em + lead`.
 
 Deux espacements faibles adjacents fusionnent en gardant le plus grand, et
-`par.spacing` vaut déjà `lead` : la valeur à poser est donc `1em + 2 × lead` pour
-obtenir une ligne vide franche. **Cette valeur est à confirmer par mesure sur le PDF
-composé, pas par ce raisonnement** — si Typst additionne au lieu de fusionner, elle
-change, et c'est la mesure qui tranche.
+`par.spacing` vaut déjà `lead` : la valeur posée est donc `1em + lead * 2`.
+
+**Relevé sur PDF le 22/08**, et non déduit : à 150 dpi, l'écart entre deux lignes vaut
+28 px et celui que le blanc ouvre en vaut 57 — une ligne sautée exactement. Typst
+fusionne bien ; s'il avait additionné, l'écart aurait été de 63 px.
 
 ## 4. L'épreuve
 
