@@ -11,6 +11,7 @@
 //! ruptures de scène, son œil.
 
 use crate::manuscrit::{self, Bloc, Chapitre, Morceau};
+use std::time::SystemTime;
 
 /// Texte brut → contenu XML.
 ///
@@ -140,6 +141,44 @@ pub fn faces(noms: &[String]) -> Option<Faces> {
         romain: choisir(false)?,
         italique: choisir(true),
     })
+}
+
+/// `SystemTime` → date ISO 8601 en UTC, à la seconde, telle qu'EPUB 3 l'exige pour
+/// `dcterms:modified`.
+///
+/// Écrit à la main plutôt que tiré d'une crate : c'est le seul endroit du projet qui
+/// ait besoin d'une date, et l'algorithme tient en dix lignes. Une horloge d'avant
+/// 1970 rendrait l'époque — un EPUB daté de 1970 se voit, un `unwrap` sur une machine
+/// mal réglée ferait perdre un livre.
+pub fn horodatage(t: SystemTime) -> String {
+    let s = t
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0) as i64;
+    let (a, m, j) = civil(s.div_euclid(86_400));
+    let reste = s.rem_euclid(86_400);
+    format!(
+        "{a:04}-{m:02}-{j:02}T{:02}:{:02}:{:02}Z",
+        reste / 3600,
+        (reste % 3600) / 60,
+        reste % 60
+    )
+}
+
+/// Jours depuis 1970-01-01 → (année, mois, jour), par l'algorithme de Howard Hinnant.
+/// Il place mars en tête d'année, ce qui range le 29 février en fin de cycle et évite
+/// tout cas particulier de bissextile.
+fn civil(z: i64) -> (i64, u32, u32) {
+    let z = z + 719_468;
+    let ere = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let an = yoe + ere * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let jour = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let mois = (if mp < 10 { mp + 3 } else { mp - 9 }) as u32;
+    (if mois <= 2 { an + 1 } else { an }, mois, jour)
 }
 
 #[cfg(test)]
@@ -301,5 +340,19 @@ mod tests {
     #[test]
     fn sans_fichier_il_n_y_a_pas_de_face() {
         assert!(faces(&[]).is_none());
+    }
+
+    use std::time::Duration;
+
+    /// EPUB 3 exige un `dcterms:modified` en ISO 8601 UTC à la seconde. Les trois valeurs
+    /// ci-dessous ont été relevées avec `date -u -r <secondes>` : l'époque, une date
+    /// quelconque, et le 29 février d'une année bissextile — le seul cas où un calcul de
+    /// calendrier écrit à la main se trompe sans qu'on s'en aperçoive.
+    #[test]
+    fn l_horodatage_suit_le_calendrier_annees_bissextiles_comprises() {
+        let t = |s: u64| SystemTime::UNIX_EPOCH + Duration::from_secs(s);
+        assert_eq!(horodatage(t(0)), "1970-01-01T00:00:00Z");
+        assert_eq!(horodatage(t(1_755_000_000)), "2025-08-12T12:00:00Z");
+        assert_eq!(horodatage(t(1_709_164_800)), "2024-02-29T00:00:00Z");
     }
 }
