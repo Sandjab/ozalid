@@ -374,7 +374,9 @@ pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Piece>, String> {
     // Le dernier chapitre du manuscrit n'a pas de « ## » suivant pour déclencher
     // l'élagage : il faut le faire une dernière fois en sortie de boucle.
     elague_rupture_finale(pieces.last_mut());
-    if pieces.is_empty() {
+    // Le compte, pas le vide : depuis que le manuscrit sait lire des pièces, un fichier
+    // réduit à « ## Préface » n'est plus vide sans porter pour autant un seul chapitre.
+    if !pieces.iter().any(|p| p.est_chapitre()) {
         return Err("aucun chapitre trouvé (attendu : « ## NN - Titre »).".into());
     }
     if let Some(n) = attendu {
@@ -692,6 +694,15 @@ mod tests {
         assert_eq!(p[0].sorte, Sorte::Liminaire);
         assert_eq!(p[1].sorte, Sorte::Liminaire);
         assert_eq!(p[2].sorte, Sorte::Chapitre(1));
+    }
+
+    /// Un livre est fait de chapitres : une préface toute seule n'en est pas un. Avant
+    /// que le manuscrit sache lire des pièces, un tel fichier échouait faute de
+    /// « ## NN - Titre » ; il ne doit pas passer du seul fait qu'un mot-clé est reconnu.
+    #[test]
+    fn un_manuscrit_sans_le_moindre_chapitre_est_refuse() {
+        let err = decoupe("## Préface\n\nEntrez.\n", None).unwrap_err();
+        assert!(err.contains("aucun chapitre trouvé"), "{err}");
     }
 
     /// L'échappement passe avant l'emphase : un `#` du texte ne doit pas ouvrir une
