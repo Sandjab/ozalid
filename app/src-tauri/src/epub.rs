@@ -456,12 +456,77 @@ p.scene {{ text-align: center; text-indent: 0; margin: 1em 0; word-spacing: 0.5e
 /// Tiré du titre et de l'auteur, non d'un tirage au sort : deux générations du même
 /// livre doivent porter le même identifiant, sans quoi une liseuse y verrait deux
 /// ouvrages et garderait les deux. `envoi::assaini` est déjà la fonction du projet qui
-/// décide ce qu'un titre devient quand il sert de nom.
+/// décide ce qu'un titre devient quand il sert de nom — mais elle garde l'espace,
+/// légitime dans un nom de fichier ; ici l'identifiant tient dans un attribut XML, où
+/// un espace serait plus difficile à relire, donc il devient un tiret.
 fn identifiant(livre: &Livre) -> String {
     format!(
         "urn:ozalid:{}-{}",
-        crate::envoi::assaini(livre.titre),
-        crate::envoi::assaini(livre.auteur)
+        crate::envoi::assaini(livre.titre).replace(' ', "-"),
+        crate::envoi::assaini(livre.auteur).replace(' ', "-")
+    )
+}
+
+/// Nom de fichier → `id` XML.
+///
+/// Un `id` ne peut ni commencer par un chiffre ni porter de barre oblique ou de point ;
+/// un nom de fichier peut les trois. Le préfixe règle le chiffre, la substitution
+/// règle le reste, et la bijection tient parce que deux entrées ne portent jamais le
+/// même nom.
+fn id_de(nom: &str) -> String {
+    let corps: String = nom
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    format!("f-{corps}")
+}
+
+/// Le manifeste et le fil de lecture, dérivés de l'inventaire.
+///
+/// `content.opf` ne se manifeste pas lui-même : c'est lui qui décrit les autres, et la
+/// spec de l'EPUB le désigne par `META-INF/container.xml`.
+fn opf(livre: &Livre, entrees: &[Entree], modifie: &str) -> String {
+    let mut manifeste = String::new();
+    for e in entrees {
+        let props = match e.proprietes {
+            Some(p) => format!(" properties=\"{p}\""),
+            None => String::new(),
+        };
+        manifeste.push_str(&format!(
+            "<item id=\"{}\" href=\"{}\" media-type=\"{}\"{props}/>\n",
+            id_de(&e.nom),
+            e.nom,
+            e.media
+        ));
+    }
+    let mut fil = String::new();
+    for e in entrees.iter().filter(|e| e.spine) {
+        fil.push_str(&format!("<itemref idref=\"{}\"/>\n", id_de(&e.nom)));
+    }
+    format!(
+        r#"<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id" xml:lang="fr">
+<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+<dc:identifier id="pub-id">{ident}</dc:identifier>
+<dc:title>{titre}</dc:title>
+<dc:creator>{auteur}</dc:creator>
+<dc:language>fr</dc:language>
+<dc:rights>{droits}</dc:rights>
+<meta property="dcterms:modified">{modifie}</meta>
+<meta name="cover" content="{cover}"/>
+</metadata>
+<manifest>
+{manifeste}</manifest>
+<spine toc="{ncx}">
+{fil}</spine>
+</package>
+"#,
+        ident = echappe(&identifiant(livre)),
+        titre = echappe(livre.titre),
+        auteur = echappe(livre.auteur),
+        droits = echappe(&livre.copyright.replace('\n', " ")),
+        cover = id_de("images/couverture.png"),
+        ncx = id_de("toc.ncx"),
     )
 }
 
@@ -768,5 +833,75 @@ mod tests {
         l.dedicace = None;
         let sans = contenu(&l, &ch, b"\x89PNG", None);
         assert!(!lim(&sans).contains("dedicace"), "{}", lim(&sans));
+    }
+
+    /// Le manifeste porte exactement les entrées de l'inventaire, et le fil de lecture ne
+    /// renvoie qu'à des `id` du manifeste. Un `idref` orphelin fait rejeter l'archive.
+    #[test]
+    fn le_manifeste_porte_l_inventaire_et_le_fil_n_y_renvoie_que_des_id() {
+        let ch = chapitres_temoins();
+        let e = contenu(&livre_temoin(), &ch, b"\x89PNG", None);
+        let x = opf(&livre_temoin(), &e, "2026-08-22T10:00:00Z");
+        for entree in &e {
+            assert!(
+                x.contains(&format!("href=\"{}\"", entree.nom)),
+                "{} n'est pas manifesté : {x}",
+                entree.nom
+            );
+        }
+        for entree in e.iter().filter(|x| x.spine) {
+            assert!(
+                x.contains(&format!("idref=\"{}\"", id_de(&entree.nom))),
+                "{} n'est pas dans le fil : {x}",
+                entree.nom
+            );
+        }
+        // Le fil ne porte que des pages : ni le CSS, ni le PNG, ni le `nav`.
+        assert!(
+            !x.contains(&format!("idref=\"{}\"", id_de("style.css"))),
+            "{x}"
+        );
+        assert!(
+            !x.contains(&format!("idref=\"{}\"", id_de("nav.xhtml"))),
+            "{x}"
+        );
+    }
+
+    /// Les métadonnées qu'EPUB 3 exige, plus celle que les liseuses anciennes lisent pour
+    /// afficher une vignette.
+    #[test]
+    fn les_metadonnees_disent_le_livre_et_sa_couverture() {
+        let ch = chapitres_temoins();
+        let e = contenu(&livre_temoin(), &ch, b"\x89PNG", None);
+        let x = opf(&livre_temoin(), &e, "2026-08-22T10:00:00Z");
+        assert!(x.contains("<dc:title>Les Heures creuses</dc:title>"), "{x}");
+        assert!(x.contains("<dc:creator>Ivan Pjig</dc:creator>"), "{x}");
+        assert!(x.contains("<dc:language>fr</dc:language>"), "{x}");
+        assert!(x.contains("urn:ozalid:Les-Heures-creuses-Ivan-Pjig"), "{x}");
+        assert!(
+            x.contains(r#"<meta property="dcterms:modified">2026-08-22T10:00:00Z</meta>"#),
+            "{x}"
+        );
+        // La vignette, deux fois : `properties` pour EPUB 3, `meta name` pour le reste.
+        assert!(x.contains(r#"properties="cover-image""#), "{x}");
+        assert!(
+            x.contains(&format!(
+                r#"<meta name="cover" content="{}"/>"#,
+                id_de("images/couverture.png")
+            )),
+            "{x}"
+        );
+    }
+
+    /// Un `id` XML ne peut ni commencer par un chiffre ni porter de barre oblique ou de
+    /// point. Un nom de fichier, si.
+    #[test]
+    fn un_nom_de_fichier_devient_un_id_xml_valide() {
+        assert_eq!(id_de("images/couverture.png"), "f-images-couverture-png");
+        assert_eq!(id_de("ch001.xhtml"), "f-ch001-xhtml");
+        assert_eq!(
+            id_de("fonts/Cardo-Regular.ttf"),
+            "f-fonts-Cardo-Regular-ttf"
+        );
     }
 }
