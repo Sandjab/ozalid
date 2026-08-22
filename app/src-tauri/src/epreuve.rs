@@ -2,30 +2,18 @@
 //!
 //! Ce n'est **pas** une simulation du livre imprimé, et elle ne le prétend pas : A4
 //! recto, fer à gauche, large marge à droite, numéros de ligne. C'est un document de
-//! travail sur le texte. C'est aussi ce qui l'autorise à composer les ruptures de
-//! scène que l'intérieur perd encore.
+//! travail sur le texte.
+//!
+//! Les ruptures de scène s'y composent avec la même marque que dans le livre —
+//! `manuscrit::SCENE` — pour que ce qu'on relit soit ce qui s'imprime ; seul l'espace
+//! autour diffère, réglé ici en mm puisque l'épreuve n'a qu'un format.
 //!
 //! Aucun `Provider` n'entre ici, et aucune convergence : une épreuve ne va chez
 //! personne, et son compte de pages n'intéresse personne.
 
 use crate::interieur::Interieur;
-use crate::manuscrit::{echappe, echappe_chaine, inline, Bloc, Chapitre};
+use crate::manuscrit::{echappe, echappe_chaine, inline, Bloc, Chapitre, SCENE};
 use crate::projet::Livre;
-
-/// Marque de rupture de scène : trois astérisques espacées.
-///
-/// Un blanc seul ne survit pas à une fin de page, il faut donc un signe visible. Mais
-/// ce signe doit exister dans les **sept** polices de `POLICES_TEXTE`, sinon Typst le
-/// compose par repli sur une autre police, sans un mot — le mécanisme même contre
-/// lequel `Interieur::verifie` a été posé, et qui ne se verrait qu'après tirage.
-///
-/// Relevé sur les 29 fichiers de `fonts/` : `✳` (U+2733) et l'astérisme `⁂` (U+2042)
-/// ne sont portés que par Cardo ; l'astérisque `*` (U+002A) est dans les 29. La marque
-/// suit donc le caractère du livre au lieu de le trahir, et le jour où Cardo quitterait
-/// `polices.sh` rien ne bougera.
-///
-/// Les `\*` sont échappés : en markup Typst, `*` ouvre une emphase.
-pub const SCENE: &str = r"\*#h(0.8em)\*#h(0.8em)\*";
 
 /// Format de la page, en mm. La marge de droite est celle où l'on écrit.
 const MARGE_HAUT: f64 = 25.0;

@@ -13,12 +13,32 @@
 ///
 /// Une rupture de scène n'est ni un paragraphe vide ni de la mise en page : c'est une
 /// coupure que l'auteur a écrite. Elle est typée pour que chaque composition décide
-/// quoi en faire — l'épreuve la rend, l'intérieur ne la rend pas encore.
+/// quoi en faire — l'épreuve et l'intérieur la rendent tous deux, chacun avec son
+/// espace autour de la même marque.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Bloc {
     Paragraphe(String),
     Scene,
 }
+
+/// Marque de rupture de scène : trois astérisques espacées.
+///
+/// Un blanc seul ne survit pas à une fin de page, il faut donc un signe visible. Mais
+/// ce signe doit exister dans les **sept** polices de `POLICES_TEXTE`, sinon Typst le
+/// compose par repli sur une autre police, sans un mot — le mécanisme même contre
+/// lequel `Interieur::verifie` a été posé, et qui ne se verrait qu'après tirage.
+///
+/// Relevé sur les 29 fichiers de `fonts/` : `✳` (U+2733) et l'astérisme `⁂` (U+2042)
+/// ne sont portés que par Cardo ; l'astérisque `*` (U+002A) est dans les 29. La marque
+/// suit donc le caractère du livre au lieu de le trahir, et le jour où Cardo quitterait
+/// `polices.sh` rien ne bougera.
+///
+/// Elle vit ici, à côté du bloc qu'elle rend, parce que l'épreuve et le livre la
+/// composent tous deux : ce qu'on relit doit être ce qui s'imprime. Ce qui les sépare
+/// est l'espace autour, que chacun règle à sa page.
+///
+/// Les `\*` sont échappés : en markup Typst, `*` ouvre une emphase.
+pub const SCENE: &str = r"\*#h(0.8em)\*#h(0.8em)\*";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Chapitre {

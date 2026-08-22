@@ -10,7 +10,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::manuscrit::{echappe, echappe_chaine, inline, Bloc, Chapitre};
+use crate::manuscrit::{echappe, echappe_chaine, inline, Bloc, Chapitre, SCENE};
 use crate::projet::Livre;
 use crate::providers::Provider;
 use crate::typst::MARQUEUR;
@@ -213,13 +213,24 @@ pub fn source(
             ));
         }
         s.push_str("#v(11mm)\n");
-        // Les ruptures de scène sont ignorées ici : le livre imprimé les perd, dette
-        // consignée dans NOTES.md. Les corriger déplacerait le compte de pages de tous
-        // les livres déjà composés, ce qui mérite son propre passage.
         for b in &ch.blocs {
-            let Bloc::Paragraphe(p) = b else { continue };
-            s.push_str(&inline(p));
-            s.push_str("\n\n");
+            match b {
+                Bloc::Paragraphe(p) => {
+                    s.push_str(&inline(p));
+                    s.push_str("\n\n");
+                }
+                // Le blanc est en em, non en mm : il suit le corps du prestataire comme
+                // l'interligne, là où l'épreuve, qui n'a qu'un format, se règle en mm.
+                // Il s'ajoute à l'espace de paragraphe, de part et d'autre — une rupture
+                // se voit d'un coup d'œil sur la page, sans la trouer.
+                //
+                // Le paragraphe qui suit garde son alinéa, comme après n'importe quel
+                // blanc : relevé sur la page composée, pas déduit. La marque le rend
+                // sans conséquence — c'est elle qui dit la coupure, pas le retrait.
+                Bloc::Scene => {
+                    s.push_str(&format!("#v(1em)\n#align(center)[{SCENE}]\n#v(1em)\n\n"))
+                }
+            }
         }
     }
 
@@ -591,11 +602,14 @@ mod tests {
         assert!(s.contains(r#"font: "Cardo""#), "police du projet ignorée");
     }
 
-    /// L'intérieur ignore les ruptures de scène — c'est la dette consignée dans la
-    /// spec. Le test la fige : le jour où on la corrigera, il tombera, et il faudra
-    /// alors relever le nouveau compte de pages sciemment.
+    /// La rupture que l'auteur a écrite s'imprime. Elle a longtemps été perdue —
+    /// deux scènes se composaient collées, en alinéas consécutifs — et le test qui
+    /// figeait cette dette est celui-ci, retourné : ce qui était « à l'identique »
+    /// exige désormais une différence, et la marque.
+    ///
+    /// La même que l'épreuve compose, pour que ce qu'on relit soit ce qui s'imprime.
     #[test]
-    fn l_interieur_compose_a_l_identique_avec_ou_sans_rupture_de_scene() {
+    fn une_rupture_de_scene_s_imprime() {
         let pr = provider("lulu").unwrap();
         let r = Reglage {
             gouttiere: 25.0,
@@ -619,11 +633,13 @@ mod tests {
                 Bloc::Paragraphe("Après.".into()),
             ],
         }];
-        assert_eq!(
+        let s = source(&livre(), &int, pr, &r, &avec, None);
+        assert_ne!(
             source(&livre(), &int, pr, &r, &sans, None),
-            source(&livre(), &int, pr, &r, &avec, None),
-            "la rupture de scène a changé l'intérieur"
+            s,
+            "la rupture de scène est encore perdue"
         );
+        assert!(s.contains(SCENE), "marque de rupture absente");
     }
 
     /// Le premier chapitre suit déjà le saut de page du copyright : un saut de plus
