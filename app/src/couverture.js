@@ -443,7 +443,24 @@ function poserApercu(a) {
   if (a) img.src = a.image;
   else img.removeAttribute('src');
   img.hidden = !a;
+  // Le rapport d'aspect s'en va avec l'image : il dimensionne le cadre, qui garderait
+  // sinon sa place, vide, entre la scène et le message qui dit qu'il n'y a rien à voir.
+  if (!a) $('cadreApercu').style.removeProperty('--ratio');
   poserCoupe(a?.coupe ?? null);
+}
+
+/**
+ * Donne au cadre le rapport d'aspect de l'image qu'il vient de recevoir.
+ *
+ * C'est ce qui lui donne une taille : sans lui, le cadre se dimensionnerait sur une
+ * image elle-même bornée en pourcentage du cadre, et le navigateur tranche ce cycle à
+ * zéro — mesuré, cadre et image à 0 × 0 dans une scène de 620 × 345. Le rapport ne se
+ * connaît qu'une fois l'image décodée, d'où l'écoute du chargement.
+ */
+function poserRatio() {
+  const img = $('apercu');
+  if (!img.naturalHeight) return;
+  $('cadreApercu').style.setProperty('--ratio', String(img.naturalWidth / img.naturalHeight));
 }
 
 /**

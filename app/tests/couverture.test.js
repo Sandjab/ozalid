@@ -509,3 +509,38 @@ test('un aperçu qui échoue emporte l\'habillage avec l\'image', async () => {
   await attendreApercu();
   assert.strictEqual(els.get('coupe').hidden, true, 'habillage laissé seul à l\'écran');
 });
+
+/**
+ * Le rapport d'aspect est ce qui donne au cadre sa taille : sans lui, il se
+ * dimensionnerait sur une image elle-même bornée en pourcentage de ce cadre, et le
+ * navigateur tranche ce cycle à zéro — mesuré, cadre et image à 0 × 0 dans une scène de
+ * 620 × 345. Le retirer ne casse aucun autre test : l'aperçu disparaîtrait sans un mot.
+ */
+test('le cadre prend le rapport d\'aspect de l\'image décodée', async () => {
+  const { els } = await ouvre(maquette());
+  await attendreApercu();
+  const img = els.get('apercu');
+  // Une planche Lulu : 235,35 mm de large pour 181,35 de haut, à 150 ppi.
+  img.naturalWidth = 1390;
+  img.naturalHeight = 1071;
+  await img.declenche('load');
+  assert.strictEqual(
+    els.get('cadreApercu').style.getPropertyValue('--ratio'), String(1390 / 1071)
+  );
+});
+
+/**
+ * Un cadre qui garderait son rapport d'aspect sans image garderait sa place, vide, et
+ * pousserait plus bas le message qui dit justement qu'il n'y a rien à voir.
+ */
+test('l\'aperçu retiré emporte le rapport d\'aspect du cadre', async () => {
+  const { els } = await ouvre(maquette(), {
+    couverture_apercu: () => {
+      throw 'prolongement panoramique : la largeur du dos est inconnue';
+    },
+  });
+  const cadre = els.get('cadreApercu');
+  cadre.style.setProperty('--ratio', '1.29');
+  await attendreApercu();
+  assert.strictEqual(cadre.style.getPropertyValue('--ratio'), '');
+});

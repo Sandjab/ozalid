@@ -27,6 +27,7 @@ class El {
     this.style = {
       setProperty: (nom, valeur) => proprietes.set(nom, String(valeur)),
       getPropertyValue: (nom) => proprietes.get(nom) ?? '',
+      removeProperty: (nom) => proprietes.delete(nom),
     };
     this._id = undefined;
     this._registre = null;

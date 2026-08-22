@@ -557,6 +557,62 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
   box-shadow: 0 8px 20px -8px rgba(0, 0, 0, .4);
 }
 
+/* Le cadre de l'aperçu : il n'a pas d'apparence, il n'existe que pour donner à
+   l'habillage exactement la boîte de l'image.
+   Il se dimensionne par son rapport d'aspect, et l'image le remplit — l'inverse ne
+   tient pas debout : une image bornée en pourcentage de son propre cadre attend une
+   taille que le cadre attend d'elle, et le navigateur tranche ce cycle à zéro. Mesuré :
+   cadre et image à 0 × 0 dans une scène de 620 × 345.
+   `--ratio` est posé par `poserRatio` une fois l'image décodée, et retiré avec elle :
+   un cadre sans image garderait sinon sa place, vide, et pousserait plus bas le message
+   qui dit justement qu'il n'y a rien à voir. */
+.cadre {
+  position: relative;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: var(--ratio);
+}
+
+.cadre .apercu { width: 100%; height: 100%; }
+
+/* Le dos couché prend toute la largeur ; son cadre aussi, sans quoi l'image y serait
+   à nouveau dimensionnée par sa hauteur. */
+.couv[data-face="dos"] .cadre { width: 100%; }
+
+/* La bande que le massicot emporte, et la ligne de coupe.
+   Les deux ensemble, et pas l'un ou l'autre : sur une couverture claire le voile ne se
+   voit presque pas et le trait reste ; sur une photo sombre à fond perdu le trait se
+   perd dans le motif et le voile reste.
+   Le voile est fait de quatre fonds et non d'une ombre étalée sous un `overflow`
+   caché : l'aperçu porte une ombre portée que ce découpage emporterait, et la
+   couverture paraîtrait posée à plat. Les bandes latérales s'arrêtent au-dessus et
+   au-dessous des horizontales — deux voiles superposés assombriraient les quatre coins,
+   et ces coins-là sont justement ce qu'on regarde.
+   Les deux fractions viennent du Rust, posées par `poserCoupe`. */
+.coupe {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  --voile: rgba(255, 255, 255, .5);
+  background:
+    linear-gradient(var(--voile) 0 0) 0 0 / 100% calc(var(--coupe-y) * 100%),
+    linear-gradient(var(--voile) 0 0) 0 100% / 100% calc(var(--coupe-y) * 100%),
+    linear-gradient(var(--voile) 0 0) 0 50%
+      / calc(var(--coupe-x) * 100%) calc(100% - var(--coupe-y) * 200%),
+    linear-gradient(var(--voile) 0 0) 100% 50%
+      / calc(var(--coupe-x) * 100%) calc(100% - var(--coupe-y) * 200%);
+  background-repeat: no-repeat;
+}
+
+/* La ligne de coupe elle-même, sur le rectangle rogné. En pseudo-élément : elle n'a
+   rien à dire au balisage, et l'habillage reste un seul nœud. */
+.coupe::after {
+  content: '';
+  position: absolute;
+  inset: calc(var(--coupe-y) * 100%) calc(var(--coupe-x) * 100%);
+  border: 1px dashed rgba(0, 0, 0, .6);
+}
+
 /* La seule zone défilante de l'application, et elle défile sur la hauteur de la
    fenêtre — plus sur un `max-height` en rem qui ignorait l'écran qu'on a. */
 .reglages {
