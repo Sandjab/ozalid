@@ -169,9 +169,27 @@ préface, appliquée des deux côtés.
 
 ### Pages de partie
 
-Le dispositif de la dédicace (`interieur.rs:365`) : recto puis blanche. Le folio étant
-actif dans le corps, les deux pages passent par `#page(footer: none)`, comme la blanche
-de fin (`interieur.rs:246`) :
+Recto puis blanche, comme la dédicace (`interieur.rs:365`) — mais le dispositif de la
+dédicace ne suffit pas ici, et c'est le piège du chantier. Deux `#page` d'affilée
+garantissent le **verso blanc**, jamais le **recto** : la dédicace ne tombe juste que
+parce que sa parité est déterministe (quatre pages liminaires avant elle). Au milieu du
+corps, la parité suit la longueur du chapitre précédent, donc un texte que l'auteur
+retouche — trois paragraphes ajoutés et l'ouverture de partie paraît au verso, sa
+blanche au recto, le dispositif exactement à l'envers. Le compte de pages ne le dit pas
+(les deux cas coûtent deux pages), et cela ne se découvrirait qu'après tirage.
+
+La partie est donc calée sur une belle page. Pas par `#pagebreak(to: "odd")` : la page
+qu'il insère hérite du folio du corps, et une page entièrement vide portant son numéro
+au milieu du livre se remarque. La blanche de calage est posée à la main, muette, selon
+la parité de la page en cours — la partie ouvrant la suivante, c'est une page **impaire**
+en cours qui appelle une blanche :
+
+```
+#context if calc.odd(here().page()) { page(footer: none)[] }
+```
+
+Le folio étant actif dans le corps, les deux pages de la partie passent elles aussi par
+`#page(footer: none)`, comme la blanche de fin (`interieur.rs:246`) :
 
 ```
 #page(footer: none)[
@@ -191,6 +209,11 @@ tandis que la boucle des chapitres pose un `#pagebreak()` avant chaque chapitre 
 du premier (`interieur.rs:209`). Enchaînés tels quels, ils produiraient une page blanche
 de trop après chaque partie. Le compte de pages tranche, pas le raisonnement : il se
 vérifie sur un manuscrit d'essai portant une partie.
+
+**Et le calage de parité ne se vérifie pas au compte de pages** : les deux parités
+coûtent le même nombre de pages. Il se vérifie en composant une partie à plusieurs
+positions et en relevant sur quelle page elle tombe — relevé au chapitre 2, 3 et 4 du
+manuscrit témoin : pages 9, 11, 13, toutes impaires, chaque blanche de calage muette.
 
 ## 4. L'épreuve
 
