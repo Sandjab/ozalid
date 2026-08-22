@@ -10,6 +10,13 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-22-fond-perdu-visible-design.md`
 
+> **Exécuté le 22/08, avec un écart à la tâche 5.** Le cadre décrit ici — un `flex` qui
+> reprend les contraintes de l'image — se dimensionne à 0 × 0 : l'image se borne en
+> pourcentage de son cadre, le cadre attend sa taille de l'image, et le navigateur
+> tranche le cycle. Mesuré au navigateur, puis corrigé par un rapport d'aspect posé
+> depuis l'image décodée. **C'est la spec, mise à jour, qui fait foi**, pas la tâche 5
+> ci-dessous, laissée telle qu'elle a été écrite.
+
 **Toutes les commandes de ce plan partent de `app/` ou de `app/src-tauri/`, jamais de la racine.**
 
 ---
