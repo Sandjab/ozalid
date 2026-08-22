@@ -73,6 +73,20 @@ impl Gabarit {
         self.format.1 + 2.0 * self.fond_perdu
     }
 
+    /// La part que le fond perdu prend sur la largeur et sur la hauteur de la planche,
+    /// en fraction de celle-ci.
+    ///
+    /// C'est la mesure dont l'aperçu a besoin pour marquer la coupe sur une image qu'il
+    /// affiche à une taille quelconque : les millimètres n'y survivent pas, les
+    /// proportions oui. Deux fractions et non une : une planche est bien plus large que
+    /// haute, et le même fond perdu n'y pèse pas pareil.
+    pub fn part_fond_perdu(&self) -> (f64, f64) {
+        (
+            self.fond_perdu / self.largeur(),
+            self.fond_perdu / self.hauteur(),
+        )
+    }
+
     /// Abscisse du pli côté 4ème, depuis le bord extérieur gauche.
     fn pli(&self) -> f64 {
         self.fond_perdu + self.format.0
@@ -462,6 +476,35 @@ mod tests {
         assert_eq!(g.fond_perdu, 5.0);
         assert!((g.largeur() - 246.8).abs() < 0.01, "{}", g.largeur());
         assert!((g.hauteur() - 180.0).abs() < 0.01, "{}", g.hauteur());
+    }
+
+    /// L'aperçu marque la coupe en pourcentage de l'image qu'il habille : c'est une
+    /// fraction, pas des millimètres, et il en faut **deux**. Une planche fait près de
+    /// 250 mm de large pour 180 de haut ; la même fraction sur les deux dimensions
+    /// marquerait la coupe à côté d'elle-même.
+    #[test]
+    fn la_part_du_fond_perdu_differe_en_largeur_et_en_hauteur() {
+        let g = gabarit("tbe-110x170", 280);
+        let (x, y) = g.part_fond_perdu();
+        assert!((x - 5.0 / 246.8).abs() < 1e-6, "part en largeur : {x}");
+        assert!((y - 5.0 / 180.0).abs() < 1e-6, "part en hauteur : {y}");
+        assert!(
+            x < y,
+            "la planche est plus large que haute : {x} devrait être < {y}"
+        );
+    }
+
+    /// La face Dos compose sur un gabarit à fond perdu nul (voir `source_dos`). Rien à
+    /// y marquer — et surtout pas un trait sur le bord même de l'image, qui se lirait
+    /// comme une coupe à zéro millimètre du texte.
+    #[test]
+    fn un_gabarit_sans_fond_perdu_ne_donne_aucune_part() {
+        let g = Gabarit {
+            format: (108.0, 175.0),
+            dos: 13.0,
+            fond_perdu: 0.0,
+        };
+        assert_eq!(g.part_fond_perdu(), (0.0, 0.0));
     }
 
     /// Chez un prestataire à gabarit, rien ne peut être calculé : l'application doit le
