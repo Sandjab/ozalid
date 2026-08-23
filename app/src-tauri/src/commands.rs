@@ -1817,6 +1817,6 @@ mod tests {
         assert!(l.titre.is_empty());
         assert!(l.auteur.is_empty());
         assert_eq!(l.chapitres, None);
-        assert_eq!(l.titre_page, None);
+        assert_eq!(l.titre_page, "%TITRE%");
     }
 }

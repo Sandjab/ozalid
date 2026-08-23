@@ -500,7 +500,7 @@ mod tests {
     fn livre() -> Livre {
         Livre {
             titre: "Les Heures creuses".into(),
-            titre_page: Some("Les Heures\ncreuses".into()),
+            titre_page: "Les Heures\ncreuses".into(),
             auteur: "Ivan Pjig".into(),
             genre: "roman".into(),
             copyright: "© Ivan Pjig, 2026.\nTous droits réservés.".into(),
@@ -755,7 +755,7 @@ mod tests {
     fn le_titre_de_page_garde_ses_sauts_de_ligne_et_reste_echappe() {
         let pr = provider("lulu").unwrap();
         let mut l = livre();
-        l.titre_page = Some("Les Heures\ncreuses".into());
+        l.titre_page = "Les Heures\ncreuses".into();
         l.auteur = "Ivan #Pjig".into();
         let s = source(
             &l,

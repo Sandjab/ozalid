@@ -384,7 +384,7 @@ function afficherProjet(p) {
     : (p.chemin ? 'enregistré' : 'jamais enregistré');
 
   $('inTitre').value = p.livre.titre;
-  $('inTitrePage').value = p.livre.titre_page ?? '';
+  $('inTitrePage').value = p.livre.titre_page;
   $('inAuteur').value = p.livre.auteur;
   $('inGenre').value = p.livre.genre;
   $('inCopyright').value = p.livre.copyright;
@@ -725,11 +725,10 @@ async function enregistrerSous() {
  */
 function livre() {
   const chap = $('inChapitres').value.trim();
-  const tp = $('inTitrePage').value.trim();
   const ded = $('inDedicace').value;
   return {
     titre: $('inTitre').value.trim(),
-    titre_page: tp === '' ? null : tp,
+    titre_page: $('inTitrePage').value.trim(),
     auteur: $('inAuteur').value.trim(),
     genre: $('inGenre').value.trim() || 'roman',
     copyright: $('inCopyright').value,

@@ -68,9 +68,10 @@ pub fn generer(
         .as_ref()
         .ok_or("aucune maquette de couverture : en choisir une avant de générer les ebooks.")?;
     let chapitres = manuscrit::decoupe(&projet.texte, livre.chapitres)?;
+    let titre_page = livre.titre_page();
     let livre_epub = epub::Livre {
         titre: &livre.titre,
-        titre_page: livre.titre_page(),
+        titre_page: &titre_page,
         auteur: &livre.auteur,
         genre: &livre.genre,
         copyright: &livre.copyright,

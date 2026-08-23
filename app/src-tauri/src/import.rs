@@ -55,7 +55,11 @@ pub fn lire_livre_toml(contenu: &str) -> Result<(Livre, Designations), String> {
     let s = f.livre;
     let livre = Livre {
         titre: s.titre,
-        titre_page: s.titre_page,
+        // Absent du `livre.toml`, il voulait déjà dire « le titre sert » : c'est ce
+        // que le jeton dit désormais, en le montrant.
+        titre_page: s
+            .titre_page
+            .unwrap_or_else(crate::projet::titre_page_defaut),
         auteur: s.auteur,
         genre: s.genre.unwrap_or_else(|| "roman".into()),
         copyright: s.copyright,
@@ -581,7 +585,7 @@ couverture = "in/covers/LHC-Photo.png"
         let p = assemble(
             Livre {
                 titre: "T".into(),
-                titre_page: None,
+                titre_page: crate::projet::titre_page_defaut(),
                 auteur: "A".into(),
                 genre: "roman".into(),
                 copyright: String::new(),
@@ -750,7 +754,7 @@ couverture = "in/covers/LHC-Photo.png"
         let p = assemble(
             Livre {
                 titre: "T".into(),
-                titre_page: None,
+                titre_page: crate::projet::titre_page_defaut(),
                 auteur: "A".into(),
                 genre: "roman".into(),
                 copyright: String::new(),

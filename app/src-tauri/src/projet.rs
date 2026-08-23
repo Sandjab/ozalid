@@ -44,9 +44,13 @@ const ENVOIS: &str = "envois/";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Livre {
     pub titre: String,
-    /// Titre de la page de titre, avec ses sauts de ligne voulus. Absent, le titre sert.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub titre_page: Option<String>,
+    /// Titre de la page de titre, avec ses sauts de ligne voulus.
+    ///
+    /// Vaut `%TITRE%` par défaut, ce qui reproduit l'ancien repli — le titre sert — en
+    /// le rendant visible dans le champ et retouchable. Un `.ozalid` écrit avant le
+    /// jeton reçoit ce défaut ; `VERSION` n'a donc pas à bouger.
+    #[serde(default = "titre_page_defaut")]
+    pub titre_page: String,
     pub auteur: String,
     #[serde(default = "genre_defaut")]
     pub genre: String,
@@ -65,6 +69,10 @@ fn genre_defaut() -> String {
     "roman".into()
 }
 
+pub(crate) fn titre_page_defaut() -> String {
+    "%TITRE%".into()
+}
+
 impl Livre {
     /// Un livre à remplir : tous les champs vides, sauf le genre, dont le défaut
     /// vaut mieux qu'un blanc — et c'est le même défaut que celui d'un `projet.toml`
@@ -72,7 +80,7 @@ impl Livre {
     pub fn vide() -> Self {
         Self {
             titre: String::new(),
-            titre_page: None,
+            titre_page: titre_page_defaut(),
             auteur: String::new(),
             genre: genre_defaut(),
             copyright: String::new(),
@@ -81,9 +89,9 @@ impl Livre {
         }
     }
 
-    /// Titre tel qu'il doit paraître sur la page de titre, sauts de ligne compris.
-    pub fn titre_page(&self) -> &str {
-        self.titre_page.as_deref().unwrap_or(&self.titre)
+    /// Titre tel qu'il doit paraître sur la page de titre, jetons résolus.
+    pub fn titre_page(&self) -> String {
+        crate::gabarit::substituer(&self.titre_page, self)
     }
 
     /// La dédicace, si le livre en porte une qui ne soit pas que du blanc.
@@ -614,10 +622,38 @@ mod tests {
     use super::*;
     use std::io::Cursor;
 
+    /// Le repli d'autrefois — `titre_page` absent, le titre sert — devient un jeton. Un
+    /// `.ozalid` écrit avant ce lot doit donc s'ouvrir avec `%TITRE%` et composer comme
+    /// avant, sans que `VERSION` ait bougé.
+    #[test]
+    fn un_projet_sans_titre_de_page_recoit_le_jeton() {
+        let toml = r#"
+[ozalid]
+version = 2
+
+[livre]
+titre = "Les Heures creuses"
+auteur = "Ivan Pjig"
+"#;
+        let m: Metadonnees = toml::from_str(toml).expect("projet sans titre_page refusé");
+        assert_eq!(m.livre.titre_page, "%TITRE%");
+        assert_eq!(m.livre.titre_page(), "Les Heures creuses");
+    }
+
+    /// Un titre de page saisi à la main, avec ses sauts de ligne voulus, ne doit pas
+    /// être touché par la substitution.
+    #[test]
+    fn un_titre_de_page_ecrit_a_la_main_est_rendu_tel_quel() {
+        let mut l = Livre::vide();
+        l.titre = "Les Heures creuses".into();
+        l.titre_page = "Les Heures\ncreuses".into();
+        assert_eq!(l.titre_page(), "Les Heures\ncreuses");
+    }
+
     fn livre() -> Livre {
         Livre {
             titre: "Les Heures creuses".into(),
-            titre_page: Some("Les Heures\ncreuses".into()),
+            titre_page: "Les Heures\ncreuses".into(),
             auteur: "Ivan Pjig".into(),
             genre: "roman".into(),
             copyright: "© Ivan Pjig, 2026.\nTous droits réservés.".into(),

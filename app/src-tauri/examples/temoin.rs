@@ -40,7 +40,8 @@ fn main() -> Result<(), String> {
 
     let livre = Livre {
         titre: "Candide".into(),
-        titre_page: None,
+        // Le jeton, comme un projet neuf : la page de titre reprend le titre.
+        titre_page: "%TITRE%".into(),
         auteur: "Voltaire".into(),
         genre: "conte philosophique".into(),
         copyright: "Texte du domaine public.".into(),

@@ -168,7 +168,7 @@ mod tests {
     fn livre() -> Livre {
         Livre {
             titre: "Les Heures creuses".into(),
-            titre_page: None,
+            titre_page: crate::projet::titre_page_defaut(),
             auteur: "Ivan Pjig".into(),
             genre: "roman".into(),
             copyright: String::new(),
