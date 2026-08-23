@@ -606,14 +606,24 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
   position: absolute;
   inset: 0;
   pointer-events: none;
-  --voile: rgba(255, 255, 255, .5);
+  /* Le voile est hachuré, et non d'un blanc uni : une bande unie se lit comme une teinte
+     de la couverture — un liseré clair voulu par la maquette — quand des hachures ne se
+     lisent que comme une marque de l'écran.
+     Un trait clair puis un trait sombre, comme les deux filets du pli et pour la même
+     raison : mesuré à l'écran, des hachures blanches sur un papier crème ne se voient
+     pas du tout. Le clair porte sur les couvertures sombres, le sombre sur les claires.
+     Les deux restent légers — ce qui est sous la coupe doit rester jugeable, c'est
+     justement là qu'on vérifie qu'une image porte bien jusqu'au bord. */
+  --voile: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, .5) 0 3px,
+    rgba(0, 0, 0, .12) 3px 6px
+  );
   background:
-    linear-gradient(var(--voile) 0 0) 0 0 / 100% calc(var(--coupe-y) * 100%),
-    linear-gradient(var(--voile) 0 0) 0 100% / 100% calc(var(--coupe-y) * 100%),
-    linear-gradient(var(--voile) 0 0) 0 50%
-      / calc(var(--coupe-x) * 100%) calc(100% - var(--coupe-y) * 200%),
-    linear-gradient(var(--voile) 0 0) 100% 50%
-      / calc(var(--coupe-x) * 100%) calc(100% - var(--coupe-y) * 200%);
+    var(--voile) 0 0 / 100% calc(var(--coupe-y) * 100%),
+    var(--voile) 0 100% / 100% calc(var(--coupe-y) * 100%),
+    var(--voile) 0 50% / calc(var(--coupe-x) * 100%) calc(100% - var(--coupe-y) * 200%),
+    var(--voile) 100% 50% / calc(var(--coupe-x) * 100%) calc(100% - var(--coupe-y) * 200%);
   background-repeat: no-repeat;
 }
 
