@@ -42,24 +42,32 @@ aurait été un trait à un `if` près du fichier d'impression.
 `couverture_apercu` renvoie aujourd'hui une `String` — la data URL du PNG. Il renverra :
 
 ```rust
-/// Ce qu'un aperçu de face donne à voir : l'image, et où la couper s'il y a lieu.
+/// Ce qu'un aperçu de face donne à voir : l'image, et où la planche se coupe et se plie
+/// s'il y a lieu.
 #[derive(Serialize)]
 pub struct Apercu {
     pub image: String,
-    /// Absente sur les faces qui se composent sans fond perdu.
-    pub coupe: Option<Coupe>,
+    /// Absents sur les faces qui se composent sans fond perdu.
+    pub reperes: Option<Reperes>,
 }
 
-/// La part du fond perdu sur chaque dimension de la planche, en fraction de celle-ci.
-/// Les deux diffèrent : une planche est bien plus large que haute.
+/// Où la planche se coupe et où elle se plie, en fraction de ses propres dimensions.
+/// `x` et `y` diffèrent : une planche est bien plus large que haute.
 #[derive(Serialize)]
-pub struct Coupe {
+pub struct Reperes {
     pub x: f64,
     pub y: f64,
+    pub pli_quatre: f64,
+    pub pli_une: f64,
 }
 ```
 
-`coupe` est `None` pour la 1ère, la 4ème et le dos : ces trois faces se composent au
+Les deux plis sont venus après coup, le 23/08 : une maquette dont le dos porte le papier
+des deux faces paraît d'un seul tenant, et c'est précisément celle où le dos se rate. Ils
+voyagent avec la coupe parce qu'ils s'affichent avec elle, sous la même lunette — d'où
+son nom, « Repères », et non « Fond perdu ».
+
+`reperes` est `None` pour la 1ère, la 4ème et le dos : ces trois faces se composent au
 format rogné, sans fond perdu (`source_dos` le dit déjà en toutes lettres). Il n'y a
 donc rien à y marquer — et c'est le Rust qui l'affirme, plutôt que le front qui le
 déduise d'un nom de face.
@@ -97,9 +105,9 @@ C'était le point délicat du chantier, et il ne se voyait qu'à l'écran : aucu
 faux DOM ne mesure une boîte. La garde est donc double — un test qui vérifie que le
 rapport est bien posé et bien retiré, et une vérification au navigateur.
 
-### Un seul élément pour les deux effets
+### Un seul élément pour les trois effets
 
-Un enfant du cadre, `.coupe`, posé sur toute l'image, en `pointer-events: none` :
+Un enfant du cadre, `.reperes`, posé sur toute l'image, en `pointer-events: none` :
 
 - **le voile** est fait de quatre fonds — haut, bas, gauche, droite — dimensionnés en
   pourcentage depuis les deux fractions. Pas d'ombre étalée sous un `overflow: hidden`,
@@ -109,13 +117,18 @@ Un enfant du cadre, `.coupe`, posé sur toute l'image, en `pointer-events: none`
   aux quatre coins — et ces coins-là sont justement ce qu'on regarde.
 - **la ligne de coupe** est un `::after` en `inset` sur le rectangle rogné, bordé d'un
   `1px dashed`. En pseudo-élément : elle n'a rien à dire au balisage.
+- **les deux plis** sont un `::before` portant deux dégradés horizontaux, chacun deux
+  filets accolés — un clair, un sombre — sur toute la hauteur. Leurs positions sont
+  redites en entier à chaque arrêt : un arrêt de dégradé qui recule est ramené au
+  précédent, et deux `0` de suite donneraient une bande de largeur nulle, donc un pli
+  absent sans que rien ne le signale.
 
-Les deux variables sont posées par le JS depuis la `coupe` reçue. La visibilité de
-`.coupe` tient à un `hidden` : pas de `coupe`, ou bascule éteinte, il disparaît.
+Les deux variables sont posées par le JS depuis les `reperes` reçus. La visibilité de
+`.reperes` tient à un `hidden` : pas de `reperes`, ou bascule éteinte, il disparaît.
 
 ### La bascule
 
-Un bouton « Fond perdu » dans la barre `.outils`, à deux états `aria-pressed` — le
+Un bouton « Repères » dans la barre `.outils`, à deux états `aria-pressed` — le
 pattern des boutons de face, pas celui des onglets d'étape. Allumé par défaut, masqué
 hors face Planche, comme les blocs de réglages sans objet.
 
@@ -142,14 +155,16 @@ Rust :
   la largeur plus petite que celle de la hauteur.
 - Un gabarit à fond perdu nul rend `(0.0, 0.0)` — la face n'a alors rien à marquer et
   l'habillage ne trace pas un trait sur le bord même de l'image.
+- `plis` rend deux fractions dont l'écart, ramené en millimètres, **vaut le dos** : c'est
+  ce qui fait de ces deux traits la seule chose qui montre où le livre se plie.
 
 JS :
 
-- Après un aperçu de la face Planche, `--coupe-x` et `--coupe-y` sont posées sur le
-  cadre et `.coupe` est visible.
-- La bascule éteinte, `.coupe` est masqué **sans** nouvel appel à `couverture_apercu` :
+- Après un aperçu de la face Planche, les quatre variables — `--coupe-x`, `--coupe-y`,
+  `--pli-quatre`, `--pli-une` — sont posées sur le cadre et `.reperes` est visible.
+- La bascule éteinte, `.reperes` est masqué **sans** nouvel appel à `couverture_apercu` :
   c'est tout l'intérêt d'habiller plutôt que de recomposer.
-- Sur la face 1ère, où la commande ne rend pas de `coupe`, `.coupe` est masqué.
+- Sur la face 1ère, où la commande ne rend pas de `reperes`, `.reperes` est masqué.
 - Un aperçu en échec ne laisse pas l'habillage seul à l'écran : `poserApercu(null)`
   retire l'image *et* la coupe.
 
@@ -170,6 +185,9 @@ Sur un manuscrit réel, chez un prestataire à fond perdu publié :
   demanderait au Rust de connaître la boîte de chaque élément composé ; la couverture
   est aujourd'hui décrite en pourcentages et composée par Typst, qui seul sait où les
   choses tombent. Autre chantier.
-- **Le pli du dos.** Deux traits de plus, sur une planche qui montre déjà ses trois
-  zones par leurs fonds. À revoir si le besoin se présente.
+- ~~**Le pli du dos.**~~ Écarté le 22/08 au motif que la planche montre ses trois zones
+  par leurs fonds — faux dès qu'elles portent le même papier, et c'est le cas courant.
+  **Fait le 23/08** : deux filets accolés, l'un clair et l'autre sombre, sur toute la
+  hauteur. Le pli traverse la zone imprimée, qu'aucun voile n'éclaircit : un seul filet
+  disparaîtrait sur un dos noir ou sur un papier blanc.
 - **Les repères sur le PDF.** Jamais : les prestataires les refusent.
