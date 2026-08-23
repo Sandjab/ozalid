@@ -177,6 +177,76 @@ fn personnalisees(config: &Path) -> Vec<Maquette> {
     v
 }
 
+/// Le chemin du fichier d'une personnalisée.
+fn chemin(config: &Path, cle: &str) -> PathBuf {
+    repertoire(config).join(format!("{cle}.{EXT}"))
+}
+
+/// Le nom de la maquette qui tient déjà cette clé — `soi` exceptée, pour qu'un
+/// renommage ne se refuse pas à lui-même quand le slug ne change pas.
+fn deja_prise(config: &Path, cle: &str, soi: Option<&str>) -> Option<String> {
+    toutes(Some(config))
+        .into_iter()
+        .find(|m| m.cle == cle && Some(m.cle.as_str()) != soi)
+        .map(|m| m.nom)
+}
+
+/// La personnalisée de cette clé, ou le refus qui dit pourquoi.
+///
+/// C'est ici que l'immuabilité des fournies est **réellement** tenue. L'interface qui
+/// n'offre pas les boutons est une politesse : une commande s'appelle sans elle, et une
+/// liste périmée nomme des clés qui n'existent plus.
+fn personnalisee(config: &Path, cle: &str) -> Result<Maquette, String> {
+    let m = par_cle(Some(config), cle).ok_or_else(|| format!("maquette inconnue : {cle}"))?;
+    if m.fournie {
+        return Err(format!(
+            "« {} » est une maquette fournie : elle ne se renomme ni ne s'efface.",
+            m.nom
+        ));
+    }
+    Ok(m)
+}
+
+/// Écrit le fichier d'une personnalisée, sans rien contrôler : c'est l'appelant qui
+/// sait s'il crée ou s'il remplace.
+fn poser(
+    config: &Path,
+    cle: &str,
+    nom: &str,
+    couverture: &Couverture,
+    images: &BTreeMap<String, Vec<u8>>,
+) -> Result<(), String> {
+    let dir = repertoire(config);
+    std::fs::create_dir_all(&dir).map_err(|e| {
+        format!(
+            "répertoire des maquettes inutilisable ({}) : {e}",
+            dir.display()
+        )
+    })?;
+    let chemin = chemin(config, cle);
+    let f = std::fs::File::create(&chemin)
+        .map_err(|e| format!("écriture de {} : {e}", chemin.display()))?;
+    ecrire_archive(
+        f,
+        &Maquette {
+            cle: cle.into(),
+            nom: nom.into(),
+            fournie: false,
+            couverture: couverture.clone(),
+            images: images.clone(),
+        },
+    )
+}
+
+/// Le slug d'un nom saisi, ou le refus qui dit quoi faire.
+fn slug_saisi(nom: &str) -> Result<String, String> {
+    slug(nom).ok_or_else(|| {
+        format!(
+            "« {nom} » ne peut pas nommer une maquette : il y faut au moins une lettre ou un chiffre."
+        )
+    })
+}
+
 /// Enregistre une couverture comme maquette personnalisée.
 ///
 /// **L'écriture échoue fort**, là où la lecture est au mieux : un « Enregistrer » qui
@@ -196,34 +266,39 @@ pub fn ecrire(
     couverture: &Couverture,
     images: &BTreeMap<String, Vec<u8>>,
 ) -> Result<(), String> {
-    let cle = slug(nom).ok_or_else(|| {
-        format!(
-            "« {nom} » ne peut pas nommer une maquette : il y faut au moins une lettre ou un chiffre."
-        )
-    })?;
-    if let Some(prise) = toutes(Some(config)).into_iter().find(|m| m.cle == cle) {
-        return Err(format!("« {} » porte déjà ce nom.", prise.nom));
+    let cle = slug_saisi(nom)?;
+    if let Some(prise) = deja_prise(config, &cle, None) {
+        return Err(format!("« {prise} » porte déjà ce nom."));
     }
-    let dir = repertoire(config);
-    std::fs::create_dir_all(&dir).map_err(|e| {
-        format!(
-            "répertoire des maquettes inutilisable ({}) : {e}",
-            dir.display()
-        )
-    })?;
-    let chemin = dir.join(format!("{cle}.{EXT}"));
-    let f = std::fs::File::create(&chemin)
-        .map_err(|e| format!("écriture de {} : {e}", chemin.display()))?;
-    ecrire_archive(
-        f,
-        &Maquette {
-            cle,
-            nom: nom.into(),
-            fournie: false,
-            couverture: couverture.clone(),
-            images: images.clone(),
-        },
-    )
+    poser(config, &cle, nom, couverture, images)
+}
+
+/// Renomme une personnalisée.
+///
+/// Le slug nommant le fichier, le renommage le **déplace** — sauf quand seule la casse
+/// ou la ponctuation change, auquel cas le fichier est réécrit en place et la maquette
+/// ne se refuse pas son propre nom.
+pub fn renommer(config: &Path, cle: &str, nom: &str) -> Result<(), String> {
+    let m = personnalisee(config, cle)?;
+    let neuf = slug_saisi(nom)?;
+    if let Some(prise) = deja_prise(config, &neuf, Some(cle)) {
+        return Err(format!("« {prise} » porte déjà ce nom."));
+    }
+    poser(config, &neuf, nom, &m.couverture, &m.images)?;
+    if neuf != cle {
+        let ancien = chemin(config, cle);
+        std::fs::remove_file(&ancien)
+            .map_err(|e| format!("l'ancien fichier tient encore ({}) : {e}", ancien.display()))?;
+    }
+    Ok(())
+}
+
+/// Efface une personnalisée. Sans reprise : ce que le fichier portait est perdu, et
+/// c'est la fenêtre qui demande confirmation.
+pub fn effacer(config: &Path, cle: &str) -> Result<(), String> {
+    personnalisee(config, cle)?;
+    let chemin = chemin(config, cle);
+    std::fs::remove_file(&chemin).map_err(|e| format!("effacement de {} : {e}", chemin.display()))
 }
 
 /// Les maquettes, dans l'ordre où l'interface les propose.
@@ -491,6 +566,135 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         assert_eq!(toutes(None).len(), 3, "aucun répertoire");
         assert_eq!(toutes(Some(dir.path())).len(), 3, "répertoire vide");
+    }
+
+    /// Le refus côté Rust n'est pas une redondance de l'interface qui masque les
+    /// boutons : c'est la **seule** garantie réelle de l'immuabilité des fournies.
+    /// L'interface n'est qu'une politesse, et une commande s'appelle sans elle.
+    #[test]
+    fn une_fournie_ne_se_renomme_ni_ne_s_efface() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let e = renommer(dir.path(), "folio", "Ma folio").unwrap_err();
+        assert!(e.contains("fournie"), "{e}");
+        let e = effacer(dir.path(), "folio").unwrap_err();
+        assert!(e.contains("fournie"), "{e}");
+
+        assert!(
+            par_cle(Some(dir.path()), "folio").is_some(),
+            "Folio doit tenir"
+        );
+    }
+
+    /// Renommer déplace le fichier, puisque le slug le nomme — et la maquette garde
+    /// tout ce qu'elle emportait. Ce qui se perdrait ici serait une couverture entière.
+    #[test]
+    fn renommer_deplace_le_fichier_et_garde_le_contenu() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut images = BTreeMap::new();
+        images.insert("couverture.jpg".to_string(), vec![1, 2, 3]);
+        let cv = fournie("surimpression");
+        ecrire(dir.path(), "Ma collection", &cv, &images).unwrap();
+
+        renommer(dir.path(), "ma-collection", "Nuit blanche").unwrap();
+
+        assert!(
+            par_cle(Some(dir.path()), "ma-collection").is_none(),
+            "l'ancien fichier tient encore"
+        );
+        let m = par_cle(Some(dir.path()), "nuit-blanche").unwrap();
+        assert_eq!(m.nom, "Nuit blanche");
+        assert_eq!(m.couverture, cv);
+        assert_eq!(m.images, images);
+    }
+
+    /// Corriger la casse ou la ponctuation d'un nom garde le même slug : la maquette ne
+    /// doit pas s'y voir refuser son propre nom, ni disparaître dans l'opération.
+    #[test]
+    fn se_renommer_sous_le_meme_slug_est_permis() {
+        let dir = tempfile::tempdir().unwrap();
+        ecrire(
+            dir.path(),
+            "ma collection",
+            &fournie("folio"),
+            &BTreeMap::new(),
+        )
+        .unwrap();
+
+        renommer(dir.path(), "ma-collection", "Ma Collection !").unwrap();
+
+        let m = par_cle(Some(dir.path()), "ma-collection").unwrap();
+        assert_eq!(m.nom, "Ma Collection !");
+        assert_eq!(
+            toutes(Some(dir.path()))
+                .iter()
+                .filter(|m| !m.fournie)
+                .count(),
+            1,
+            "le renommage a dédoublé la maquette"
+        );
+    }
+
+    /// L'unicité vaut au renommage comme à l'écriture : deux maquettes de même clé
+    /// rendraient la seconde inatteignable, et le renommage écraserait la première.
+    #[test]
+    fn renommer_vers_un_nom_pris_est_refuse() {
+        let dir = tempfile::tempdir().unwrap();
+        ecrire(
+            dir.path(),
+            "Ma collection",
+            &fournie("folio"),
+            &BTreeMap::new(),
+        )
+        .unwrap();
+        ecrire(
+            dir.path(),
+            "Nuit blanche",
+            &fournie("blanche"),
+            &BTreeMap::new(),
+        )
+        .unwrap();
+
+        let e = renommer(dir.path(), "nuit-blanche", "MA COLLECTION").unwrap_err();
+        assert!(e.contains("Ma collection"), "{e}");
+
+        let m = par_cle(Some(dir.path()), "nuit-blanche").unwrap();
+        assert_eq!(m.nom, "Nuit blanche", "le refus a quand même renommé");
+    }
+
+    /// Effacer retire le fichier, et rien d'autre.
+    #[test]
+    fn effacer_retire_la_maquette_et_laisse_les_autres() {
+        let dir = tempfile::tempdir().unwrap();
+        ecrire(
+            dir.path(),
+            "Ma collection",
+            &fournie("folio"),
+            &BTreeMap::new(),
+        )
+        .unwrap();
+        ecrire(
+            dir.path(),
+            "Nuit blanche",
+            &fournie("blanche"),
+            &BTreeMap::new(),
+        )
+        .unwrap();
+
+        effacer(dir.path(), "ma-collection").unwrap();
+
+        assert!(par_cle(Some(dir.path()), "ma-collection").is_none());
+        assert!(par_cle(Some(dir.path()), "nuit-blanche").is_some());
+        assert_eq!(toutes(Some(dir.path())).len(), 4, "fournies comprises");
+    }
+
+    /// Une clé qu'aucune maquette ne porte : le geste vient d'une liste périmée, et le
+    /// dire vaut mieux que de laisser croire à un effacement qui n'a rien effacé.
+    #[test]
+    fn une_cle_inconnue_est_refusee_avant_toute_ecriture() {
+        let dir = tempfile::tempdir().unwrap();
+        let e = effacer(dir.path(), "jamais-vue").unwrap_err();
+        assert!(e.contains("jamais-vue"), "{e}");
     }
 
     /// L'aller-retour complet d'une personnalisée : ce qu'on enregistre est ce qu'on
