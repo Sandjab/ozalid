@@ -258,8 +258,12 @@ générique a atteint l'intérieur.
 - Chaque jeton se substitue, dans chacun des six champs qui les reconnaissent.
 - Un jeton inconnu traverse intact.
 - Aucune cascade : un `%TITRE%` tapé dans le champ Titre ressort littéral.
-- **Un test par point de sortie** — intérieur, couverture, planche, épreuve, ebook —
-  vérifiant qu'aucun jeton connu ne survit à la composition.
+- **Un test par point de sortie qui compose un champ libre.** Au lot 1 : la source
+  Typst de l'intérieur (titre de page, copyright, dédicace) et la conversion vers
+  l'EPUB. Au lot 2 s'ajoute la 4ème de couverture (mention, prix, résumé). L'épreuve
+  n'en reçoit **aucun** — `epreuve::source` ne lit que le titre, l'auteur et le genre,
+  qui sont des clés littérales : un test y serait creux, et un test creux ment sur la
+  couverture réelle.
 - La dédicace vide ou blanche ne compose rien (test existant, conservé).
 - Un nouveau livre porte un copyright daté de l'année en cours.
 - Migration : un v2 complet remonte les cinq textes ; un v2 sans
