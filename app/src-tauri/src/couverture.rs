@@ -1097,7 +1097,10 @@ pub fn corps_quatre(
 
     let mut c = String::new();
     let pad = q.pad_x / 100.0 * fw;
-    if !q.texte.trim().is_empty() {
+    // Le seul texte que la maquette porte encore, et le seul endroit où la substitution
+    // la sert : une 4ème générique se résout pour chaque livre où on la charge.
+    let resume = crate::gabarit::substituer(&q.texte, livre);
+    if !resume.trim().is_empty() {
         c.push_str(&format!(
             "#place(top + left, dx: {}, dy: {}, block(width: {})[\n\
              #set align({})\n#set par(leading: {}em, spacing: {}em, justify: false)\n\
@@ -1108,7 +1111,7 @@ pub fn corps_quatre(
             q.align.typst(),
             q.interligne - 1.0,
             q.interligne - 1.0,
-            q.style.applique(fw, &q.texte),
+            q.style.applique(fw, &resume),
         ));
     }
 
@@ -1586,5 +1589,23 @@ mod tests {
             assert!(!une.contains(jeton), "{jeton} a traversé la 1ère");
             assert!(!quatre.contains(jeton), "{jeton} a traversé la 4ème");
         }
+    }
+
+    /// Le résumé de 4ème est le seul texte que la maquette porte encore, et c'est le
+    /// seul endroit où la substitution la sert : une maquette peut ainsi porter une
+    /// 4ème générique qui se résout pour chaque livre où on la charge.
+    #[test]
+    fn le_resume_de_quatrieme_cite_les_cles() {
+        let mut l = livre();
+        l.genre = "roman".into();
+        let mut cv = maquettes::par_cle("blanche").unwrap();
+        cv.quatrieme.texte = "%TITRE%, un %GENRE% de %AUTEUR%.".into();
+
+        let quatre = source_quatre(&l, &cv, FORMAT, None, None, None).unwrap();
+        assert!(
+            quatre.contains("Les Heures creuses, un roman de Ivan Pjig."),
+            "{quatre}"
+        );
+        assert!(!quatre.contains('%'), "un jeton a traversé le résumé");
     }
 }
