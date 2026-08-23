@@ -273,6 +273,32 @@ pub fn ecrire(
     poser(config, &cle, nom, couverture, images)
 }
 
+/// Ce que porte un nom de clone, sans son rang.
+const COPIE: &str = " (copie)";
+
+/// Un nom libre pour le clone de `nom` : « Folio (copie) », puis « Folio (copie) 2 ».
+///
+/// Le suffixe se **remplace** plutôt que de s'empiler : cloner un clone donne un
+/// deuxième clone, non « Folio (copie) (copie) ». Le rang monte tant que la place est
+/// prise — un nom fabriqué par le code n'a pas à se faire refuser, là où un nom saisi,
+/// lui, l'est, pour que l'utilisateur sache que le sien existait déjà.
+pub fn nom_de_copie(config: Option<&Path>, nom: &str) -> String {
+    let souche = match nom.split_once(COPIE) {
+        Some((avant, _)) => avant,
+        None => nom,
+    };
+    let pris =
+        |candidat: &str| slug(candidat).is_some_and(|c| toutes(config).iter().any(|m| m.cle == c));
+    let premier = format!("{souche}{COPIE}");
+    if !pris(&premier) {
+        return premier;
+    }
+    (2..)
+        .map(|n| format!("{souche}{COPIE} {n}"))
+        .find(|c| !pris(c))
+        .expect("la suite des entiers ne s'épuise pas")
+}
+
 /// Renomme une personnalisée.
 ///
 /// Le slug nommant le fichier, le renommage le **déplace** — sauf quand seule la casse
@@ -566,6 +592,55 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         assert_eq!(toutes(None).len(), 3, "aucun répertoire");
         assert_eq!(toutes(Some(dir.path())).len(), 3, "répertoire vide");
+    }
+
+    /// Cloner est un geste, pas une saisie : le nom du clone est fabriqué par le code,
+    /// et un nom fabriqué se suffixe plutôt que de se faire refuser — c'est déjà la
+    /// convention du dépôt pour les envois (`envoi::distinct`). Renommer est à côté
+    /// pour la fois où « (copie) » ne convient pas.
+    #[test]
+    fn le_nom_d_un_clone_s_ecarte_de_ce_qui_est_pris() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(nom_de_copie(Some(dir.path()), "Folio"), "Folio (copie)");
+
+        ecrire(
+            dir.path(),
+            "Folio (copie)",
+            &fournie("folio"),
+            &BTreeMap::new(),
+        )
+        .unwrap();
+        assert_eq!(nom_de_copie(Some(dir.path()), "Folio"), "Folio (copie) 2");
+
+        ecrire(
+            dir.path(),
+            "Folio (copie) 2",
+            &fournie("folio"),
+            &BTreeMap::new(),
+        )
+        .unwrap();
+        assert_eq!(nom_de_copie(Some(dir.path()), "Folio"), "Folio (copie) 3");
+    }
+
+    /// Cloner un clone ne fait pas « Folio (copie) (copie) (copie) » : le suffixe se
+    /// remplace, il ne s'empile pas.
+    #[test]
+    fn cloner_un_clone_ne_reempile_pas_le_suffixe() {
+        let dir = tempfile::tempdir().unwrap();
+        // La source d'un clonage existe forcément : c'est elle qu'on clone.
+        ecrire(
+            dir.path(),
+            "Folio (copie)",
+            &fournie("folio"),
+            &BTreeMap::new(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            nom_de_copie(Some(dir.path()), "Folio (copie)"),
+            "Folio (copie) 2",
+            "le suffixe s'empilerait en « Folio (copie) (copie) »"
+        );
     }
 
     /// Le refus côté Rust n'est pas une redondance de l'interface qui masque les
