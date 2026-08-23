@@ -47,22 +47,35 @@
   </section>
 
   <section id="etapeLivre" class="etape" role="tabpanel" hidden>
+    <!-- Deux groupes, et la frontière tient en une phrase : ce qui nomme, et ce qui en
+         dérive. Les clés sont littérales — un %TITRE% tapé dans le Titre ressort tel
+         quel —, les dérivés les citent. C'est la même frontière que celle du livre et de
+         la maquette : le livre dit ce qui est écrit, la maquette où ça se voit. -->
     <div class="bloc">
       <h2>Livre</h2>
       <label><span>Titre</span><input type="text" id="inTitre"></label>
-      <label><span>Titre de la page de titre</span>
-        <textarea id="inTitrePage" rows="2" placeholder="%TITRE%"></textarea></label>
       <label><span>Auteur</span><input type="text" id="inAuteur"></label>
       <label><span>Genre</span><input type="text" id="inGenre"></label>
       <label><span>Éditeur</span><input type="text" id="inEditeur"></label>
       <label><span>Collection</span><input type="text" id="inCollection"></label>
       <label><span>Monogramme</span><input type="text" id="inMonogramme"></label>
+    </div>
+
+    <div class="bloc">
+      <h2>Textes dérivés</h2>
+      <!-- Vide à dessein : la liste des jetons vient de `jetons_liste`. La recopier ici
+           la ferait mentir au premier jeton ajouté — la table a grossi deux fois. -->
+      <p class="note" id="aideJetons"></p>
+      <label><span>Titre de la page de titre</span>
+        <textarea id="inTitrePage" rows="2" placeholder="%TITRE%"></textarea></label>
       <label><span>Copyright</span><textarea id="inCopyright" rows="3"></textarea></label>
       <label><span>Prix</span><input type="text" id="inPrix"></label>
       <label><span>Mention</span><input type="text" id="inMention"></label>
       <label><span>Dédicace</span>
         <textarea id="inDedicace" rows="2"
                   placeholder="vide : pas de page de dédicace"></textarea></label>
+      <!-- Ni clé ni dérivé : un contrôle d'intégrité du manuscrit. Son étiquette le dit,
+           et lui faire un troisième bloc pour lui seul coûterait plus que ce voisinage. -->
       <label><span>Chapitres attendus</span>
         <input type="number" id="inChapitres" min="1" placeholder="facultatif — contrôle d'intégrité"></label>
     </div>

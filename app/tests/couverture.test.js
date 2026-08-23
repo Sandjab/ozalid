@@ -116,6 +116,7 @@ async function ouvre(couverture, sur = {}, dialogues = []) {
     if (cmd === 'providers_liste') return [LULU];
     if (cmd === 'polices_liste') return ['Archivo', 'Spectral', 'Bodoni Moda'];
     if (cmd === 'polices_texte_liste') return ['EB Garamond', 'Alegreya', 'Cardo'];
+    if (cmd === 'jetons_liste') return ['%TITRE%', '%AUTEUR%', '%GENRE%', '%EDITEUR%', '%COLLECTION%', '%MONOGRAMME%'];
     if (cmd === 'mains_liste') return ['Caveat', 'Dancing Script'];
     if (cmd === 'maquettes_liste') {
       return [

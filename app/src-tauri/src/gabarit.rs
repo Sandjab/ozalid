@@ -24,6 +24,14 @@ const JETONS: [Jeton; 6] = [
     ("%MONOGRAMME%", |l| &l.monogramme),
 ];
 
+/// Les jetons reconnus, dans l'ordre où l'aide les présente.
+///
+/// Servie au front plutôt que recopiée dans le HTML : la table a grossi deux fois en
+/// deux lots, et une copie aurait menti les deux fois.
+pub fn jetons() -> Vec<&'static str> {
+    JETONS.iter().map(|(j, _)| *j).collect()
+}
+
 /// Remplace les jetons connus par la valeur de leur champ clé.
 ///
 /// **Une seule passe.** Le texte est parcouru une fois de gauche à droite : ce qu'un
@@ -142,5 +150,29 @@ mod tests {
             substituer("%EDITEUR%, %COLLECTION%, %MONOGRAMME%", &l),
             "Ozalid, Les Heures, O"
         );
+    }
+
+    /// La liste des jetons est servie par le Rust, seul à la connaître. La recopier
+    /// dans le HTML la ferait mentir le jour où une clé s'ajoute — ce qui vient
+    /// d'arriver deux fois.
+    #[test]
+    fn les_jetons_annonces_sont_ceux_qui_substituent() {
+        let l = Livre {
+            titre: "T".into(),
+            auteur: "A".into(),
+            genre: "G".into(),
+            editeur: "E".into(),
+            collection: "C".into(),
+            monogramme: "M".into(),
+            ..Livre::vide()
+        };
+        for jeton in jetons() {
+            assert_ne!(
+                substituer(jeton, &l),
+                jeton,
+                "{jeton} est annoncé mais ne substitue rien"
+            );
+        }
+        assert_eq!(jetons().len(), JETONS.len());
     }
 }

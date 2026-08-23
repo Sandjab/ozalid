@@ -94,6 +94,7 @@ pub fn run() {
             commands::maquettes_liste,
             commands::polices_liste,
             commands::polices_texte_liste,
+            commands::jetons_liste,
             commands::interieur_modifier,
             commands::epreuve_tirer,
             commands::maquette_choisir,

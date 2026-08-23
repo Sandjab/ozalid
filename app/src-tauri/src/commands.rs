@@ -374,6 +374,12 @@ pub fn livre_modifier(livre: Livre, atelier: State<Atelier>) -> Result<ProjetVue
     vue_modifiee(o)
 }
 
+/// Les jetons que les champs dérivés du livre peuvent citer.
+#[tauri::command]
+pub fn jetons_liste() -> Vec<&'static str> {
+    crate::gabarit::jetons()
+}
+
 #[tauri::command]
 pub fn polices_texte_liste() -> Vec<&'static str> {
     interieur::POLICES_TEXTE.to_vec()

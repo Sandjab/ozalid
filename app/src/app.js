@@ -340,6 +340,9 @@ async function chargerProviders() {
     $('inPoliceInterieur').append(new Option(p, p));
   }
   mains = await invoke('mains_liste');
+  // La liste vient du Rust, seul à la connaître : `gabarit::JETONS` a grossi deux fois.
+  $('aideJetons').textContent =
+    `Ces champs peuvent citer les précédents : ${(await invoke('jetons_liste')).join(' ')}`;
   // L'accès au modèle appartient à la machine, pas au projet : il se lit une fois, au
   // démarrage, et il survit à tous les livres qu'on ouvrira ensuite.
   afficherDiffusion(await invoke('diffusion_lire'));

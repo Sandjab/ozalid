@@ -46,6 +46,7 @@ const invoke = async (cmd) => {
   if (cmd === 'providers_liste') return [LULU];
   if (cmd === 'polices_liste') return ['Archivo'];
   if (cmd === 'polices_texte_liste') return ['Alegreya'];
+  if (cmd === 'jetons_liste') return ['%TITRE%', '%AUTEUR%', '%GENRE%', '%EDITEUR%', '%COLLECTION%', '%MONOGRAMME%'];
   if (cmd === 'mains_liste') return ['Caveat'];
   if (cmd === 'maquettes_liste') return [{ cle: 'folio', libelle: 'Folio' }];
   if (cmd === 'recents_liste') return [];
@@ -332,5 +333,32 @@ test('les textes du livre ont quitté le schéma de la couverture', () => {
   for (const chemin of ['pied.monogramme', 'pied.editeur', 'pastille.texte',
     'quatrieme.mention', 'quatrieme.collection', 'quatrieme.prix']) {
     assert.ok(!js.includes(`'${chemin}'`), `${chemin} est encore réglable en couverture`);
+  }
+});
+
+/**
+ * L'aide de l'onglet Livre liste les jetons servis par le Rust, jamais une copie écrite
+ * dans le HTML : la table `JETONS` a grossi deux fois en deux lots, et une copie aurait
+ * menti les deux fois.
+ */
+test('l\'aide des jetons vient du Rust, pas du HTML', async () => {
+  const rust = source('src-tauri', 'src', 'gabarit.rs');
+  const attendus = [...rust.matchAll(/\("(%[A-Z]+%)"/g)].map((m) => m[1]);
+  assert.ok(attendus.length >= 6, `moisson suspecte : ${attendus}`);
+
+  const html = source('src', 'index.html');
+  // `%TITRE%` a le droit d'y être en indication du champ de titre de page : c'est un
+  // exemple, pas la liste. Les cinq autres n'ont aucune raison d'y figurer.
+  for (const jeton of attendus.filter((j) => j !== '%TITRE%')) {
+    assert.ok(!html.includes(jeton), `${jeton} est recopié dans le HTML`);
+  }
+
+  const { els } = await charge({
+    invoke: async (cmd, args) => (cmd === 'jetons_liste' ? attendus : invoke(cmd, args)),
+    open: async () => null,
+  });
+  const aide = els.get('aideJetons').textContent;
+  for (const jeton of attendus) {
+    assert.ok(aide.includes(jeton), `${jeton} absent de l'aide`);
   }
 });

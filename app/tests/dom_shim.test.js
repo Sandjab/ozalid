@@ -39,6 +39,7 @@ const invokeMuet = async (cmd) => {
     }];
     case 'polices_liste': return ['Bodoni Moda'];
     case 'polices_texte_liste': return ['EB Garamond'];
+    case 'jetons_liste': return ['%TITRE%', '%AUTEUR%', '%GENRE%', '%EDITEUR%', '%COLLECTION%', '%MONOGRAMME%'];
     case 'mains_liste': return ['Caveat', 'Dancing Script'];
     case 'maquettes_liste': return [];
     case 'recents_liste': return [];

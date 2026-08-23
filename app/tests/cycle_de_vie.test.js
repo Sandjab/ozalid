@@ -50,6 +50,7 @@ function atelier({ garde = 'ignorer', recents = [], sur = {} } = {}) {
       case 'providers_liste': return [LULU];
       case 'polices_liste': return ['Bodoni Moda'];
       case 'polices_texte_liste': return ['EB Garamond'];
+      case 'jetons_liste': return ['%TITRE%', '%AUTEUR%', '%GENRE%', '%EDITEUR%', '%COLLECTION%', '%MONOGRAMME%'];
       case 'mains_liste': return ['Caveat', 'Dancing Script'];
       case 'maquettes_liste': return [];
       case 'recents_liste': return recents;

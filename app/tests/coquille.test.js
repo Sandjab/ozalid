@@ -71,6 +71,7 @@ function atelier({
       case 'providers_liste': return providers;
       case 'polices_liste': return ['Bodoni Moda'];
       case 'polices_texte_liste': return ['EB Garamond'];
+      case 'jetons_liste': return ['%TITRE%', '%AUTEUR%', '%GENRE%', '%EDITEUR%', '%COLLECTION%', '%MONOGRAMME%'];
       case 'mains_liste': return ['Caveat', 'Dancing Script'];
       // L'accès au modèle appartient à la machine : le Rust ne rend jamais la clé, il
       // dit seulement qu'elle est posée.
