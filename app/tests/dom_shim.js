@@ -118,6 +118,38 @@ class El {
     (this.ecouteurs[type] ||= []).push(fn);
   }
 
+  /**
+   * Retire un écouteur, et le retire vraiment.
+   *
+   * Un geste de souris pose trois écouteurs à la pression et les reprend au
+   * relâchement : sans ce retrait, le deuxième geste rejouerait le premier par-dessus,
+   * et le troisième les deux — c'est exactement le genre de fuite qu'un faux DOM
+   * complaisant laisserait passer jusqu'à la fenêtre.
+   */
+  removeEventListener(type, fn) {
+    const l = this.ecouteurs[type];
+    if (!l) return;
+    const i = l.indexOf(fn);
+    if (i >= 0) l.splice(i, 1);
+  }
+
+  /**
+   * La boîte de l'élément à l'écran, que les tests posent eux-mêmes.
+   *
+   * Le faux DOM ne met rien en page : il n'a pas de boîte à mesurer. Mais la
+   * manipulation directe convertit des pixels de souris en pourcentages de couverture,
+   * et cette division-là est exactement ce qu'un test doit pouvoir vérifier — sans
+   * elle, un geste calé sur des pixels passerait inaperçu jusqu'à la première fenêtre
+   * d'une autre taille. Nulle par défaut : l'application refuse alors le geste, comme
+   * elle le fait devant un aperçu qui n'est pas encore affiché.
+   */
+  getBoundingClientRect() {
+    return this.rect ?? { left: 0, top: 0, width: 0, height: 0 };
+  }
+
+  /** La capture du pointeur, sans objet ici : il n'y a qu'un geste à la fois. */
+  setPointerCapture() {}
+
   setAttribute(nom, valeur) {
     this.attrs[nom] = String(valeur);
   }

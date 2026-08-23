@@ -4,10 +4,13 @@
 //! même version sur macOS et Windows. C'est ce qui rend la pagination reproductible
 //! d'une machine à l'autre — la chaîne pandoc + WeasyPrint ne le garantissait pas.
 //!
-//! Deux opérations seulement, et elles sont distinctes à dessein : `pages` mesure
-//! sans rien écrire, `compile` écrit le PDF. La boucle de convergence de l'intérieur
-//! n'a besoin que de la première, donc elle ne produit plus de PDF jeté à chaque tour.
+//! Les opérations qui n'écrivent rien et celle qui écrit sont distinctes à dessein :
+//! `pages` et `mesures` évaluent le document sans produire de fichier, `compile` écrit
+//! le PDF. La boucle de convergence de l'intérieur n'a besoin que de `pages`, donc elle
+//! ne produit plus de PDF jeté à chaque tour ; l'aperçu du dos n'a besoin que de
+//! `mesures`, et il les obtient pour un dixième du prix d'une composition.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -68,6 +71,27 @@ impl Typst {
             .map_err(|_| {
                 format!("compte de pages illisible dans la réponse de Typst : « {sortie} »")
             })
+    }
+
+    /// Les mesures qu'une source publie sous `<mesures>`, en JSON.
+    ///
+    /// Rien n'est composé : `typst eval` évalue le document et rend la métadonnée. Une
+    /// longueur de texte ne se calcule pas autrement — elle dépend de chaque glyphe, et
+    /// seul Typst tient les métriques des polices embarquées. Mesuré à une quinzaine de
+    /// millisecondes, contre cent dix pour un aperçu.
+    pub fn mesures(&self, source: &Path) -> Result<BTreeMap<String, f64>, String> {
+        let (sortie, _) = self.lance(&[
+            "eval",
+            "query(<mesures>).map(it => it.value)",
+            "--in",
+            &chemin(source)?,
+            "--format",
+            "json",
+        ])?;
+        // `typst eval` rend le tableau des métadonnées trouvées : une seule ici.
+        let tableau: Vec<BTreeMap<String, f64>> = serde_json::from_str(&sortie)
+            .map_err(|e| format!("mesures illisibles dans la réponse de Typst : {e}"))?;
+        Ok(tableau.into_iter().next().unwrap_or_default())
     }
 
     /// Compile la source en PDF, et rend les familles de police que Typst n'a pas

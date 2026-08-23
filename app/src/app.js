@@ -48,6 +48,23 @@ let reperesVisibles = true;
 let attenteApercu = null;
 
 /**
+ * La manipulation directe de la couverture : ce qu'on tient, et de quoi le montrer.
+ *
+ * `geste` n'est pas qu'un drapeau — c'est lui qui dit aux deux autres mécanismes de se
+ * taire pendant qu'on tire : le panneau ne réécrit pas les champs qu'on est en train de
+ * déplacer, et l'aperçu vrai qui arrive ne retire pas le direct posé par-dessus. Sans
+ * lui, la couverture reviendrait à son ancien cadrage à chaque composition rattrapée.
+ *
+ * `calques` est ce que le Rust a donné pour la face montrée : la photo, sa zone et
+ * l'habillage. Absent, il n'y a rien à déplacer — et la prise de l'image ne s'offre
+ * pas plutôt que d'offrir un geste qui mentirait.
+ */
+let geste = null;
+let calques = null;
+let boitesDos = [];
+let attenteCommit = null;
+
+/**
  * L'attente avant une recomposition automatique, et de quoi n'en lancer qu'une.
  *
  * `veilleSuspendue` couvre le seul rendu où la veille ne doit pas partir : celui d'un
@@ -1007,6 +1024,7 @@ $('inMain').addEventListener('change', () => tente(async () => {
 }));
 construireEtapes();
 construireFaces();
+cablerPrises();
 for (const id of ['inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright',
   'inDedicace', 'inChapitres']) {
   $(id).addEventListener('change', majLivre);

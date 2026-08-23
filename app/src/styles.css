@@ -37,6 +37,10 @@
      d'`index.html`, valeurs comprises — c'est une convention d'atelier, pas un goût. */
   --etabli: #7a7b78;
   --etabli-creux: #6a6b68;
+  /* Le bleu des prises. Il n'habille rien d'autre, et c'est voulu : il ne dit pas
+     « important », il dit « ceci se saisit ». Le rouge est à l'alerte, l'encre au texte ;
+     il fallait une troisième voix, et c'est celle que l'atelier HTML employait déjà. */
+  --prise: #1a6ee0;
   --onglets-flux: column;
   /* La coquille, en quatre bandes à la hauteur exacte de la fenêtre. Passer au rail
      vertical serait une autre valeur ici et un `--onglets-flux: row` : le balisage,
@@ -630,6 +634,170 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
 /* Le dos couché prend toute la largeur ; son cadre aussi, sans quoi l'image y serait
    à nouveau dimensionnée par sa hauteur. */
 .couv[data-face="dos"] .cadre { width: 100%; }
+
+/* ---------- le direct et les prises ---------- */
+
+/* Le direct : trois pièces qui refont la face à l'identique, empilées sur l'aperçu
+   pendant qu'on déplace la photo. Il n'a aucune apparence propre — s'il en avait une,
+   on la verrait apparaître au premier pixel du geste. */
+.direct { position: absolute; inset: 0; }
+.direct-papier { position: absolute; inset: 0; background: var(--papier, transparent); }
+
+/* Les quatre fractions que `poser` écrit, ici et sur les prises : la boîte n'a pas
+   d'autre géométrie. Les valeurs de repli servent le premier rendu, avant qu'aucun
+   geste n'ait rien posé. */
+.direct-fenetre,
+.direct-fenetre img,
+.prise {
+  left: calc(var(--gauche, 0) * 100%);
+  top: calc(var(--haut, 0) * 100%);
+  width: calc(var(--largeur, 1) * 100%);
+  height: calc(var(--hauteur, 0) * 100%);
+}
+
+/* La zone où la photo se compose. C'est elle qui la rogne, exactement comme le `clip`
+   du bloc Typst : sans ce débordement caché, une photo agrandie déborderait sur le
+   papier au lieu d'être coupée par sa zone. */
+.direct-fenetre { position: absolute; overflow: hidden; }
+.direct-fenetre img { position: absolute; max-width: none; }
+
+.direct-habillage { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* Les prises. Effacées tant que le curseur est ailleurs : une couverture se juge sans
+   guides par-dessus, et c'est tout l'objet de l'établi gris en dessous. Elles
+   reparaissent dès qu'on approche la main, et restent tant qu'on tient — `data-geste`
+   est posé par `saisir`, sans quoi sortir du cadre en tirant les ferait disparaître
+   sous la souris qui les tient. */
+.prises { position: absolute; inset: 0; }
+
+.prise {
+  position: absolute;
+  opacity: 0;
+  transition: opacity .12s ease-out;
+  touch-action: none;
+}
+
+.cadre:hover .prise,
+.cadre[data-geste] .prise { opacity: 1; }
+
+/* Le cadre de la photo. Deux filets accolés, l'un clair et l'autre sombre, comme les
+   plis de la planche et pour la même raison : une photo porte les deux, et un seul
+   trait se perd sur la moitié d'entre elles. */
+.prise-image {
+  border: 1px dashed var(--prise);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .45);
+  cursor: grab;
+}
+
+.prise-image:active { cursor: grabbing; }
+
+/* Le bloc de texte : sa hauteur, ses deux marges. On n'en connaît que le bord haut —
+   ce qu'il mesure dépend de la composition Typst, qui n'est pas ici —, d'où une barre
+   et non un rectangle. Elle est haute de dix pixels pour se saisir, et ne montre que
+   son filet. */
+.prise-bloc {
+  height: 10px;
+  margin-top: -5px;
+  border-top: 1px dashed var(--prise);
+  cursor: ns-resize;
+}
+
+/* En mode Bandeau, la hauteur du bloc découle de la bande : la barre montre où le texte
+   commence, mais ne se tire pas — seules ses poignées répondent. */
+.prise-bloc[data-figee="oui"] { cursor: default; }
+
+.poignee {
+  position: absolute;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  margin-top: -6px;
+  background: var(--surface);
+  border: 1.5px solid var(--prise);
+  border-radius: 50%;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.poignee.gauche { left: -6px; }
+.poignee.droite { right: -6px; }
+
+/* La frontière du bandeau : là où la bande s'arrête et où la photo commence. */
+.prise-bandeau {
+  height: 10px;
+  margin-top: -5px;
+  border-top: 1px dashed var(--prise);
+  cursor: ns-resize;
+}
+
+/* Les trois textes du dos couché. Un rectangle plein et non un filet : ce qu'on saisit
+   ici est un objet qu'on déplace, pas une frontière qu'on tire — et sur une bande de
+   soixante pixels, un liseré ne s'attrape pas. Le libellé ne paraît que quand la place
+   le permet, sans quoi « Éditeur » déborderait d'un mot de trois lettres. */
+.prise-dos {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  /* Au repos, un cadre et un voile très clair : le texte du dos doit rester jugeable
+     dessous — c'est lui qu'on est venu regarder, et c'est lui qui nomme la prise. */
+  background: rgba(26, 110, 224, .1);
+  border: 1px solid var(--prise);
+  border-radius: 2px;
+  cursor: grab;
+  font-size: .62rem;
+  letter-spacing: .04em;
+  color: var(--surface);
+  white-space: nowrap;
+}
+
+.prise-dos span { display: none; }
+
+/* Ce qui est saisi passe devant ses voisins, s'opacifie et prend son nom : il a quitté
+   son texte, et plus rien d'autre à l'écran ne dirait ce qu'on tient. */
+.prise-dos[data-saisi="oui"] {
+  z-index: 2;
+  background: var(--prise);
+  cursor: grabbing;
+}
+
+.prise-dos[data-saisi="oui"] span { display: block; }
+
+/* Les trois places, en tiers du dos, montrées le temps du geste seulement. */
+.zones-dos {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  pointer-events: none;
+}
+
+.zone-dos {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 2px;
+  font-size: .58rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .95);
+  border-right: 1px dashed rgba(255, 255, 255, .55);
+  /* Un voile franc, et non discret : pendant le geste on range, on ne juge plus — et
+     un libellé clair sur un dos blanc à peine grisé ne se lit pas. */
+  background: rgba(0, 0, 0, .32);
+}
+
+.zone-dos:last-child { border-right: 0; }
+
+/* La place qui recevrait. Elle s'allume au lieu de se contenter d'un contour : le dépôt
+   change une place et un rang d'un coup, et c'est la seule chose qui l'annonce avant
+   que ce soit fait. */
+.zones-dos[data-cible="pied"] .zone-dos[data-place="pied"],
+.zones-dos[data-cible="centre"] .zone-dos[data-place="centre"],
+.zones-dos[data-cible="tete"] .zone-dos[data-place="tete"] {
+  background: rgba(26, 110, 224, .28);
+  color: var(--surface);
+}
 
 /* La bande que le massicot emporte, et la ligne de coupe.
    Les deux ensemble, et pas l'un ou l'autre : sur une couverture claire le voile ne se

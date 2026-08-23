@@ -998,37 +998,49 @@ pub fn page_une(
     )
 }
 
-/// Corps de la 4ème de couverture, dans la boîte donnée.
+/// Le papier de la 4ème : le sien quand elle en déclare un, celui de la 1ère sinon.
 ///
-/// `pano` n'est requis que pour le prolongement : il porte la largeur de la planche,
-/// donc celle du dos, donc la pagination. C'est le couplage que l'application existe
-/// pour tenir — ici, il est explicite au lieu d'être recopié à la main, et la 4ème
-/// refuse de se composer sans lui plutôt que de se composer de travers.
-pub fn corps_quatre(
+/// Une image ou un prolongement se composent **sur** ce papier, et non à sa place : il
+/// reste ce qui se voit là où l'image ne porte pas.
+pub fn papier_quatre(cv: &Couverture) -> &str {
+    match cv.quatrieme.fond {
+        FondQuatre::Couleur => &cv.quatrieme.couleur,
+        _ => &cv.papier,
+    }
+}
+
+/// La photo de la 4ème : où elle se compose, comment elle s'y place, et laquelle.
+///
+/// Extraite de [`corps_quatre`] parce que deux appelants en ont besoin et qu'un seul
+/// compose : l'autre est l'aperçu manipulable, qui doit poser la photo sur la même zone
+/// que la composition pour que le geste dise vrai. Recopier ce `match` là-bas, c'est
+/// accepter qu'un jour la souris cadre une zone et Typst une autre.
+///
+/// `Ok(None)` couvre les fonds qui n'ont pas de photo — le papier hérité, la couleur
+/// distincte — et l'image annoncée mais absente ou illisible : rien à composer n'est pas
+/// une erreur. Le prolongement, lui, refuse : il a été demandé, et le composer de
+/// travers ne se verrait qu'au pli.
+#[allow(clippy::type_complexity)]
+pub fn photo_quatre<'a>(
     cv: &Couverture,
     format: (f64, f64),
-    image_quatre: Option<&Ressource>,
-    photo_une: Option<&Ressource>,
+    image_quatre: Option<&'a Ressource>,
+    photo_une: Option<&'a Ressource>,
     pano: Option<Panorama>,
     b: Boite,
-) -> Result<String, String> {
-    let (fw, _) = format;
-    let q = &cv.quatrieme;
-    let fond = match q.fond {
-        FondQuatre::Couleur => &q.couleur,
-        _ => &cv.papier,
-    };
-    let mut s = bloc_fond(b, fond);
-
-    match q.fond {
+) -> Result<Option<((f64, f64, f64, f64), Geometrie, &'a Ressource)>, String> {
+    match cv.quatrieme.fond {
         FondQuatre::Image => {
-            if let Some(r) = image_quatre {
-                let zone = (0.0, 0.0, b.largeur, b.hauteur);
-                if let Some(g) = image::place((zone.2, zone.3), (r.largeur, r.hauteur), &q.cadrage)
-                {
-                    s.push_str(&bloc_image(zone, &g, &r.fichier));
-                }
-            }
+            let Some(r) = image_quatre else {
+                return Ok(None);
+            };
+            let zone = (0.0, 0.0, b.largeur, b.hauteur);
+            let g = image::place(
+                (zone.2, zone.3),
+                (r.largeur, r.hauteur),
+                &cv.quatrieme.cadrage,
+            );
+            Ok(g.map(|g| (zone, g, r)))
         }
         FondQuatre::Panorama => {
             let p = pano.ok_or_else(|| {
@@ -1045,9 +1057,32 @@ pub fn corps_quatre(
             let (zone, g) = image_une(cv, format, Some(r), b, Some(p)).ok_or_else(|| {
                 "prolongement panoramique : sans objet en composition typographique.".to_string()
             })?;
-            s.push_str(&bloc_image(zone, &g, &r.fichier));
+            Ok(Some((zone, g, r)))
         }
-        _ => {}
+        _ => Ok(None),
+    }
+}
+
+/// Corps de la 4ème de couverture, dans la boîte donnée.
+///
+/// `pano` n'est requis que pour le prolongement : il porte la largeur de la planche,
+/// donc celle du dos, donc la pagination. C'est le couplage que l'application existe
+/// pour tenir — ici, il est explicite au lieu d'être recopié à la main, et la 4ème
+/// refuse de se composer sans lui plutôt que de se composer de travers.
+pub fn corps_quatre(
+    cv: &Couverture,
+    format: (f64, f64),
+    image_quatre: Option<&Ressource>,
+    photo_une: Option<&Ressource>,
+    pano: Option<Panorama>,
+    b: Boite,
+) -> Result<String, String> {
+    let (fw, _) = format;
+    let q = &cv.quatrieme;
+    let mut s = bloc_fond(b, papier_quatre(cv));
+
+    if let Some((zone, g, r)) = photo_quatre(cv, format, image_quatre, photo_une, pano, b)? {
+        s.push_str(&bloc_image(zone, &g, &r.fichier));
     }
 
     let avec_image = matches!(q.fond, FondQuatre::Image | FondQuatre::Panorama);

@@ -15,6 +15,7 @@ use crate::couverture::{
 };
 use crate::projet::Livre;
 use crate::providers::{Papier, Provider};
+use serde::Serialize;
 
 /// Ce qu'un prestataire ne publie pas et qu'il a fallu relever sur son gabarit.
 /// Vide chez ceux qui publient tout — c'est le cas de la plupart.
@@ -144,15 +145,129 @@ const JEU_PLI: f64 = 1.0;
 /// c'est ce qui permet de composer un dos sans éditeur. [`bloc_dos`] et [`dos_requis`]
 /// lisent la même liste, sans quoi une maquette serait jugée sur un auteur qu'elle ne
 /// porte pas.
-fn composes<'a>(livre: &'a Livre, cv: &'a Couverture) -> Vec<(&'a ElementDos, &'a str)> {
+fn composes<'a>(
+    livre: &'a Livre,
+    cv: &'a Couverture,
+) -> Vec<(&'static str, &'a ElementDos, &'a str)> {
     [
-        (&cv.dos.auteur, livre.auteur.trim()),
-        (&cv.dos.titre, livre.titre.trim()),
-        (&cv.dos.editeur, cv.pied.editeur.trim()),
+        ("auteur", &cv.dos.auteur, livre.auteur.trim()),
+        ("titre", &cv.dos.titre, livre.titre.trim()),
+        ("editeur", &cv.dos.editeur, cv.pied.editeur.trim()),
     ]
     .into_iter()
-    .filter(|(el, texte)| el.actif && !texte.is_empty())
+    .filter(|(_, el, texte)| el.actif && !texte.is_empty())
     .collect()
+}
+
+/// La rangée d'une place, dans l'ordre de lecture du dos : du pied vers la tête.
+fn rangee(p: PlaceDos) -> usize {
+    match p {
+        PlaceDos::Pied => 0,
+        PlaceDos::Centre => 1,
+        PlaceDos::Tete => 2,
+    }
+}
+
+/// Ce qu'un élément du dos occupe le long du dos, en fraction de sa longueur.
+///
+/// Des fractions, comme les repères de la planche et pour la même raison : l'aperçu du
+/// dos s'affiche à la largeur que la fenêtre lui laisse, et seules des proportions y
+/// survivent. Le sens est celui de l'aperçu couché, de gauche à droite — donc du pied
+/// vers la tête, ce que la double rotation de `source_dos` produit.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct BoiteDos {
+    pub cle: &'static str,
+    pub debut: f64,
+    pub fin: f64,
+}
+
+/// La source qui mesure les trois textes du dos, et ne compose rien.
+///
+/// Typst est le seul à savoir ce qu'un texte occupe : la longueur d'une ligne dépend de
+/// chaque glyphe, là où sa hauteur d'encre ne dépend que de la famille — c'est pourquoi
+/// [`dos_requis`] se contente d'une table et pourquoi ceci n'en peut pas. La source ne
+/// rend aucune page : `typst eval` la mesure et rend un objet JSON, en quelques
+/// millisecondes.
+pub fn source_mesures(livre: &Livre, cv: &Couverture, format: (f64, f64)) -> String {
+    let (fw, _) = format;
+    let champs: Vec<String> = composes(livre, cv)
+        .iter()
+        .map(|(cle, el, texte)| {
+            format!(
+                "{cle}: measure({}).width / 1mm",
+                el.style.applique(fw, texte)
+            )
+        })
+        .collect();
+    format!(
+        "#set page(width: 1000mm, height: 20mm, margin: 0mm)\n\
+         #set text(lang: \"fr\", top-edge: 0.75em, bottom-edge: -0.25em)\n\
+         #context [\n  #metadata(({})) <mesures>\n]\n",
+        champs.join(", ")
+    )
+}
+
+/// Où chaque élément du dos tombe, à partir des longueurs que Typst a mesurées.
+///
+/// La règle est celle de [`bloc_dos`], relue ici depuis l'autre bout : cinq colonnes —
+/// pied, ressort, centre, ressort, tête — dans un bloc long comme le dos et retiré de
+/// sa marge aux deux extrémités. Le pied se cale contre le début, la tête contre la
+/// fin, le centre reste centré, et les éléments d'une même place se suivent séparés de
+/// l'écart. Une place dont la longueur dépasse ce que le dos offre déborde ici comme
+/// elle déborde là-bas : rien n'est ramené dans les bornes, sans quoi la prise se
+/// poserait où le texte n'est pas.
+pub fn boites_dos(
+    livre: &Livre,
+    cv: &Couverture,
+    format: (f64, f64),
+    mesures: &std::collections::BTreeMap<String, f64>,
+) -> Vec<BoiteDos> {
+    let (fw, fh) = format;
+    let marge = cv.dos.marge / 100.0 * fw;
+    let ecart = cv.dos.ecart / 100.0 * fw;
+
+    let mut places: [Vec<(u8, &'static str, f64)>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+    for (cle, el, _) in composes(livre, cv) {
+        let l = mesures.get(cle).copied().unwrap_or(0.0);
+        places[rangee(el.place)].push((el.rang, cle, l));
+    }
+
+    for p in places.iter_mut() {
+        p.sort_by_key(|(rang, _, _)| *rang);
+    }
+    let longueurs: Vec<f64> = places
+        .iter()
+        .map(|p| {
+            p.iter().map(|(_, _, l)| l).sum::<f64>() + ecart * (p.len().saturating_sub(1)) as f64
+        })
+        .collect();
+    // Le bloc est retiré de sa marge aux deux bouts, et les deux ressorts se partagent
+    // à parts égales ce qui reste. Le centre n'est donc **pas** centré sur le dos dès
+    // que le pied et la tête ne pèsent pas pareil : il l'est sur ce que les deux
+    // ressorts laissent. Le croire centré le décale de la moitié de leur différence —
+    // sept millimètres sur un dos de poche, et la prise se pose à côté du titre.
+    let libre = fh - 2.0 * marge - longueurs.iter().sum::<f64>();
+
+    let mut out = Vec::new();
+    for (i, p) in places.iter().enumerate() {
+        if p.is_empty() {
+            continue;
+        }
+        let mut u = match i {
+            0 => marge,
+            1 => marge + longueurs[0] + libre / 2.0,
+            _ => fh - marge - longueurs[2],
+        };
+        for (_, cle, l) in p.iter() {
+            out.push(BoiteDos {
+                cle,
+                debut: u / fh,
+                fin: (u + l) / fh,
+            });
+            u += l + ecart;
+        }
+    }
+    out
 }
 
 /// Épaisseur de dos que la maquette réclame, en mm : sa ligne la plus haute, plus le
@@ -173,7 +288,7 @@ pub fn dos_requis(livre: &Livre, cv: &Couverture, largeur: f64) -> f64 {
         return 0.0;
     }
     els.iter()
-        .map(|(el, _)| el.style.encre_mm(largeur))
+        .map(|(_, el, _)| el.style.encre_mm(largeur))
         .fold(0.0, f64::max)
         + 2.0 * JEU_PLI
 }
@@ -247,13 +362,8 @@ fn bloc_dos(
     // déjà écartés par `composes` : c'est ce qui permet de composer un dos sans
     // éditeur, ou un dos qui ne porte que le titre.
     let mut places: [Vec<(u8, String)>; 3] = [Vec::new(), Vec::new(), Vec::new()];
-    for (el, texte) in composes(livre, cv) {
-        let i = match el.place {
-            PlaceDos::Pied => 0,
-            PlaceDos::Centre => 1,
-            PlaceDos::Tete => 2,
-        };
-        places[i].push((el.rang, format!("#{}", el.style.applique(fw, texte))));
+    for (_, el, texte) in composes(livre, cv) {
+        places[rangee(el.place)].push((el.rang, format!("#{}", el.style.applique(fw, texte))));
     }
     if places.iter().all(Vec::is_empty) {
         return s;
@@ -762,6 +872,100 @@ mod tests {
         // La page, elle, est cette boîte couchée : le dos y court en largeur.
         let page = format!("#set page(width: {}, height: {}", mm(g.format.1), mm(g.dos));
         assert!(s.contains(&page), "page attendue {page} dans :\n{s}");
+    }
+
+    /// Les prises du dos tombent là où les textes se composent.
+    ///
+    /// La règle est celle des cinq colonnes de `bloc_dos`, relue depuis l'autre bout :
+    /// le pied contre le début, la tête contre la fin, l'écart entre deux voisins d'une
+    /// même place. C'est le seul endroit où cette mise en page est écrite deux fois —
+    /// une fois pour Typst, une fois pour la souris — et ce test est ce qui les tient
+    /// d'accord. Si elles divergent, la prise se pose à côté du texte et le geste
+    /// devient une devinette.
+    ///
+    /// Les longueurs sont données ici plutôt que mesurées : ce qui se vérifie est
+    /// l'arithmétique de la place, pas la métrique des polices — celle-là, seul Typst
+    /// la connaît, et `source_mesures` la lui demande.
+    #[test]
+    fn les_boites_du_dos_suivent_les_cinq_colonnes() {
+        let mut cv = maquettes::folio();
+        cv.pied.editeur = "OZALID".into();
+        cv.dos.marge = 3.0;
+        cv.dos.ecart = 2.0;
+        cv.dos.auteur = ElementDos {
+            actif: true,
+            place: PlaceDos::Pied,
+            rang: 1,
+            ..cv.dos.auteur.clone()
+        };
+        cv.dos.titre = ElementDos {
+            actif: true,
+            place: PlaceDos::Pied,
+            rang: 2,
+            ..cv.dos.titre.clone()
+        };
+        cv.dos.editeur = ElementDos {
+            actif: true,
+            place: PlaceDos::Tete,
+            rang: 1,
+            ..cv.dos.editeur.clone()
+        };
+        let mesures = [
+            ("auteur".to_string(), 20.0),
+            ("titre".to_string(), 50.0),
+            ("editeur".to_string(), 10.0),
+        ]
+        .into_iter()
+        .collect();
+
+        // Poche Lulu : 108 de large, 175 de dos. Marge 3,24 mm, écart 2,16 mm.
+        let pres = |b: &[BoiteDos], c: &str, deb: f64, fin: f64, quoi: &str| {
+            let x = b.iter().find(|x| x.cle == c).unwrap();
+            assert!(
+                (x.debut * 175.0 - deb).abs() < 0.01 && (x.fin * 175.0 - fin).abs() < 0.01,
+                "{quoi} : [{}, {}] attendu [{deb}, {fin}]",
+                x.debut * 175.0,
+                x.fin * 175.0
+            );
+        };
+
+        // Deux au pied, un à la tête. Le pied part de la marge, ses deux textes sont
+        // séparés de l'écart, la tête est calée contre la marge de l'autre bout.
+        let b = boites_dos(&livre(), &cv, (108.0, 175.0), &mesures);
+        pres(
+            &b,
+            "auteur",
+            3.24,
+            23.24,
+            "l'auteur ne part pas de la marge du pied",
+        );
+        pres(
+            &b,
+            "titre",
+            25.4,
+            75.4,
+            "le titre ne suit pas l'auteur d'un écart",
+        );
+        pres(
+            &b,
+            "editeur",
+            161.76,
+            171.76,
+            "l'éditeur n'est pas calé sur la tête",
+        );
+
+        // Le même dos, l'éditeur passé au centre : la tête est vide, et le centre n'est
+        // donc plus centré sur le dos. Les deux ressorts se partagent ce que le pied
+        // laisse — 168,52 − 72,16 − 10 —, d'où 3,24 + 72,16 + 43,18.
+        cv.dos.editeur.place = PlaceDos::Centre;
+        let b = boites_dos(&livre(), &cv, (108.0, 175.0), &mesures);
+        pres(
+            &b,
+            "editeur",
+            118.58,
+            128.58,
+            "le centre est cru centré sur le dos",
+        );
     }
 
     /// Le corps du texte de dos est un pourcentage de la **largeur de couverture** ;

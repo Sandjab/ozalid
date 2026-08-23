@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { charge } = require('./dom_shim');
-const { groupes, lire, ecrire } = require('../src/couverture.js');
+const { groupes, lire, ecrire, placeImage } = require('../src/couverture.js');
 
 const LULU = {
   cle: 'lulu', libelle: 'Lulu', largeur: 108, hauteur: 175, fond_perdu: 3.175, dos_publie: true,
@@ -140,6 +140,34 @@ async function ouvre(couverture, sur = {}, dialogues = []) {
           : null,
       };
     }
+    // Les calques de la face manipulable, demandés après chaque aperçu. Une photo de
+    // 1000 × 1000 dans le bandeau d'une poche Lulu : la zone commence sous la bande, à
+    // 30 % de la hauteur, et prend toute la largeur.
+    if (cmd === 'couverture_calques') {
+      // Les mêmes conditions que le Rust : pas de photo à déplacer en composition
+      // typographique, ni sur une 4ème qui ne porte pas sa propre image.
+      const photo = args.face === 'une'
+        ? couverture?.mode !== 'typo'
+        : args.face === 'quatre' && couverture?.quatrieme.fond === 'image';
+      return photo
+        ? {
+          habillage: 'data:image/png;base64,SEFC',
+          photo: 'data:image/jpeg;base64,UEhP',
+          naturel_l: 1000, naturel_h: 1000,
+          zone: { x: 0, y: 0.3, l: 1, h: 0.7 },
+          papier: '#ffffff',
+        }
+        : null;
+    }
+    // Les boîtes du dos, mesurées par Typst côté Rust. Celles de la maquette de ce
+    // fichier : auteur et titre au pied, éditeur à la tête.
+    if (cmd === 'couverture_dos_boites') {
+      return [
+        { cle: 'auteur', debut: 0.02, fin: 0.14 },
+        { cle: 'titre', debut: 0.15, fin: 0.43 },
+        { cle: 'editeur', debut: 0.92, fin: 0.98 },
+      ];
+    }
     // Viser un autre destinataire est un des gestes qui redemandent un aperçu : le
     // format de la page vient de lui. Le projet de ce fichier n'en déclare qu'un, et
     // c'est assez — ce qui est vérifié ici, c'est que l'aperçu reparte.
@@ -162,6 +190,35 @@ async function ouvre(couverture, sur = {}, dialogues = []) {
 
 /** Laisse passer le délai de grâce de l'aperçu. */
 const attendreApercu = () => new Promise((r) => setTimeout(r, 300));
+
+/**
+ * Donne une taille à l'aperçu.
+ *
+ * Le faux DOM ne met rien en page : sans cette boîte, tout geste se refuse — comme il le
+ * fait dans la fenêtre devant un aperçu qui n'est pas encore affiché. Deux pixels par
+ * millimètre sur une poche Lulu de 108 × 175, ce qui rend les comptes lisibles.
+ */
+const poserBoite = (els) => {
+  els.get('cadreApercu').rect = { left: 0, top: 0, width: 216, height: 350 };
+};
+
+/** Un événement de souris, réduit à ce que la manipulation directe en lit. */
+const souris = (x, y) => ({
+  button: 0, clientX: x, clientY: y, pointerId: 1,
+  preventDefault() {}, stopPropagation() {},
+});
+
+/** Un geste complet sur une prise : presser, traîner, relâcher. */
+async function glisser(els, prise, de, vers) {
+  const el = els.get(prise);
+  await el.declenche('pointerdown', souris(de[0], de[1]));
+  await el.declenche('pointermove', souris(vers[0], vers[1]));
+  await el.declenche('pointerup', souris(vers[0], vers[1]));
+}
+
+/** La dernière maquette envoyée au Rust. */
+const derniereMaquette = (appels) =>
+  [...appels].reverse().find(([c]) => c === 'couverture_modifier')?.[1].couverture;
 
 /**
  * La face par son libellé, et non par son rang : l'application les retrouve par rang —
@@ -645,4 +702,263 @@ test('la bascule ne s\'offre que sur la planche', async () => {
   await face(els, 'Planche').declenche('click');
   await attendreApercu();
   assert.strictEqual(els.get('btReperes').hidden, false, 'bascule absente de la planche');
+});
+
+/* ---------- manipulation directe ---------- */
+
+/**
+ * Le portage de `image::place` en JavaScript dit la même chose que le Rust.
+ *
+ * C'est la seule règle de composition qui existe en deux langues dans l'application, et
+ * cette table est ce qui les tient d'accord : les cinq cas sont exactement ceux des
+ * tests de `image.rs`, valeurs comprises. Les recalculer autrement ici ne prouverait
+ * rien — ce qu'on vérifie, c'est que les deux versions se rejoignent, pas que celle-ci
+ * est cohérente avec elle-même.
+ *
+ * Si l'une des deux bouge sans l'autre, la photo suivra la souris ailleurs que là où
+ * Typst la composera, et le geste mentira sans jamais lever d'erreur.
+ */
+test('le portage de place dit la même chose que le Rust', () => {
+  const zone = { largeur: 100, hauteur: 50 };
+  const nat = { largeur: 100, hauteur: 100 };
+  const base = { proportions: false, x: 0.5, y: 0.5, zoom: 1, etirement: 1 };
+
+  const debordante = placeImage(zone, nat, base);
+  assert.deepStrictEqual(debordante, { gauche: 0, haut: -25, largeur: 100, hauteur: 100 });
+
+  const gardees = placeImage(zone, nat, { ...base, proportions: true });
+  assert.deepStrictEqual(gardees, { gauche: 25, haut: 0, largeur: 50, hauteur: 50 });
+
+  for (const [y, attendu] of [[0, 0], [0.5, -25], [1, -50]]) {
+    assert.strictEqual(placeImage(zone, nat, { ...base, y }).haut, attendu, `ancrage ${y}`);
+  }
+
+  const zoome = placeImage(zone, nat, { ...base, x: 0, y: 0, zoom: 2 });
+  assert.deepStrictEqual(zoome, { gauche: 0, haut: 0, largeur: 200, hauteur: 200 });
+
+  const etire = placeImage(zone, nat, { ...base, etirement: 1.5 });
+  assert.strictEqual(etire.largeur, 150);
+  assert.strictEqual(etire.hauteur, 100, 'la hauteur ne suit pas l\'étirement');
+  const neutralise = placeImage(zone, nat, { ...base, proportions: true, etirement: 1.5 });
+  assert.strictEqual(neutralise.largeur, 50, 'étirement non neutralisé par les proportions');
+});
+
+/**
+ * La photo suit la souris au 1:1 — et la référence est son mou réel, pas la largeur de
+ * la couverture.
+ *
+ * Une photo de 1000 × 1000 dans une zone de 108 × 122,5 mm se compose en 122,5 × 122,5 :
+ * elle déborde de 14,5 mm en largeur et de rien du tout en hauteur. Les 10 px du geste
+ * valent 5 mm sur cet aperçu-là, soit un tiers du mou : l'ancrage passe de 0,5 à 0,16.
+ *
+ * Deux choses se vérifient ici et nulle part ailleurs. Le **sens** : tirer vers la
+ * droite découvre la gauche de la photo, donc l'ancrage décroît — l'inverse ferait
+ * fuir l'image sous le curseur. Et le **refus** de l'axe sans mou : la hauteur ne bouge
+ * pas d'un cheveu, parce qu'il n'y a rien à y découvrir. Un geste calé sur la largeur de
+ * la face aurait donné 0,45 au lieu de 0,16, et le réglage aurait paru mou.
+ */
+test('tirer la photo déplace l\'ancrage de son mou réel, dans le sens du geste', async () => {
+  const cv = maquette();
+  const { els, appels, contexte } = await ouvre(cv, { couverture_modifier: (a) => projet(a.couverture) });
+  await attendreApercu();
+  poserBoite(els);
+
+  await glisser(els, 'priseImage', [100, 200], [110, 200]);
+  assert.strictEqual(contexte.valeurSaisie('cadrage.x'), 0.16);
+  assert.strictEqual(contexte.valeurSaisie('cadrage.y'), 0.5, 'axe sans mou déplacé');
+  assert.strictEqual(derniereMaquette(appels).cadrage.x, 0.16, 'valeur non commise au Rust');
+});
+
+/**
+ * La hauteur du bloc de la 4ème se compte en pourcentage de la **largeur** de la
+ * couverture, celle de la 1ère en pourcentage de sa **hauteur** — c'est le schéma qui le
+ * dit, chacun dans son unité.
+ *
+ * Le même geste vertical n'y vaut donc pas le même nombre : 17,5 px sur un aperçu haut de
+ * 350 font un vingtième de la hauteur, soit 8,75 mm, soit 8,1 % de la largeur — et non 5.
+ * Un geste qui ignorerait l'unité poserait 17 au lieu de 20,5, et le texte de la 4ème
+ * partirait d'un tiers de trop à chaque tirée.
+ */
+test('la hauteur du bloc de la 4ème se compte sur la largeur', async () => {
+  const cv = maquette();
+  cv.quatrieme.texte = 'Un texte de présentation.';
+  const { els, contexte } = await ouvre(cv, { couverture_modifier: (a) => projet(a.couverture) });
+  await face(els, '4ème').declenche('click');
+  await attendreApercu();
+  poserBoite(els);
+
+  await glisser(els, 'priseBloc', [100, 100], [100, 117.5]);
+  assert.strictEqual(contexte.valeurSaisie('quatrieme.top'), 20);
+});
+
+/**
+ * Le panneau ne réécrit pas le champ que la souris tient.
+ *
+ * Pendant un geste lent, une composition part à chaque pause et revient avec la maquette
+ * telle qu'elle était **au départ de cette composition** — donc en retard sur la souris,
+ * qui a continué. Sans garde, la couverture reculerait d'un cran à chaque rattrapage, et
+ * le geste deviendrait impossible à finir.
+ */
+test('le panneau ne réécrit pas le réglage que la souris tient', async () => {
+  // Une commande qu'on retient : c'est ce qui fait le test. Elle part avec le bandeau à
+  // 40, la souris continue jusqu'à 50, et sa réponse — périmée de dix points — n'arrive
+  // qu'ensuite. Une commande instantanée ne prouverait rien : elle répondrait toujours
+  // ce que le champ porte encore.
+  let repondre;
+  const retenue = new Promise((r) => { repondre = r; });
+  const cv = maquette();
+  const { els, contexte } = await ouvre(cv, {
+    couverture_modifier: async (a) => { await retenue; return projet(a.couverture); },
+  });
+  await attendreApercu();
+  poserBoite(els);
+
+  const prise = els.get('priseBandeau');
+  await prise.declenche('pointerdown', souris(100, 100));
+  await prise.declenche('pointermove', souris(100, 135));
+  assert.strictEqual(contexte.valeurSaisie('bandeau'), 40, '10 % de la hauteur non ajoutés');
+
+  // Le rattrapage part…
+  await new Promise((r) => setTimeout(r, 200));
+  // …la souris continue…
+  await prise.declenche('pointermove', souris(100, 170));
+  assert.strictEqual(contexte.valeurSaisie('bandeau'), 50);
+  // …et la réponse périmée arrive.
+  repondre();
+  await new Promise((r) => setTimeout(r, 50));
+  assert.strictEqual(contexte.valeurSaisie('bandeau'), 50, 'champ repris par le panneau');
+  await prise.declenche('pointerup', souris(100, 170));
+});
+
+/**
+ * Poser la souris sur sa propre couverture ne modifie pas le document.
+ *
+ * Un clic sans déplacement ne commet rien : sinon regarder une couverture suffirait à
+ * réveiller la garde des modifications à la fermeture, et à faire proposer d'enregistrer
+ * un travail que personne n'a touché.
+ */
+test('un clic qui ne déplace rien ne modifie pas le projet', async () => {
+  const cv = maquette();
+  const { els, appels } = await ouvre(cv, { couverture_modifier: (a) => projet(a.couverture) });
+  await attendreApercu();
+  poserBoite(els);
+
+  const prise = els.get('priseImage');
+  await prise.declenche('pointerdown', souris(100, 200));
+  await prise.declenche('pointerup', souris(100, 200));
+  assert.strictEqual(
+    appels.some(([c]) => c === 'couverture_modifier'), false, 'clic commis au Rust');
+});
+
+/**
+ * Une prise ne s'offre que là où il y a quelque chose à saisir.
+ *
+ * La frontière du bandeau n'existe qu'en mode Bandeau ; la planche ne règle rien, donc
+ * n'offre aucune prise. Le détour par la 1ère est ce qui fait le test : les prises
+ * naissent masquées dans le HTML, et sans lui on vérifierait qu'une boîte jamais montrée
+ * reste absente.
+ */
+test('les prises ne s\'offrent que là où il y a quelque chose à saisir', async () => {
+  const { els } = await ouvre(maquette());
+  await attendreApercu();
+  assert.strictEqual(els.get('prises').hidden, false, 'aucune prise sur la 1ère');
+  assert.strictEqual(els.get('priseBandeau').hidden, false, 'frontière du bandeau absente');
+  assert.strictEqual(els.get('priseImage').hidden, false, 'photo non saisissable');
+
+  await face(els, 'Planche').declenche('click');
+  await attendreApercu();
+  assert.strictEqual(els.get('prises').hidden, true, 'prises laissées sur la planche');
+
+  const { els: sansImage } = await ouvre(maquette('typo'));
+  await attendreApercu();
+  assert.strictEqual(
+    sansImage.get('priseBandeau').hidden, true, 'frontière de bandeau hors mode Bandeau');
+  assert.strictEqual(sansImage.get('priseImage').hidden, true, 'photo saisissable sans photo');
+});
+
+/**
+ * Les prises du dos tombent sur les boîtes que le Rust donne, et pas ailleurs.
+ *
+ * Ces boîtes-là ne se devinent pas : la longueur d'un texte dépend de chaque glyphe, et
+ * seul Typst tient les métriques des polices embarquées. La fenêtre n'a donc rien à
+ * calculer ici — ce qui se vérifie, c'est qu'elle pose sans rien réinterpréter.
+ */
+test('les prises du dos se posent sur les boîtes mesurées', async () => {
+  const { els } = await ouvre(maquette());
+  await face(els, 'Dos').declenche('click');
+  await attendreApercu();
+
+  const prise = els.get('priseDosTitre');
+  assert.strictEqual(prise.hidden, false, 'le titre du dos ne se saisit pas');
+  assert.strictEqual(prise.style.getPropertyValue('--gauche'), '0.15');
+  assert.strictEqual(prise.style.getPropertyValue('--largeur'), '0.28');
+  // L'éditeur est éteint dans la maquette de ce fichier ? Non : il est à la tête.
+  assert.strictEqual(els.get('priseDosEditeur').style.getPropertyValue('--gauche'), '0.92');
+  // Les prises des autres faces n'ont rien à faire en travers du dos.
+  assert.strictEqual(els.get('priseBandeau').hidden, true, 'bandeau posé sur le dos');
+  assert.strictEqual(els.get('priseImage').hidden, true, 'cadre d\'image posé sur le dos');
+});
+
+/**
+ * Déposer un texte du dos dans un autre tiers le range, et renumérote la place entière.
+ *
+ * L'éditeur part de la tête et tombe à 20 % du dos, donc au pied, entre l'auteur — dont
+ * le texte s'arrête avant — et le titre, qui commence après. Les trois rangs du pied
+ * sont alors réécrits d'un bout à l'autre : laisser un trou ferait dépendre l'ordre de
+ * nombres qui ne veulent plus rien dire, et deux éléments finiraient par partager un
+ * rang, auquel cas c'est le tri du Rust qui trancherait sans que personne l'ait décidé.
+ *
+ * Rien n'est commis en chemin : la place et le rang n'ont de valeur qu'une fois le doigt
+ * levé, et une composition par tiers traversé ferait clignoter le dos sous la souris.
+ */
+test('déposer un texte du dos le range et renumérote sa place', async () => {
+  const cv = maquette();
+  const { els, appels, contexte } = await ouvre(cv, {
+    couverture_modifier: (a) => projet(a.couverture),
+  });
+  await face(els, 'Dos').declenche('click');
+  await attendreApercu();
+  poserBoite(els);
+
+  const prise = els.get('priseDosEditeur');
+  await prise.declenche('pointerdown', souris(200, 40));
+  await prise.declenche('pointermove', souris(43.2, 40));
+
+  // La prise suit la souris pendant qu'on la traîne : sans ce déplacement, on lâcherait
+  // à l'aveugle un rectangle resté à sa place de départ.
+  assert.ok(
+    Math.abs(Number(prise.style.getPropertyValue('--gauche')) - (0.92 - 156.8 / 216)) < 1e-9,
+    'la prise saisie ne suit pas la souris');
+
+  // Au-delà du délai de grâce : rien ne part tant que le doigt n'est pas levé.
+  await new Promise((r) => setTimeout(r, 250));
+  assert.strictEqual(
+    appels.some(([c]) => c === 'couverture_modifier'), false, 'commis avant le dépôt');
+
+  await prise.declenche('pointerup', souris(43.2, 40));
+  assert.strictEqual(contexte.valeurSaisie('dos.editeur.place'), 'pied');
+  assert.strictEqual(contexte.valeurSaisie('dos.auteur.rang'), 1);
+  assert.strictEqual(contexte.valeurSaisie('dos.editeur.rang'), 2, 'inséré au mauvais rang');
+  assert.strictEqual(contexte.valeurSaisie('dos.titre.rang'), 3, 'le voisin n\'a pas reculé');
+  assert.strictEqual(derniereMaquette(appels).dos.editeur.place, 'pied', 'dépôt non commis');
+});
+
+/**
+ * Reposer un texte du dos là où il était ne modifie pas le document, comme un clic sur
+ * la couverture. Le dépôt écrit bien les six réglages, mais il les écrit à l'identique.
+ */
+test('reposer un texte du dos au même endroit ne modifie pas le projet', async () => {
+  const cv = maquette();
+  const { els, appels } = await ouvre(cv, { couverture_modifier: (a) => projet(a.couverture) });
+  await face(els, 'Dos').declenche('click');
+  await attendreApercu();
+  poserBoite(els);
+
+  // L'éditeur est à la tête, et 200 px sur 216 tombent dans le dernier tiers.
+  const prise = els.get('priseDosEditeur');
+  await prise.declenche('pointerdown', souris(200, 40));
+  await prise.declenche('pointermove', souris(198, 40));
+  await prise.declenche('pointerup', souris(198, 40));
+  assert.strictEqual(
+    appels.some(([c]) => c === 'couverture_modifier'), false, 'dépôt sans effet commis');
 });

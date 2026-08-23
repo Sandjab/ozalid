@@ -351,6 +351,13 @@ function construireReglages() {
 function afficherCouverture(cv) {
   for (const { champ, el, ligne } of controles) {
     const v = lire(cv, champ.chemin);
+    // Un champ que la souris tient en ce moment ne se réécrit pas : la valeur qui
+    // revient est celle de la composition rattrapée, et le geste, lui, a continué.
+    // Sans cette ligne, la couverture reculerait d'un cran à chaque rattrapage.
+    if (geste?.chemins.has(champ.chemin)) {
+      ligne.hidden = !!champ.modes && !champ.modes.includes(cv.mode);
+      continue;
+    }
     if (champ.type === 'case') el.checked = !!v;
     else el.value = v ?? '';
     // Un réglage sans objet dans l'état courant est masqué plutôt que grisé : le
@@ -361,6 +368,7 @@ function afficherCouverture(cv) {
     b.el.hidden = b.face !== face || (!!b.modes && !b.modes.includes(cv.mode));
   }
   poserDisposition(blocs.some((b) => !b.el.hidden));
+  poserPrises();
 }
 
 /**
@@ -418,7 +426,9 @@ async function majCouverture() {
  */
 function demanderApercu() {
   clearTimeout(attenteApercu);
-  attenteApercu = setTimeout(rendreApercu, 180);
+  // Zéro pendant un geste : la commande a déjà fait l'attente, et la répéter ajoutait
+  // 180 ms à chaque rattrapage sans rien coalescer de plus.
+  attenteApercu = setTimeout(rendreApercu, geste ? 0 : 180);
 }
 
 /**
@@ -451,6 +461,10 @@ function poserApercu(a) {
   if (!a) $('cadreApercu').style.removeProperty('--ratio');
   poserReperes(a?.reperes ?? null);
   poserMesures(a?.mesures ?? null);
+  // Le direct ne s'efface qu'entre deux gestes : pendant, il montre plus juste que
+  // l'image qui vient d'arriver, laquelle a déjà un cran de retard sur la souris.
+  if (!geste) masquerDirect();
+  poserPrises();
 }
 
 /**
@@ -539,11 +553,534 @@ async function rendreApercu() {
     poserApercu(await invoke('couverture_apercu', { face, dosMm: dosCourant() }));
     $('etatApercu').textContent = '';
     $('etatApercu').className = 'note';
+    // Après l'aperçu, jamais pendant un geste : une composition de plus, dont le geste
+    // en cours n'a pas besoin — l'habillage qu'il tient ne dépend pas du cadrage.
+    if (!geste) demanderCalques();
   } catch (e) {
     poserApercu(null);
     $('etatApercu').textContent = String(e);
     $('etatApercu').className = 'note alerte';
   }
+}
+
+/* ---------- manipulation directe ---------- */
+
+/**
+ * Ce que chaque face manipulable règle, et sous quel nom.
+ *
+ * Les deux faces portent les mêmes trois choses — un cadrage, un bloc de texte et ses
+ * marges — sous deux préfixes différents. La table est la seule à le savoir : les gestes
+ * qui suivent ne connaissent que `cadrage`, `bloc` et `pad`.
+ *
+ * `bloc_sur` n'est pas un détail : la hauteur du bloc de la 1ère se compte en pourcentage
+ * de la **hauteur** de la couverture, celle de la 4ème en pourcentage de sa **largeur**.
+ * C'est le schéma qui le dit, chacun dans son unité, et un geste qui l'ignorerait
+ * déplacerait le texte de la 4ème d'un tiers de trop.
+ */
+const REGLAGES = {
+  une: { cadrage: 'cadrage', bloc: 'bloc_y', bloc_sur: 'hauteur', pad: 'pad_x' },
+  quatre: {
+    cadrage: 'quatrieme.cadrage', bloc: 'quatrieme.top', bloc_sur: 'largeur',
+    pad: 'quatrieme.pad_x',
+  },
+};
+
+/** Le format du destinataire visé, en millimètres — l'échelle de tout ce qui suit. */
+function formatCourant() {
+  const d = destinataireCourant();
+  const p = providers.find((x) => x.cle === d?.provider);
+  return p ? { largeur: p.largeur, hauteur: p.hauteur } : null;
+}
+
+/** Le contrôle qui porte un chemin du schéma, s'il existe. */
+const controleDe = (chemin) => controles.find((c) => c.champ.chemin === chemin);
+
+/**
+ * La valeur que porte un contrôle — et non celle du projet.
+ *
+ * Pendant un geste, les deux diffèrent : le contrôle est déjà à la position de la
+ * souris, le projet en est encore à la dernière composition. C'est le contrôle qui fait
+ * foi, puisque c'est lui que la commande relira.
+ */
+function valeurSaisie(chemin) {
+  const c = controleDe(chemin);
+  if (!c) return undefined;
+  if (c.champ.type === 'case') return c.el.checked;
+  if (c.champ.type === 'nombre') return nombreSaisi(c.el, c.champ);
+  return c.el.value;
+}
+
+/**
+ * Pose une valeur dans son contrôle, au cran du schéma et dans ses bornes.
+ *
+ * Au cran, et c'est ce qui rend le geste et le panneau lisibles ensemble : la souris
+ * produit des réels, et une hauteur de bandeau à 37,813567143516 % s'écrit telle quelle
+ * dans le champ, part telle quelle au projet, et ne se retape pas à la main. Le pas est
+ * celui que le schéma offre déjà aux flèches du champ — la souris n'a pas de raison
+ * d'être plus fine que le clavier.
+ */
+function poserValeur(chemin, v) {
+  const c = controleDe(chemin);
+  if (!c) return;
+  const { min, max, pas } = c.champ;
+  if (min !== undefined) v = Math.min(Math.max(v, min), max);
+  if (pas) {
+    // `toFixed` après l'arrondi : sans lui, 0,1 × 3 s'écrirait 0,30000000000000004.
+    const decimales = (String(pas).split('.')[1] ?? '').length;
+    v = Number((Math.round(v / pas) * pas).toFixed(decimales));
+  }
+  c.el.value = v;
+}
+
+/** Les cinq réglages d'un cadrage, tels que les contrôles les portent. */
+function cadrageSaisi(prefixe) {
+  return {
+    proportions: valeurSaisie(`${prefixe}.proportions`),
+    x: valeurSaisie(`${prefixe}.x`),
+    y: valeurSaisie(`${prefixe}.y`),
+    zoom: valeurSaisie(`${prefixe}.zoom`),
+    etirement: valeurSaisie(`${prefixe}.etirement`),
+  };
+}
+
+/**
+ * Où la photo se pose dans sa zone — le portage exact d'`image::place`.
+ *
+ * Traduit du Rust, et c'est le seul endroit de l'application où une règle de composition
+ * existe en deux langues. Le prix est assumé : sans elle, la fenêtre ne peut pas montrer
+ * la photo suivre la souris, et une composition Typst par pixel parcouru n'est pas
+ * envisageable — 110 ms mesurés pour une 1ère. Les deux versions sont tenues d'accord
+ * par une table de cas partagée, écrite deux fois : `tests/couverture.test.js` ici,
+ * `image.rs` là-bas.
+ */
+function placeImage(zone, naturel, c) {
+  if (zone.largeur <= 0 || zone.hauteur <= 0 || naturel.largeur <= 0 || naturel.hauteur <= 0) {
+    return null;
+  }
+  const a = zone.largeur / naturel.largeur;
+  const b = zone.hauteur / naturel.hauteur;
+  const ajuste = c.proportions ? Math.min(a, b) : Math.max(a, b);
+  // La déformation est repliée dans l'échelle horizontale, et n'a de sens qu'en cadrage
+  // débordant : conserver les proportions la neutralise.
+  const sx = c.zoom * (c.proportions ? 1 : c.etirement);
+  const dl = naturel.largeur * ajuste;
+  const dh = naturel.hauteur * ajuste;
+  const gauche = (zone.largeur - dl) * c.x;
+  const haut = (zone.hauteur - dh) * c.y;
+  // Le zoom se prend autour du point d'ancrage, pas du coin de la zone.
+  const ox = zone.largeur * c.x;
+  const oy = zone.hauteur * c.y;
+  return {
+    gauche: ox - (ox - gauche) * sx,
+    haut: oy - (oy - haut) * c.zoom,
+    largeur: dl * sx,
+    hauteur: dh * c.zoom,
+  };
+}
+
+/** La zone de la photo en millimètres, pour la face montrée. */
+function zoneMm() {
+  const f = formatCourant();
+  if (!f || !calques) return null;
+  const z = calques.zone;
+  return {
+    gauche: z.x * f.largeur, haut: z.y * f.hauteur,
+    largeur: z.l * f.largeur, hauteur: z.h * f.hauteur,
+  };
+}
+
+/**
+ * Le mou de la photo sur chaque axe : la course dont le cadrage dispose.
+ *
+ * Nul quand l'image couvre sa zone pile — et le geste se refuse alors plutôt que de
+ * déplacer un curseur qui ne déplace rien. C'est le parti de l'atelier HTML, repris
+ * ici : un geste sans effet visible fait douter du réglage, pas du cadrage.
+ */
+function mouPhoto() {
+  const zone = zoneMm();
+  if (!zone) return null;
+  const g = placeImage(zone, { largeur: calques.naturel_l, hauteur: calques.naturel_h },
+    cadrageSaisi(REGLAGES[face].cadrage));
+  if (!g) return null;
+  return { x: Math.abs(zone.largeur - g.largeur), y: Math.abs(zone.hauteur - g.hauteur), g, zone };
+}
+
+/* ---------- le direct ---------- */
+
+/**
+ * Empile le papier, la photo et l'habillage à la place que le cadrage courant leur donne.
+ *
+ * Tout est en pourcentage de sa boîte : l'aperçu s'affiche à la taille que la fenêtre lui
+ * laisse, et des pixels calculés ici seraient faux au premier redimensionnement.
+ */
+function poserDirect() {
+  const m = mouPhoto();
+  if (!m) return;
+  const { zone, g } = m;
+  const z = calques.zone;
+  $('directPapier').style.setProperty('--papier', calques.papier);
+  poser($('directFenetre'), z.x, z.y, z.l, z.h);
+  const ph = $('directPhoto');
+  if (ph.src !== calques.photo) ph.src = calques.photo;
+  // La photo se place en fraction de sa **zone**, pas de la face : c'est la fenêtre qui
+  // la rogne, et c'est dans ses coordonnées à elle que Typst la compose.
+  poser(ph, g.gauche / zone.largeur, g.haut / zone.hauteur,
+    g.largeur / zone.largeur, g.hauteur / zone.hauteur);
+  const hab = $('directHabillage');
+  if (hab.src !== calques.habillage) hab.src = calques.habillage;
+  $('direct').hidden = false;
+}
+
+/** Retire le direct : l'aperçu vrai a rattrapé, il n'a plus rien à montrer de plus. */
+function masquerDirect() {
+  $('direct').hidden = true;
+}
+
+/* ---------- les prises ---------- */
+
+/**
+ * Pose une boîte sur la face, en fractions de celle-ci.
+ *
+ * Par variables CSS et non par `style.left` : c'est déjà ce que fait la coupe, et pour
+ * la même raison. Des fractions traversent un `calc()`, se relisent dans un test, et
+ * survivent à un aperçu affiché à la taille que la fenêtre lui laisse ; des pixels
+ * calculés ici seraient faux au premier redimensionnement.
+ */
+function poser(el, gauche, haut, largeur, hauteur) {
+  el.style.setProperty('--gauche', String(gauche));
+  el.style.setProperty('--haut', String(haut));
+  if (largeur !== undefined) el.style.setProperty('--largeur', String(largeur));
+  if (hauteur !== undefined) el.style.setProperty('--hauteur', String(hauteur));
+}
+
+/**
+ * La hauteur du bloc de texte, en fraction de la face.
+ *
+ * En mode Bandeau, le bloc ne se règle pas : il se cale dans la bande, à 22 % de sa
+ * hauteur — la règle est dans `bloc_texte`, côté Rust. La prise s'y dessine quand même,
+ * mais seules ses poignées latérales répondent : c'est la frontière du bandeau qui la
+ * déplace, et c'est exactement ce que fait l'atelier HTML.
+ */
+function hauteurBloc(cv) {
+  const r = REGLAGES[face];
+  if (face === 'une') {
+    return (cv.mode === 'bandeau' ? valeurSaisie('bandeau') * 0.22 : valeurSaisie('bloc_y')) / 100;
+  }
+  const f = formatCourant();
+  return valeurSaisie(r.bloc) / 100 * (f.largeur / f.hauteur);
+}
+
+/**
+ * Les trois places du dos, dans l'ordre où l'aperçu couché les montre.
+ *
+ * De gauche à droite : pied, centre, tête. Ce n'est pas un choix d'affichage — c'est ce
+ * que produit la double rotation de `source_dos`, et c'est aussi l'ordre de lecture du
+ * dos, du début du livre vers sa fin.
+ */
+const PLACES_DOS_ORDRE = ['pied', 'centre', 'tete'];
+
+/** Toutes les prises du balisage, pour les éteindre d'un bloc avant de choisir. */
+const PRISES = ['priseImage', 'priseBloc', 'priseBandeau',
+  'priseDosAuteur', 'priseDosTitre', 'priseDosEditeur'];
+
+/** La place que vise un dépôt, par tiers du dos. */
+const placeVisee = (u) => PLACES_DOS_ORDRE[Math.min(2, Math.max(0, Math.floor(u * 3)))];
+
+/** Redessine les prises d'après ce que les contrôles portent. */
+function poserPrises() {
+  const cv = projet?.couverture;
+  const r = REGLAGES[face];
+  const boite = $('prises');
+  boite.hidden = !cv || !formatCourant() || !(r || face === 'dos');
+  // Tout s'éteint d'abord, et chaque face rallume ce qui la concerne : une prise laissée
+  // d'une face à l'autre se poserait sur un aperçu qui ne la porte pas — la frontière
+  // d'un bandeau en travers du dos, par exemple.
+  for (const id of PRISES) $(id).hidden = true;
+  $('zonesDos').hidden = true;
+  if (boite.hidden) return;
+  if (face === 'dos') {
+    poserPrisesDos();
+    return;
+  }
+
+  const pi = $('priseImage');
+  pi.hidden = !calques;
+  if (calques) {
+    const z = calques.zone;
+    poser(pi, z.x, z.y, z.l, z.h);
+  }
+
+  // Le bloc de la 4ème n'existe que s'il porte du texte : une prise posée sur du vide
+  // déplacerait un réglage dont rien à l'écran ne montrerait l'effet.
+  const pb = $('priseBloc');
+  pb.hidden = face === 'quatre' && !valeurSaisie('quatrieme.texte').trim();
+  if (!pb.hidden) {
+    const pad = valeurSaisie(r.pad) / 100;
+    poser(pb, pad, hauteurBloc(cv), 1 - 2 * pad);
+    // La barre du bloc se montre en mode Bandeau — le texte est bien là —, mais elle ne
+    // se tire pas : sa hauteur découle de la bande. Seules ses poignées répondent.
+    pb.setAttribute('data-figee', face === 'une' && cv.mode === 'bandeau' ? 'oui' : 'non');
+  }
+
+  const pbd = $('priseBandeau');
+  pbd.hidden = !(face === 'une' && cv.mode === 'bandeau');
+  if (!pbd.hidden) poser(pbd, 0, valeurSaisie('bandeau') / 100, 1);
+}
+
+/**
+ * Les prises du dos : une par texte composé, à l'endroit exact où Typst le pose.
+ *
+ * Les boîtes viennent du Rust, qui les tient de Typst : la longueur d'une ligne dépend
+ * de chaque glyphe, et l'estimer ici poserait la prise à côté du texte. Un dos nu, ou
+ * une face montrée avant que la mesure ne soit revenue, n'offre simplement rien.
+ */
+function poserPrisesDos() {
+  for (const b of ['Auteur', 'Titre', 'Editeur']) {
+    const el = $(`priseDos${b}`);
+    const cle = b.toLowerCase();
+    const boite = boitesDos.find((x) => x.cle === cle);
+    el.hidden = !boite;
+    if (!boite) continue;
+    // La prise saisie suit la souris ; les deux autres restent où le texte est. Elle
+    // seule porte son nom, et seulement le temps du geste : au repos, la prise est posée
+    // sur son propre texte, qui se nomme mieux qu'aucun libellé — et un libellé par
+    // dessus rendrait les deux illisibles.
+    const saisie = geste?.cle === cle;
+    el.setAttribute('data-saisi', saisie ? 'oui' : 'non');
+    poser(el, boite.debut + (saisie ? geste.glisse.x : 0), 0, boite.fin - boite.debut, 1);
+  }
+  // Les places ne se montrent que pendant le geste, et celle qui recevrait s'allume.
+  const zones = $('zonesDos');
+  zones.hidden = !geste?.cle;
+  if (geste?.cle) zones.setAttribute('data-cible', placeVisee(geste.u));
+}
+
+/**
+ * Range un élément du dos là où on vient de le déposer.
+ *
+ * La place se lit au tiers du dos où le curseur a lâché, le rang au nombre de voisins
+ * déjà passés. Les trois rangs de chaque place sont ensuite renumérotés d'un bout à
+ * l'autre : laisser des trous ferait dépendre l'ordre de nombres qui ne veulent plus
+ * rien dire, et deux éléments finiraient par partager un rang — auquel cas c'est le
+ * tri du Rust qui trancherait, sans que personne l'ait décidé.
+ *
+ * Les éléments que le dos ne compose pas — éteints, ou sans texte — ne sont pas touchés :
+ * ils n'ont pas de boîte, donc pas de place dans ce que l'on voit, et leur rang ne gêne
+ * personne puisqu'ils ne sont pas triés avec les autres.
+ */
+function deposerDos(cle, u) {
+  const ordre = { pied: [], centre: [], tete: [] };
+  for (const b of boitesDos) {
+    if (b.cle !== cle) ordre[valeurSaisie(`dos.${b.cle}.place`)].push(b.cle);
+  }
+  const place = placeVisee(u);
+  const avant = boitesDos.filter(
+    (b) => b.cle !== cle && ordre[place].includes(b.cle) && (b.debut + b.fin) / 2 < u).length;
+  ordre[place].splice(avant, 0, cle);
+  for (const [p, cles] of Object.entries(ordre)) {
+    cles.forEach((c, i) => {
+      poserValeur(`dos.${c}.place`, p);
+      poserValeur(`dos.${c}.rang`, i + 1);
+    });
+  }
+}
+
+/* ---------- les gestes ---------- */
+
+/**
+ * Recompose pendant le geste, à la première pause.
+ *
+ * Deux attentes se suivaient sur ce chemin — celle de la commande, puis celle de
+ * l'aperçu — et une valeur posée mettait 400 ms à revenir en image. Pendant un geste,
+ * la seconde tombe à zéro : la première a déjà fait l'attente, et la répéter ne
+ * protège plus rien.
+ */
+function demanderCommit() {
+  clearTimeout(attenteCommit);
+  attenteCommit = setTimeout(majCouverture, 150);
+}
+
+/**
+ * Un geste de souris sur une prise : ce qu'il tient, et ce que chaque pixel en fait.
+ *
+ * `deplace` reçoit le déplacement du curseur **en fraction de la face** — jamais en
+ * pixels : l'aperçu s'affiche à la taille que la fenêtre lui laisse, et un geste calé
+ * sur des pixels irait deux fois plus vite dans une petite fenêtre.
+ */
+function saisir(el, { chemins, cle = null, direct = false, prete, deplace, deposer }) {
+  el.addEventListener('pointerdown', (e) => {
+    if (e.button) return;
+    const cadre = $('cadreApercu').getBoundingClientRect();
+    if (!cadre.width || !cadre.height) return;
+    if (prete && !prete()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    el.setPointerCapture(e.pointerId);
+
+    const depart = Object.fromEntries(chemins.map((c) => [c, valeurSaisie(c)]));
+    // Le geste porte ce qu'il traîne et où il en est : `poserPrises` en a besoin pour
+    // faire suivre la prise saisie et allumer la place visée, sans que le geste ait à
+    // dessiner lui-même.
+    geste = { chemins: new Set(chemins), cle, glisse: { x: 0, y: 0 }, u: 0 };
+    $('cadreApercu').setAttribute('data-geste', 'oui');
+    if (direct) poserDirect();
+
+    const bouger = (ev) => {
+      geste.glisse = {
+        x: (ev.clientX - e.clientX) / cadre.width,
+        y: (ev.clientY - e.clientY) / cadre.height,
+      };
+      geste.u = (ev.clientX - cadre.left) / cadre.width;
+      if (deplace) deplace(geste.glisse, depart);
+      poserPrises();
+      if (direct) poserDirect();
+      // Un geste qui ne pose ses valeurs qu'au dépôt n'a rien à faire recomposer en
+      // chemin : le commettre à chaque pause enverrait la maquette inchangée, et
+      // marquerait le projet modifié pour un déplacement qui n'a pas encore eu lieu.
+      if (deplace) demanderCommit();
+    };
+    const lacher = () => {
+      el.removeEventListener('pointermove', bouger);
+      el.removeEventListener('pointerup', lacher);
+      el.removeEventListener('pointercancel', lacher);
+      if (deposer) deposer(geste.u);
+      geste = null;
+      $('cadreApercu').removeAttribute('data-geste');
+      poserPrises();
+      clearTimeout(attenteCommit);
+      // Un clic qui n'a rien déplacé ne se commet pas : il marquerait le projet
+      // modifié, donc réveillerait la garde à la fermeture, pour avoir posé la souris
+      // sur sa propre couverture. La comparaison porte sur les valeurs et non sur le
+      // fait qu'un `pointermove` ait eu lieu — un pixel de tremblement, ramené dans les
+      // bornes, ne change rien non plus.
+      if (chemins.some((c) => valeurSaisie(c) !== depart[c])) majCouverture();
+    };
+    el.addEventListener('pointermove', bouger);
+    el.addEventListener('pointerup', lacher);
+    el.addEventListener('pointercancel', lacher);
+  });
+}
+
+/**
+ * Câble les quatre gestes de la couverture. Une fois, au démarrage : les prises sont
+ * dans le balisage, seules leurs positions changent d'une face à l'autre.
+ */
+function cablerPrises() {
+  // La photo suit la souris au 1:1 — la référence est le mou réel, pas la largeur de la
+  // face. C'est ce qui fait qu'une image à peine plus grande que sa zone se déplace de
+  // ce qu'elle peut, et pas d'un dixième de couverture par pixel.
+  saisir($('priseImage'), {
+    chemins: ['cadrage.x', 'cadrage.y', 'quatrieme.cadrage.x', 'quatrieme.cadrage.y'],
+    direct: true,
+    prete: () => {
+      const m = mouPhoto();
+      return !!m && (m.x >= 0.5 || m.y >= 0.5);
+    },
+    deplace: (d, depart) => {
+      const r = REGLAGES[face];
+      const f = formatCourant();
+      const m = mouPhoto();
+      if (!m) return;
+      // Tirer vers la droite déplace la photo vers la droite, donc découvre sa gauche :
+      // l'ancrage décroît. D'où le signe, et il est le même dans l'atelier HTML.
+      if (m.x >= 0.5) poserValeur(`${r.cadrage}.x`, depart[`${r.cadrage}.x`] - d.x * f.largeur / m.x);
+      if (m.y >= 0.5) poserValeur(`${r.cadrage}.y`, depart[`${r.cadrage}.y`] - d.y * f.hauteur / m.y);
+    },
+  });
+
+  // La frontière du bandeau : tirer vers le bas agrandit la bande.
+  saisir($('priseBandeau'), {
+    chemins: ['bandeau'],
+    deplace: (d, depart) => poserValeur('bandeau', depart.bandeau + d.y * 100),
+  });
+
+  // Le corps du bloc de texte : sa hauteur. Figé en mode Bandeau, où elle se déduit de
+  // la bande — seules les poignées répondent alors.
+  saisir($('priseBloc'), {
+    chemins: ['bloc_y', 'quatrieme.top'],
+    prete: () => !(face === 'une' && projet.couverture.mode === 'bandeau'),
+    deplace: (d, depart) => {
+      const r = REGLAGES[face];
+      const f = formatCourant();
+      // Le bloc de la 4ème se compte en pourcentage de la largeur, celui de la 1ère de
+      // la hauteur : le même déplacement vertical n'y vaut pas le même nombre.
+      const part = r.bloc_sur === 'hauteur' ? d.y : d.y * f.hauteur / f.largeur;
+      poserValeur(r.bloc, depart[r.bloc] + part * 100);
+    },
+  });
+
+  // Les deux poignées du bloc : la marge latérale, symétrique. Tirer la gauche vers la
+  // droite l'élargit ; tirer la droite vers la gauche aussi.
+  for (const [id, sens] of [['poigneeGauche', 1], ['poigneeDroite', -1]]) {
+    saisir($(id), {
+      chemins: ['pad_x', 'quatrieme.pad_x'],
+      deplace: (d, depart) => {
+        const r = REGLAGES[face];
+        poserValeur(r.pad, depart[r.pad] + sens * d.x * 100);
+      },
+    });
+  }
+
+  // Les trois textes du dos. Rien ne se commet en chemin : la place et le rang n'ont
+  // de valeur qu'une fois le doigt levé, et une recomposition par tiers traversé
+  // ferait clignoter le dos sous la souris.
+  for (const b of ['Auteur', 'Titre', 'Editeur']) {
+    const cle = b.toLowerCase();
+    saisir($(`priseDos${b}`), {
+      chemins: ['auteur', 'titre', 'editeur'].flatMap(
+        (c) => [`dos.${c}.place`, `dos.${c}.rang`]),
+      cle,
+      deposer: (u) => deposerDos(cle, u),
+    });
+  }
+
+  // La molette sur la photo : l'échelle. Pas de sélection à faire d'abord — la scène ne
+  // défile pas, et la molette n'y a rien d'autre à commander.
+  $('priseImage').addEventListener('wheel', (e) => {
+    if (!calques) return;
+    e.preventDefault();
+    const r = REGLAGES[face];
+    // Les trois unités de la molette : pixel, ligne, page. Sans cette table, un cran de
+    // trackpad et un cran de souris ne feraient pas le même zoom.
+    const px = { 0: 1, 1: 16, 2: 400 }[e.deltaMode] ?? 1;
+    const d = -e.deltaY * px * 0.001;
+    const z = valeurSaisie(`${r.cadrage}.zoom`);
+    poserValeur(`${r.cadrage}.zoom`, z + (Math.abs(d) < 0.01 ? Math.sign(d) * 0.01 : d));
+    poserPrises();
+    poserDirect();
+    demanderCommit();
+  }, { passive: false });
+}
+
+/**
+ * Demande au Rust les calques de la face montrée.
+ *
+ * Après l'aperçu et jamais pendant un geste : c'est une composition de plus, et
+ * l'habillage ne dépend pas du cadrage — celui qu'on a vaut pour le geste entier.
+ * Silencieux en cas d'échec : la prise de l'image ne s'offre alors pas, ce qui est la
+ * bonne réponse et se voit à l'écran.
+ */
+async function demanderCalques() {
+  const demandee = face;
+  calques = null;
+  boitesDos = [];
+  try {
+    if (REGLAGES[face]) {
+      const c = await invoke('couverture_calques', { face, dosMm: dosCourant() });
+      // La face a pu changer pendant la composition : poser ces calques-là sur une autre
+      // face y collerait la photo de celle qu'on vient de quitter.
+      if (demandee !== face) return;
+      calques = c;
+    } else if (face === 'dos') {
+      const b = await invoke('couverture_dos_boites', { dosMm: dosCourant() });
+      if (demandee !== face) return;
+      boitesDos = b;
+    }
+  } catch {
+    calques = null;
+    boitesDos = [];
+  }
+  poserPrises();
 }
 
 /**
@@ -578,6 +1115,10 @@ function construireFaces() {
 
 function choisirFace(v) {
   face = v;
+  // Les calques appartiennent à la face qu'on quitte : gardés, la prise de l'image
+  // resterait posée là où l'autre face composait la sienne.
+  calques = null;
+  boitesDos = [];
   [...$('faces').children].forEach((b, i) => {
     b.setAttribute('aria-pressed', String(FACES[i][0] === v));
   });
@@ -587,5 +1128,5 @@ function choisirFace(v) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { SCHEMA, groupes, lire, ecrire, libelleMode };
+  module.exports = { SCHEMA, groupes, lire, ecrire, libelleMode, placeImage };
 }

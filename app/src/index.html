@@ -151,6 +151,44 @@
         <div class="scene">
           <div class="cadre" id="cadreApercu">
             <img id="apercu" class="apercu" alt="Aperçu de la couverture">
+            <!-- Le direct : ce que la fenêtre montre pendant qu'on déplace la photo,
+                 sans rien demander à Typst. Trois pièces qui refont la face à
+                 l'identique — le papier, la photo dans sa fenêtre, l'habillage
+                 par-dessus —, et dont seule celle du milieu bouge. Les trois viennent du
+                 Rust, calques compris : ce qu'on voit bouger est ce qui se composera.
+                 Il reste posé jusqu'à ce que l'aperçu vrai arrive : le retirer au
+                 relâchement ferait revenir la couverture à son ancien cadrage le temps
+                 d'une composition. -->
+            <div class="direct" id="direct" hidden>
+              <div class="direct-papier" id="directPapier"></div>
+              <div class="direct-fenetre" id="directFenetre">
+                <img id="directPhoto" alt="">
+              </div>
+              <img class="direct-habillage" id="directHabillage" alt="">
+            </div>
+            <!-- Les prises : ce qui se saisit à la souris. Effacées tant que le curseur
+                 est ailleurs — une couverture se juge sans guides par-dessus —, et
+                 révélées dès qu'on approche la main. -->
+            <div class="prises" id="prises" hidden>
+              <div class="prise prise-image" id="priseImage"></div>
+              <div class="prise prise-bloc" id="priseBloc">
+                <i class="poignee gauche" id="poigneeGauche"></i>
+                <i class="poignee droite" id="poigneeDroite"></i>
+              </div>
+              <div class="prise prise-bandeau" id="priseBandeau"></div>
+              <!-- Le dos couché : ses trois textes se saisissent et se rangent d'une
+                   place à l'autre. Les trois zones ne paraissent que pendant le geste —
+                   hors geste, elles diraient une structure qu'on ne cherche pas, et le
+                   dos est déjà une bande de soixante pixels. -->
+              <div class="zones-dos" id="zonesDos" hidden>
+                <div class="zone-dos" data-place="pied">Pied</div>
+                <div class="zone-dos" data-place="centre">Centre</div>
+                <div class="zone-dos" data-place="tete">Tête</div>
+              </div>
+              <div class="prise prise-dos" id="priseDosAuteur"><span>Auteur</span></div>
+              <div class="prise prise-dos" id="priseDosTitre"><span>Titre</span></div>
+              <div class="prise prise-dos" id="priseDosEditeur"><span>Éditeur</span></div>
+            </div>
             <div class="reperes" id="reperes" hidden></div>
           </div>
         </div>

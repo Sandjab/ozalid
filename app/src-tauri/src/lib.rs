@@ -99,6 +99,8 @@ pub fn run() {
             commands::couverture_modifier,
             commands::image_choisir,
             commands::couverture_apercu,
+            commands::couverture_calques,
+            commands::couverture_dos_boites,
             commands::composer,
             commands::destinataire_ajouter,
             commands::destinataire_retirer,

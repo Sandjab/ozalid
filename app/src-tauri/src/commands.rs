@@ -857,6 +857,172 @@ pub fn couverture_apercu(
     })
 }
 
+/// De quoi montrer la photo bouger sous la souris sans rien recomposer.
+///
+/// Trois pièces qui, empilées dans cet ordre, refont la face à l'identique : le papier,
+/// la photo dans sa zone, et l'habillage par-dessus. La fenêtre n'a plus qu'à déplacer
+/// la pièce du milieu — et ce qu'elle montre pendant le geste est ce que Typst
+/// composera, pas une approximation.
+///
+/// Le prix est d'une composition de plus, demandée **après** l'aperçu et jamais pendant
+/// un geste : l'habillage ne dépend pas du cadrage, il vaut donc pour le geste entier.
+#[derive(Serialize)]
+pub struct Calques {
+    /// La face composée sans son papier ni sa photo, en PNG à fond transparent : le
+    /// voile, le cadre, les textes, la pastille — tout ce qui se pose *par-dessus*
+    /// l'image, et rien d'autre.
+    ///
+    /// Ce n'est pas une source de plus : c'est la même, composée sur un papier
+    /// transparent et sans photo. Une deuxième façon d'écrire une couverture finirait
+    /// par montrer autre chose que ce qui s'imprime.
+    pub habillage: String,
+    /// La photo telle que le projet la porte, en donnée `data:`.
+    pub photo: String,
+    pub naturel_l: u32,
+    pub naturel_h: u32,
+    /// La zone où la photo se compose, en fraction de la face — la seule unité qui
+    /// survive à un aperçu affiché à la taille que la fenêtre lui laisse.
+    pub zone: Zone,
+    /// Le papier de cette face-là : la 4ème peut avoir le sien.
+    pub papier: String,
+}
+
+#[derive(Serialize)]
+pub struct Zone {
+    pub x: f64,
+    pub y: f64,
+    pub l: f64,
+    pub h: f64,
+}
+
+/// Le papier rendu transparent : c'est ce qui distingue l'habillage de la face entière.
+const PAPIER_TRANSPARENT: &str = "#00000000";
+
+/// Les calques d'une face manipulable, ou `None` s'il n'y a pas de photo à y déplacer.
+///
+/// Deux faces seulement : la 1ère et la 4ème. Le dos ne se cadre pas — sa photo, quand
+/// il en porte une, est la tranche du prolongement de la 1ère, et se règle là-bas —, et
+/// la planche est une vue de contrôle qui ne règle rien.
+#[tauri::command]
+pub fn couverture_calques(
+    face: String,
+    dos_mm: Option<f64>,
+    atelier: State<Atelier>,
+) -> Result<Option<Calques>, String> {
+    let garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_ref().ok_or_else(aucun_projet)?;
+    let Some(cv) = o.projet.meta.couverture.maquette.as_ref() else {
+        return Ok(None);
+    };
+    let (pr, _, _) = vise(o)?;
+    let format = pr.format;
+    let b = couverture::Boite::rognee(format);
+
+    let dossier = std::env::temp_dir().join("ozalid-apercu");
+    std::fs::create_dir_all(&dossier).map_err(|e| format!("aperçu impossible : {e}"))?;
+    let (une, quatre) = ecrire_images(&o.projet, &dossier)?;
+
+    // La zone et la photo, demandées au moteur de composition plutôt que déduites d'un
+    // nom de mode : c'est ce qui garantit que la souris cadre là où Typst composera.
+    let pano = couverture::panorama_face(format, dos_mm, true);
+    let (zone, r, papier) = match face.as_str() {
+        "une" => {
+            let Some(r) = une.as_ref() else {
+                return Ok(None);
+            };
+            match couverture::image_une(cv, format, Some(r), b, pano) {
+                Some((zone, _)) => (zone, r, cv.papier.clone()),
+                None => return Ok(None),
+            }
+        }
+        // La 4ème ne se cadre à la souris que lorsqu'elle porte sa propre image. En
+        // prolongement, son cadrage est celui de la 1ère — le panneau le dit déjà, et
+        // offrir ici une poignée qui déplacerait la photo de l'autre face serait un
+        // piège. Papier hérité et couleur distincte n'ont, eux, rien à déplacer.
+        "quatre" if cv.quatrieme.fond == couverture::FondQuatre::Image => {
+            match couverture::photo_quatre(cv, format, quatre.as_ref(), None, None, b)? {
+                Some((zone, _, r)) => (zone, r, couverture::papier_quatre(cv).to_string()),
+                None => return Ok(None),
+            }
+        }
+        _ => return Ok(None),
+    };
+
+    // Les octets de la photo, retrouvés par le nom que la composition vient d'employer :
+    // le projet ne range pas ses images sous un rôle mais sous leur nom de fichier.
+    let octets = o
+        .projet
+        .images
+        .get(&r.fichier)
+        .ok_or_else(|| format!("{} : image absente du projet.", r.fichier))?;
+
+    let mut nu = cv.clone();
+    nu.papier = PAPIER_TRANSPARENT.to_string();
+    nu.quatrieme.couleur = PAPIER_TRANSPARENT.to_string();
+    let corps = match face.as_str() {
+        "une" => couverture::source_une(&o.projet.meta.livre, &nu, format, None, dos_mm),
+        _ => couverture::source_quatre(&nu, format, None, None, dos_mm)?,
+    };
+    // `#set page(fill: none)` en tête : une règle posée avant le préambule vaut avec
+    // lui, et c'est elle qui rend le PNG transparent là où le papier ne peint plus.
+    let src = format!("#set page(fill: none)\n{corps}");
+    let typ = dossier.join(format!("habillage-{face}.typ"));
+    let png = dossier.join(format!("habillage-{face}.png"));
+    ecrire(&typ, &src)?;
+    typst()?.apercu(&typ, &png, 1, 150)?;
+
+    Ok(Some(Calques {
+        habillage: donnee_png(&png)?,
+        photo: donnee_image(octets),
+        naturel_l: r.largeur,
+        naturel_h: r.hauteur,
+        zone: Zone {
+            x: zone.0 / b.largeur,
+            y: zone.1 / b.hauteur,
+            l: zone.2 / b.largeur,
+            h: zone.3 / b.hauteur,
+        },
+        papier,
+    }))
+}
+
+/// Où chaque élément du dos tombe sur l'aperçu couché, pour pouvoir l'y saisir.
+///
+/// Vide quand le dos ne porte aucun texte — un dos nu n'a rien à réorganiser. Séparé de
+/// l'aperçu parce qu'il coûte une évaluation de plus et qu'il ne sert qu'une face : le
+/// demander à chaque composition ferait payer la mesure du dos à la planche, qui n'en
+/// fait rien.
+#[tauri::command]
+pub fn couverture_dos_boites(
+    dos_mm: Option<f64>,
+    atelier: State<Atelier>,
+) -> Result<Vec<planche::BoiteDos>, String> {
+    let garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_ref().ok_or_else(aucun_projet)?;
+    let Some(cv) = o.projet.meta.couverture.maquette.as_ref() else {
+        return Ok(Vec::new());
+    };
+    // Le dos ne change pas les longueurs mesurées — elles suivent la largeur de
+    // couverture — mais l'aperçu qu'on habille n'existe pas sans lui, et la fenêtre ne
+    // doit pas poser de prises sur une face qu'elle n'a pas pu composer.
+    if dos_mm.is_none() {
+        return Ok(Vec::new());
+    }
+    let (pr, _, _) = vise(o)?;
+    let livre = &o.projet.meta.livre;
+    let src = planche::source_mesures(livre, cv, pr.format);
+    // Aucun texte à mesurer : Typst rendrait un objet vide, autant ne pas le déranger.
+    if !src.contains("measure(") {
+        return Ok(Vec::new());
+    }
+    let dossier = std::env::temp_dir().join("ozalid-apercu");
+    std::fs::create_dir_all(&dossier).map_err(|e| format!("aperçu impossible : {e}"))?;
+    let typ = dossier.join("mesures-dos.typ");
+    ecrire(&typ, &src)?;
+    let mesures = typst()?.mesures(&typ)?;
+    Ok(planche::boites_dos(livre, cv, pr.format, &mesures))
+}
+
 /// Un PNG du disque, en donnée `data:` : la fenêtre ne lit pas les fichiers, une image
 /// n'y entre pas autrement.
 fn donnee_png(chemin: &Path) -> Result<String, String> {
