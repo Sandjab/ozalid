@@ -122,12 +122,13 @@ mod tests {
         assert_eq!(substituer("%TITER% et 100 %", &livre()), "%TITER% et 100 %");
     }
 
-    /// **Le test qui compte.** Une valeur de clé qui ressemble à un jeton ne doit pas
-    /// être substituée à son tour : une seconde passe ouvrirait la porte à la cascade,
-    /// et un titre malencontreux ferait dire au copyright autre chose que ce qui est
-    /// écrit.
+    /// **Le test qui compte.** Aucun cycle n'est possible — un jeton ne désigne qu'une
+    /// clé, et une clé n'est jamais substituée. Le risque est ailleurs : une valeur de
+    /// clé peut *contenir* ce qui ressemble à un jeton, sans rien désigner du tout.
+    /// « 100 % coton » est un titre légitime. Relire la sortie ferait dire au copyright
+    /// autre chose que ce qui est écrit dans le champ.
     #[test]
-    fn la_substitution_ne_cascade_pas() {
+    fn une_valeur_qui_ressemble_a_un_jeton_reste_litterale() {
         let l = Livre {
             titre: "%AUTEUR%".into(),
             auteur: "Ivan Pjig".into(),
@@ -164,8 +165,13 @@ Insérer dans `app/src-tauri/src/gabarit.rs`, entre `JETONS` et le module de tes
 /// Remplace les jetons connus par la valeur de leur champ clé.
 ///
 /// **Une seule passe.** Le texte est parcouru une fois de gauche à droite : ce qu'un
-/// jeton produit n'est jamais réexaminé. Un `replace` par jeton en boucle aurait
-/// l'air équivalent et ne l'est pas — il resubstituerait la valeur du précédent.
+/// jeton produit est poussé dans la sortie et jamais réexaminé.
+///
+/// Ce n'est pas une garde contre les références cycliques — il ne peut pas y en avoir,
+/// un jeton ne désignant qu'une clé et une clé n'étant jamais substituée. C'est une
+/// garde contre la relecture de la sortie : un `replace` par jeton en boucle aurait
+/// l'air équivalent et ne l'est pas, car il traiterait la valeur du jeton précédent
+/// comme du texte à substituer. Un titre valant « 100 % coton » suffit à le montrer.
 ///
 /// Un jeton inconnu est recopié tel quel.
 pub fn substituer(texte: &str, livre: &Livre) -> String {

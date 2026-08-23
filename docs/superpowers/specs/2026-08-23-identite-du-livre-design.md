@@ -146,9 +146,19 @@ pub fn substituer(texte: &str, livre: &Livre) -> String
 Six jetons : `%TITRE%`, `%AUTEUR%`, `%GENRE%`, `%EDITEUR%`, `%COLLECTION%`,
 `%MONOGRAMME%`.
 
-**Une seule passe, sans récursion.** Les clés étant littérales par définition, rien
-ne peut se substituer en cascade — et c'est ce qui rend la boucle infinie impossible
-sans avoir à s'en garder.
+**Aucun cycle n'est possible**, et rien n'est à écrire pour s'en garder : un jeton ne
+désigne qu'une clé, une clé n'est jamais substituée, donc aucune chaîne de références
+ne peut se refermer. Pas de graphe à parcourir, pas de profondeur à borner.
+
+**Une seule passe** malgré tout, pour une raison différente : une valeur de clé peut
+*contenir* ce qui ressemble à un jeton sans rien désigner. « 100 % coton » est un titre
+légitime. Le texte est donc parcouru une fois de gauche à droite, et ce qu'un jeton
+produit n'est jamais relu — un `replace` par jeton en boucle traiterait la valeur du
+précédent comme du texte à substituer.
+
+**Rien n'interdit `%` dans un champ clé.** L'interdire pour protéger la substitution
+coûterait des titres parfaitement légitimes ; le comportement littéral est déjà la
+bonne réponse, et il ne coûte aucun code.
 
 **Un jeton inconnu est laissé tel quel.** `%TITER%` s'imprime avec ses pour-cent, se
 voit dans l'aperçu, se voit sur l'épreuve. Aucun signalement n'est ajouté : le repli
