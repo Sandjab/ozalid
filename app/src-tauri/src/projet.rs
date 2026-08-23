@@ -32,13 +32,23 @@ use serde::{Deserialize, Serialize};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
+/// La version du format `.ozalid`.
+///
+/// **v4** : la main de l'envoi descend du livre dans l'exemplaire, et le gabarit de
+/// diffusion remonte sur `Envois`. Contrairement aux sections facultatives ajoutées
+/// depuis la v3, qu'un binaire d'avant traverse sans dommage, un champ se **déplace**
+/// ici : un binaire v3 ouvrant un projet v4 ne verrait aucune main d'envoi, et son
+/// `serde(default)` les lui donnerait toutes dans la même écriture — celle que
+/// personne n'a choisie. Monter la version fait refuser ce projet, ce qui est vrai et
+/// réparable, plutôt qu'imprimer vingt exemplaires dans la mauvaise main.
+///
 /// Version 3 : l'éditeur, le monogramme, la collection, le prix et la mention sont au
 /// livre, là où la 2 les rangeait dans la maquette. Le livre dit ce qui est écrit, la
 /// maquette dit où et si ça se voit.
 ///
 /// Version 2 : la maquette de couverture y est typée, dans le vocabulaire du moteur
 /// Typst, là où la 1 conservait le bloc de réglages brut de l'atelier HTML.
-pub const VERSION: u32 = 3;
+pub const VERSION: u32 = 4;
 const PROJET_TOML: &str = "projet.toml";
 const MANUSCRIT_MD: &str = "manuscrit.md";
 const IMAGES: &str = "images/";
@@ -460,6 +470,37 @@ fn migre(mut v: toml::Value) -> Result<Metadonnees, String> {
                 v.get_mut("livre").and_then(toml::Value::as_table_mut),
             ) {
                 livre.insert(vers.to_string(), toml::Value::String(valeur));
+            }
+        }
+        // v3 → v4 : la main du livre descend dans chaque envoi, le gabarit remonte sur
+        // les envois. Sur le `toml::Value` et non sur les types, pour la raison déjà
+        // dite plus haut : en v4, `Envois` ne porte plus de `main`, il n'y a donc plus
+        // de structure Rust capable de la lire.
+        //
+        // Rien n'est **retiré**, et ce n'est pas un oubli : une fois `Envois` allégée,
+        // `main` y est inconnue, serde l'ignore, et aucune réécriture ne la conserve.
+        if let Some(envois) = v.get_mut("envois").and_then(toml::Value::as_table_mut) {
+            let ancienne = envois.get("main").cloned();
+            if let Some(g) = ancienne
+                .as_ref()
+                .and_then(|m| m.get("gabarit"))
+                .and_then(toml::Value::as_str)
+            {
+                envois
+                    .entry("gabarit".to_string())
+                    .or_insert_with(|| toml::Value::String(g.to_string()));
+            }
+            if let (Some(ancienne), Some(liste)) = (
+                ancienne,
+                envois.get_mut("liste").and_then(toml::Value::as_array_mut),
+            ) {
+                for e in liste {
+                    // Un envoi qui porte déjà sa main est en v4 : une migration rejouée
+                    // n'a pas à écraser le travail fait.
+                    if let Some(t) = e.as_table_mut() {
+                        t.entry("main".to_string()).or_insert(ancienne.clone());
+                    }
+                }
             }
         }
         if let Some(o) = v.get_mut("ozalid").and_then(toml::Value::as_table_mut) {
@@ -940,6 +981,91 @@ auteur = "Ivan Pjig"
         let p = Projet::nouveau(l, String::new());
         let v3: toml::Value = toml::from_str(&toml::to_string_pretty(&p.meta).unwrap()).unwrap();
         assert_eq!(migre(v3).unwrap().livre.editeur, "Ozalid");
+    }
+
+    /// Un `.ozalid` de la v3 porte sa main au livre. La perdre ferait composer les
+    /// vingt exemplaires dans le défaut — en silence, dans une écriture que personne
+    /// n'a choisie. Le TOML est écrit **littéralement** : ce sont les fichiers d'hier
+    /// qu'il s'agit de relire, et les types d'hier n'existent plus pour les fabriquer.
+    #[test]
+    fn la_main_du_livre_v3_descend_dans_chaque_envoi() {
+        let v3 = r#"
+[ozalid]
+version = 3
+[livre]
+titre = "Les Heures creuses"
+auteur = "Ivan Pjig"
+genre = "roman"
+chapitres = 12
+[envois.main]
+mode = "police"
+police = "Dancing Script"
+[[envois.liste]]
+dedicataire = "Léa"
+contenu = "Pour Léa."
+[[envois.liste]]
+dedicataire = "Marc"
+contenu = "À Marc."
+"#;
+        let m = migre(toml::from_str(v3).expect("TOML v3 illisible")).expect("migration refusée");
+        assert_eq!(m.ozalid.version, VERSION);
+        for e in &m.envois.liste {
+            assert_eq!(
+                e.main,
+                crate::envoi::Main::Police {
+                    police: "Dancing Script".into()
+                },
+                "{} a perdu la main du livre",
+                e.dedicataire
+            );
+        }
+    }
+
+    /// Le gabarit vivait dans la main, il appartient désormais aux envois : le perdre
+    /// obligerait à réécrire le prompt d'un livre qu'on rouvre.
+    #[test]
+    fn le_gabarit_v3_remonte_sur_les_envois() {
+        let v3 = r#"
+[ozalid]
+version = 3
+[livre]
+titre = "T"
+auteur = "A"
+genre = "roman"
+chapitres = 1
+[envois.main]
+mode = "diffusion"
+gabarit = "une écriture à l'encre bleue : {envoi}"
+[[envois.liste]]
+dedicataire = "Léa"
+"#;
+        let m = migre(toml::from_str(v3).expect("TOML v3 illisible")).expect("migration refusée");
+        assert_eq!(m.envois.gabarit, "une écriture à l'encre bleue : {envoi}");
+        assert_eq!(m.envois.liste[0].main, crate::envoi::Main::Diffusion);
+    }
+
+    /// Un envoi qui porte déjà sa main est en v4 : la main du livre n'a rien à y
+    /// écraser. Sans ce contrôle, une migration rejouée écraserait le travail fait.
+    #[test]
+    fn un_envoi_qui_a_deja_sa_main_ne_se_la_fait_pas_ecraser() {
+        let mixte = r#"
+[ozalid]
+version = 3
+[livre]
+titre = "T"
+auteur = "A"
+genre = "roman"
+chapitres = 1
+[envois.main]
+mode = "police"
+police = "Dancing Script"
+[[envois.liste]]
+dedicataire = "Léa"
+[envois.liste.main]
+mode = "image"
+"#;
+        let m = migre(toml::from_str(mixte).expect("TOML illisible")).expect("migration refusée");
+        assert_eq!(m.envois.liste[0].main, crate::envoi::Main::Image);
     }
 
     /// Un projet en version 2, maquette Folio, avec les textes posés là où la v2 les
