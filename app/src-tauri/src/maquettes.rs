@@ -27,7 +27,6 @@ use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use crate::couverture::*;
-use crate::image::Cadrage;
 
 const MAQUETTE_TOML: &str = "maquette.toml";
 const IMAGES: &str = "images/";
@@ -126,256 +125,6 @@ fn ecrire<W: Write + Seek>(sortie: W, m: &Maquette) -> Result<(), String> {
     Ok(())
 }
 
-fn style(police: &str, graisse: u16, taille: f64, couleur: &str) -> Style {
-    Style {
-        police: police.into(),
-        graisse,
-        italique: false,
-        taille,
-        couleur: couleur.into(),
-        tracking: 0.0,
-        casse: Casse::Telle,
-    }
-}
-
-/// Réglages de 4ème communs aux trois maquettes : l'atelier les livrait identiques.
-fn quatrieme_commune() -> Quatrieme {
-    Quatrieme {
-        fond: FondQuatre::Herite,
-        couleur: "#fcf0d8".into(),
-        texte: String::new(),
-        style: style("Spectral", 400, 3.0, "#191917"),
-        interligne: 1.45,
-        align: Align::Gauche,
-        pad_x: 10.0,
-        top: 12.0,
-        pied_actif: true,
-        style_pied: style("Archivo", 400, 2.4, "#191917"),
-        pied_y: 4.0,
-        isbn_actif: false,
-        isbn_l: 34.0,
-        isbn_h: 21.0,
-        isbn_dx: 7.0,
-        isbn_dy: 7.0,
-        cadrage: Cadrage::default(),
-        voile: Voile::Aucun,
-        voile_opacite: 0.55,
-    }
-}
-
-/// Le dos des trois maquettes : auteur et titre en tête, éditeur au pied, comme un
-/// poche en rayon. Seule la couleur d'encre change d'une maquette à l'autre,
-/// selon la couleur du papier — le reste se règle élément par élément dans le panneau.
-fn dos(couleur: &str) -> Dos {
-    let d = Dos::defaut();
-    let encre = |e: ElementDos| ElementDos {
-        style: style("Archivo", 600, 2.6, couleur),
-        ..e
-    };
-    Dos {
-        auteur: encre(d.auteur),
-        titre: encre(d.titre),
-        editeur: encre(d.editeur),
-        collection: encre(d.collection),
-        ..Dos::defaut()
-    }
-}
-
-fn pastille_eteinte() -> Pastille {
-    Pastille {
-        actif: false,
-        style: style("Archivo", 400, 3.2, "#ffffff"),
-        fond: "#111111".into(),
-        coin: Coin::BasDroite,
-        verticale: false,
-        arrondie: true,
-        dx: 4.5,
-        dy: 3.5,
-    }
-}
-
-/// Bandeau de titre en haut, image à fond perdu dessous. Archétype Folio / Penguin
-/// Modern Classics.
-pub fn folio() -> Couverture {
-    Couverture {
-        mode: Mode::Bandeau,
-        papier: "#ffffff".into(),
-        align: Align::Gauche,
-        pad_x: 7.0,
-        bandeau: 30.0,
-        bandeau_retrait: false,
-        bloc_y: 13.0,
-        cadre: Cadre {
-            actif: false,
-            marge: 9.0,
-            filet1_couleur: "#000000".into(),
-            filet1_epaisseur: 0.3,
-            decroche: 4.0,
-            filet2_couleur: "#c00000".into(),
-            filet2_epaisseur: 0.25,
-            ecart: 0.9,
-        },
-        auteur: Style {
-            taille: 6.4,
-            ..style("Archivo", 700, 6.4, "#c00000")
-        },
-        titre: style("Spectral", 400, 8.0, "#191917"),
-        titre_interligne: 1.1,
-        titre_ecart: 3.5,
-        genre_visible: false,
-        genre: style("Spectral", 400, 2.2, "#191917"),
-        genre_ecart: 6.0,
-        // Le pied s'inspire de chartes réelles : bandeau monogramme + nom d'éditeur en
-        // capitales espacées. Le nom et le monogramme, eux, viennent du livre — la
-        // maquette ne dit que la façon dont ils paraissent.
-        pied: Pied {
-            actif: false,
-            y: 11.0,
-            style_mono: Style {
-                italique: true,
-                ..style("Spectral", 600, 7.0, "#191917")
-            },
-            style_editeur: Style {
-                tracking: 10.0,
-                ..style("Archivo", 400, 3.2, "#191917")
-            },
-        },
-        pastille: Pastille {
-            actif: true,
-            ..pastille_eteinte()
-        },
-        cadrage: Cadrage::default(),
-        voile: Voile::Aucun,
-        voile_opacite: 0.55,
-        quatrieme: quatrieme_commune(),
-        dos: dos("#191917"),
-    }
-}
-
-/// Composition purement typographique, triple filet. Archétype Blanche / NRF.
-pub fn blanche() -> Couverture {
-    Couverture {
-        mode: Mode::Typo,
-        papier: "#fcf0d8".into(),
-        align: Align::Centre,
-        pad_x: 16.0,
-        bandeau: 30.0,
-        bandeau_retrait: false,
-        bloc_y: 13.0,
-        cadre: Cadre {
-            actif: true,
-            marge: 9.0,
-            filet1_couleur: "#000000".into(),
-            filet1_epaisseur: 0.3,
-            decroche: 4.0,
-            filet2_couleur: "#c00000".into(),
-            filet2_epaisseur: 0.25,
-            ecart: 0.9,
-        },
-        auteur: Style {
-            tracking: 6.0,
-            casse: Casse::Capitales,
-            ..style("Bodoni Moda", 700, 3.6, "#000000")
-        },
-        titre: Style {
-            tracking: 1.0,
-            casse: Casse::Capitales,
-            ..style("Bodoni Moda", 700, 9.0, "#c00000")
-        },
-        titre_interligne: 1.05,
-        titre_ecart: 11.0,
-        genre_visible: true,
-        genre: Style {
-            tracking: 12.0,
-            ..style("Bodoni Moda", 400, 2.2, "#191917")
-        },
-        genre_ecart: 6.0,
-        pied: Pied {
-            actif: true,
-            // 13,5 % et non les 11 % du CSS d'origine : à 11 %, le pied éditeur passe
-            // sous le filet interne du cadre et le traverse. C'est le seul écart assumé
-            // vis-à-vis d'`index.html` dans les maquettes — l'atelier a le même défaut,
-            // il n'a pas été reproduit. Le test `le_pied_editeur_ne_traverse_jamais_le_cadre`
-            // borne la valeur sur tous les formats de la table.
-            y: 13.5,
-            style_mono: Style {
-                italique: true,
-                ..style("Bodoni Moda", 600, 7.0, "#191917")
-            },
-            style_editeur: Style {
-                tracking: 10.0,
-                ..style("Bodoni Moda", 400, 3.2, "#191917")
-            },
-        },
-        pastille: pastille_eteinte(),
-        cadrage: Cadrage::default(),
-        voile: Voile::Aucun,
-        voile_opacite: 0.55,
-        quatrieme: quatrieme_commune(),
-        dos: dos("#191917"),
-    }
-}
-
-/// Image sur toute la surface, texte par-dessus, voile de lisibilité.
-pub fn surimpression() -> Couverture {
-    Couverture {
-        mode: Mode::Surimpression,
-        papier: "#000000".into(),
-        align: Align::Centre,
-        pad_x: 12.0,
-        bandeau: 30.0,
-        bandeau_retrait: false,
-        bloc_y: 9.0,
-        cadre: Cadre {
-            actif: true,
-            marge: 6.0,
-            filet1_couleur: "#f2ece0".into(),
-            filet1_epaisseur: 0.25,
-            decroche: 1.4,
-            filet2_couleur: "#f2ece0".into(),
-            filet2_epaisseur: 0.15,
-            ecart: 0.6,
-        },
-        auteur: Style {
-            tracking: 14.0,
-            casse: Casse::Capitales,
-            ..style("Archivo", 600, 3.4, "#f4efe4")
-        },
-        titre: Style {
-            tracking: -1.0,
-            ..style("Playfair Display", 500, 11.0, "#ffffff")
-        },
-        titre_interligne: 1.02,
-        titre_ecart: 6.0,
-        genre_visible: false,
-        genre: style("Playfair Display", 400, 2.2, "#f4efe4"),
-        genre_ecart: 6.0,
-        pied: Pied {
-            actif: false,
-            y: 11.0,
-            style_mono: Style {
-                italique: true,
-                ..style("Playfair Display", 600, 7.0, "#f4efe4")
-            },
-            style_editeur: Style {
-                tracking: 10.0,
-                ..style("Archivo", 400, 3.2, "#f4efe4")
-            },
-        },
-        pastille: pastille_eteinte(),
-        // Ancrage bas : sur un portrait, garder le haut du cadre plutôt que le centre.
-        cadrage: Cadrage {
-            y: 0.62,
-            zoom: 1.05,
-            ..Cadrage::default()
-        },
-        voile: Voile::Deux,
-        voile_opacite: 0.62,
-        quatrieme: quatrieme_commune(),
-        dos: dos("#f4efe4"),
-    }
-}
-
 /// Les trois fournies, incorporées au binaire : rien à résoudre sur le poste, donc
 /// aucun écart entre développement et livraison, et l'immuabilité est un fait.
 const FOURNIES: [(&str, &[u8]); 3] = [
@@ -441,7 +190,7 @@ mod tests {
             cle: "ma-collection".into(),
             nom: "Ma collection".into(),
             fournie: false,
-            couverture: blanche(),
+            couverture: fournie("blanche"),
             images,
         };
 
@@ -461,7 +210,7 @@ mod tests {
             cle: "peu-importe".into(),
             nom: "Ma collection".into(),
             fournie: false,
-            couverture: folio(),
+            couverture: fournie("folio"),
             images: BTreeMap::new(),
         };
         let mut octets = Vec::new();
@@ -496,49 +245,6 @@ mod tests {
         );
     }
 
-    /// **Transitoire** — part à la tâche 6.
-    ///
-    /// La bascule doit être invisible : ce que l'archive rend doit être exactement ce
-    /// que le constructeur rendait, champ pour champ. C'est ce test-là qui autorise à
-    /// retirer les constructeurs.
-    #[test]
-    fn les_archives_fournies_valent_les_constructeurs() {
-        for (cle, attendue) in [
-            ("folio", folio()),
-            ("blanche", blanche()),
-            ("surimpression", surimpression()),
-        ] {
-            assert_eq!(par_cle(None, cle).unwrap().couverture, attendue, "{cle}");
-        }
-    }
-
-    /// **Transitoire** — part à la tâche 6, avec les constructeurs.
-    ///
-    /// Les trois archives fournies ne s'écrivent pas à la main : elles se gravent
-    /// depuis les constructeurs, ce qui les leur rend identiques par construction. Ce
-    /// test écrit dans les sources, ce qu'un test ne fait jamais autrement — c'est le
-    /// prix d'une bascule qu'on veut invisible, et il ne dure que le temps du lot.
-    #[test]
-    fn grave_les_archives_fournies() {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("maquettes");
-        std::fs::create_dir_all(&dir).unwrap();
-        for (cle, nom, couverture) in [
-            ("folio", "Folio", folio()),
-            ("blanche", "Blanche", blanche()),
-            ("surimpression", "Surimpression", surimpression()),
-        ] {
-            let m = Maquette {
-                cle: cle.into(),
-                nom: nom.into(),
-                fournie: true,
-                couverture,
-                images: BTreeMap::new(),
-            };
-            let f = std::fs::File::create(dir.join(format!("{cle}.maquette"))).unwrap();
-            ecrire(f, &m).unwrap();
-        }
-    }
-
     /// Une `.maquette` est un document qu'on s'échange, et rien n'oblige celle qu'on
     /// ouvre à venir d'ici. `package::ecrire_images` fait des chemins de ces noms par
     /// `join` : une entrée qui remonte écrirait ailleurs sur le disque. Le refus est le
@@ -551,7 +257,7 @@ mod tests {
             let opts = SimpleFileOptions::default();
             let f = Fichier {
                 nom: "Piégée".into(),
-                couverture: folio(),
+                couverture: fournie("folio"),
             };
             crate::projet::ajoute(
                 &mut zip,
@@ -591,11 +297,15 @@ mod tests {
     /// Le pied éditeur est posé depuis le bas, en % de la hauteur ; le filet interne du
     /// cadre l'est depuis le bas aussi, mais son décroché se lit sur la **largeur**. Les
     /// deux ne varient donc pas ensemble d'un format à l'autre, et un pied qui dégage le
-    /// filet en poche peut le traverser en A4. Ce test tient la maquette Blanche sur
-    /// tous les formats de la table — c'est là que le défaut d'`index.html` se voyait.
+    /// filet en poche peut le traverser en A4.
+    ///
+    /// La maquette Blanche porte 13,5 % et non les 11 % du CSS de l'atelier : c'est le
+    /// seul écart assumé vis-à-vis d'`index.html`, qui a le défaut et ne l'a pas vu.
+    /// L'archive porte la valeur, ce test la borne sur tous les formats de la table —
+    /// c'est ici, et nulle part ailleurs, que la raison de ce 13,5 est écrite.
     #[test]
     fn le_pied_editeur_ne_traverse_jamais_le_cadre() {
-        let cv = blanche();
+        let cv = fournie("blanche");
         let c = &cv.cadre;
         for pr in crate::providers::PROVIDERS {
             let (fw, fh) = pr.format;
@@ -620,8 +330,8 @@ mod tests {
     /// une couverture qui n'a rien dessous.
     #[test]
     fn seule_la_maquette_a_image_pleine_page_porte_un_voile() {
-        assert_eq!(folio().voile, Voile::Aucun);
-        assert_eq!(blanche().voile, Voile::Aucun);
-        assert_ne!(surimpression().voile, Voile::Aucun);
+        assert_eq!(fournie("folio").voile, Voile::Aucun);
+        assert_eq!(fournie("blanche").voile, Voile::Aucun);
+        assert_ne!(fournie("surimpression").voile, Voile::Aucun);
     }
 }
