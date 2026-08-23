@@ -94,6 +94,11 @@ impl Livre {
         crate::gabarit::substituer(&self.titre_page, self)
     }
 
+    /// Le copyright, jetons résolus.
+    pub fn copyright(&self) -> String {
+        crate::gabarit::substituer(&self.copyright, self)
+    }
+
     /// La dédicace, jetons résolus, si elle n'est pas que du blanc.
     ///
     /// Le rognage est ici et nulle part ailleurs : une dédicace réduite à une espace

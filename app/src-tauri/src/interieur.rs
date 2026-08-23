@@ -401,7 +401,7 @@ fn liminaires(livre: &Livre, envoi: Option<Trace>, pieces: &[Piece]) -> String {
 #pagebreak()
 
 "#,
-        echappe(&livre.copyright).replace('\n', r" \ ")
+        echappe(&livre.copyright()).replace('\n', r" \ ")
     ));
 
     // La dédicace prend une belle page, son verso reste blanc — deux `#pagebreak()`
@@ -1333,5 +1333,35 @@ mod tests {
             s.contains(r"\ avec mon amitié."),
             "saut de ligne perdu : {s}"
         );
+    }
+
+    /// **Point de sortie : le PDF de l'intérieur.** Aucun jeton ne doit survivre à la
+    /// composition — un `%AUTEUR%` qui passe ici s'imprime dans le livre.
+    ///
+    /// Le test porte sur la source entière, et non sur le seul copyright : il doit
+    /// casser le jour où un champ libre de plus est branché sans passer par son
+    /// accesseur.
+    #[test]
+    fn aucun_jeton_ne_survit_a_la_source_de_l_interieur() {
+        let mut l = livre();
+        l.titre_page = "%TITRE%".into();
+        l.copyright = "© %AUTEUR%, 2026.\nTous droits réservés.".into();
+        l.dedicace = "Pour %AUTEUR%.".into();
+
+        let pr = provider("bod").unwrap();
+        let r = Reglage {
+            gouttiere: 20.0,
+            blanche: false,
+        };
+        let src = source(&l, &Interieur::default(), pr, &r, &chapitres(), None);
+
+        for jeton in ["%TITRE%", "%AUTEUR%", "%GENRE%"] {
+            assert!(!src.contains(jeton), "{jeton} a traversé la composition");
+        }
+        assert!(
+            src.contains("Ivan Pjig"),
+            "la valeur n'a pas remplacé le jeton"
+        );
+        assert!(src.contains("Les Heures creuses"));
     }
 }

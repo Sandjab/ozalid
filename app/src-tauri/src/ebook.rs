@@ -68,14 +68,13 @@ pub fn generer(
         .as_ref()
         .ok_or("aucune maquette de couverture : en choisir une avant de générer les ebooks.")?;
     let chapitres = manuscrit::decoupe(&projet.texte, livre.chapitres)?;
-    let titre_page = livre.titre_page();
-    let dedicace = livre.dedicace();
+    let (titre_page, copyright, dedicace) = libres(livre);
     let livre_epub = epub::Livre {
         titre: &livre.titre,
         titre_page: &titre_page,
         auteur: &livre.auteur,
         genre: &livre.genre,
-        copyright: &livre.copyright,
+        copyright: &copyright,
         dedicace: dedicace.as_deref(),
     };
     // Les refus de l'archive ne dépendent que du projet : les poser ici, c'est les
@@ -224,6 +223,16 @@ fn taille(chemin: &Path) -> u64 {
     std::fs::metadata(chemin).map(|m| m.len()).unwrap_or(0)
 }
 
+/// Les trois champs libres que l'EPUB reçoit, jetons résolus.
+///
+/// Isolée pour être testable, et c'est tout son objet : `epub::Livre` emprunte ses
+/// champs, la substitution doit donc produire des valeurs qui vivent plus longtemps que
+/// lui — et c'est exactement l'endroit où un oubli enverrait un `%AUTEUR%` dans le
+/// fichier du lecteur.
+fn libres(livre: &crate::projet::Livre) -> (String, String, Option<String>) {
+    (livre.titre_page(), livre.copyright(), livre.dedicace())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -314,5 +323,28 @@ mod tests {
         assert_eq!(nom_de_fichier("Les Heures creuses"), "Les Heures creuses");
         assert_eq!(nom_de_fichier("L'été / l'hiver"), "L-été - l-hiver");
         assert_eq!(nom_de_fichier("..."), "envoi");
+    }
+
+    /// **Point de sortie : l'EPUB.** La conversion vers `epub::Livre` est le seul
+    /// endroit où les champs libres du livre entrent dans le fichier du lecteur. Un
+    /// jeton qui la traverse arrive chez qui lit.
+    #[test]
+    fn aucun_jeton_ne_survit_a_la_conversion_epub() {
+        let mut l = crate::projet::Livre::vide();
+        l.titre = "Les Heures creuses".into();
+        l.auteur = "Ivan Pjig".into();
+        l.genre = "roman".into();
+        l.titre_page = "%TITRE%".into();
+        l.copyright = "© %AUTEUR%, 2026.".into();
+        l.dedicace = "Pour %AUTEUR%.".into();
+
+        let (titre_page, copyright, dedicace) = libres(&l);
+        for texte in [&titre_page, &copyright, dedicace.as_ref().unwrap()] {
+            for jeton in ["%TITRE%", "%AUTEUR%", "%GENRE%"] {
+                assert!(!texte.contains(jeton), "{jeton} a traversé : {texte}");
+            }
+        }
+        assert_eq!(titre_page, "Les Heures creuses");
+        assert_eq!(copyright, "© Ivan Pjig, 2026.");
     }
 }
