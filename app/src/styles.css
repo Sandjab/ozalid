@@ -1085,8 +1085,14 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
 .ligne.maquette { margin: 0; padding: .4rem 0; border-bottom: 1px solid var(--trait); }
 .ligne.maquette .nom { flex: 1; }
 .ligne.maquette .note { margin: 0; }
-/* Le second clic d'un effacement : ce qui se perd là ne se retrouve pas. */
-.ligne.maquette button.danger { color: var(--rouge); }
+/* Le second clic d'un effacement : ce qui se perd là ne se retrouve pas. Le rouge est
+   au fond et non au texte — les boutons de cette fenêtre sont déjà noirs, et du rouge
+   sombre sur noir ne se lit pas. Vu à l'écran, pas dans un test. */
+.ligne.maquette button.danger {
+  background: var(--rouge);
+  border-color: var(--rouge);
+  color: var(--surface);
+}
 
 /* ---------- masquage ---------- */
 

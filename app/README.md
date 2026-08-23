@@ -284,6 +284,14 @@ qui est générique, et il devinerait mal. Rien ne borne le nombre ni le poids d
 maquettes — une maquette avec deux photos pèse ce que pèsent les photos ; le répertoire
 se regarde et s'élague à la main.
 
+Toute maquette se **clone**, fournie comprise — c'est ainsi qu'on part d'une fournie pour
+en faire la sienne. Le clone se nomme tout seul (« Folio (copie) », puis
+« Folio (copie) 2 ») : un nom fabriqué par le code se suffixe, là où un nom saisi se fait
+refuser. Renommer et effacer ne valent que pour les personnalisées, et c'est le **Rust**
+qui le refuse — le dialogue qui n'offre pas ces boutons sur une fournie n'est qu'une
+politesse, et une commande s'appelle sans lui. Un effacement est sans reprise : le bouton
+demande confirmation, et c'est tout le filet.
+
 Comme le `.ozalid`, une maquette ne porte **pas de champ `version`** : tout futur champ
 arrive avec son `#[serde(default = …)]`, et une archive écrite par une version antérieure
 se relit.
