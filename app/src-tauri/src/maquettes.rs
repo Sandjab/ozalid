@@ -160,6 +160,74 @@ pub fn par_cle(config: Option<&Path>, cle: &str) -> Option<Maquette> {
     toutes(config).into_iter().find(|m| m.cle == cle)
 }
 
+/// Les lettres latines accentuées, ramenées à leur base ASCII.
+///
+/// Une table plutôt qu'une dépendance de normalisation Unicode : le besoin tient dans
+/// les alphabets latins, et une crate de plus pour cinquante caractères coûterait plus
+/// cher que ce qu'elle rendrait. Les majuscules n'y figurent pas — la casse est abaissée
+/// avant la table.
+const ACCENTS: &[(char, &str)] = &[
+    ('à', "a"),
+    ('á', "a"),
+    ('â', "a"),
+    ('ã', "a"),
+    ('ä', "a"),
+    ('å', "a"),
+    ('ç', "c"),
+    ('è', "e"),
+    ('é', "e"),
+    ('ê', "e"),
+    ('ë', "e"),
+    ('ì', "i"),
+    ('í', "i"),
+    ('î', "i"),
+    ('ï', "i"),
+    ('ñ', "n"),
+    ('ò', "o"),
+    ('ó', "o"),
+    ('ô', "o"),
+    ('õ', "o"),
+    ('ö', "o"),
+    ('ù', "u"),
+    ('ú', "u"),
+    ('û', "u"),
+    ('ü', "u"),
+    ('ý', "y"),
+    ('ÿ', "y"),
+    ('æ', "ae"),
+    ('œ', "oe"),
+    ('ß', "ss"),
+];
+
+/// Le slug d'un nom : ce qui nomme son fichier, et ce qui l'identifie.
+///
+/// Accents décapés, casse ignorée, tout ce qui n'est ni lettre ni chiffre ASCII devient
+/// un tiret, et deux tirets d'affilée n'en font qu'un. « Ma Collection » et
+/// « ma collection… » donnent donc le même slug : ce sont le même nom, et `ecrire` le
+/// refuse au lieu d'écraser.
+///
+/// `None` quand il ne reste rien — un nom qui ne s'écrit avec aucune lettre latine ne
+/// peut pas nommer un fichier, et lui en inventer un le rendrait introuvable.
+pub fn slug(nom: &str) -> Option<String> {
+    let mut decape = String::with_capacity(nom.len());
+    for c in nom.chars().flat_map(char::to_lowercase) {
+        match ACCENTS.iter().find(|(a, _)| *a == c) {
+            Some((_, base)) => decape.push_str(base),
+            None => decape.push(c),
+        }
+    }
+    let mut s = String::with_capacity(decape.len());
+    for c in decape.chars() {
+        if c.is_ascii_alphanumeric() {
+            s.push(c);
+        } else if !s.ends_with('-') {
+            s.push('-');
+        }
+    }
+    let net = s.trim_matches('-');
+    (!net.is_empty()).then(|| net.to_string())
+}
+
 /// La couverture d'une fournie, pour les tests des autres modules.
 ///
 /// Une trentaine de tests partaient d'un constructeur ; ils partent maintenant d'une
@@ -243,6 +311,37 @@ mod tests {
                 ),
             ]
         );
+    }
+
+    /// Le nom est l'identité, le slug nomme le fichier : accents décapés, casse
+    /// ignorée, tout le reste en tirets. Deux noms qui donnent le même slug **sont**
+    /// le même nom — c'est ce qui permet à l'écriture de refuser plutôt que d'écraser.
+    #[test]
+    fn le_slug_decape_les_accents_et_ignore_la_casse() {
+        assert_eq!(slug("Ma collection").as_deref(), Some("ma-collection"));
+        assert_eq!(slug("Élan  vital !").as_deref(), Some("elan-vital"));
+        assert_eq!(slug("Cœur").as_deref(), Some("coeur"));
+        assert_eq!(slug("Ma Collection"), slug("ma  collection…"));
+        assert_eq!(slug("Folio").as_deref(), Some("folio"));
+    }
+
+    /// Un slug ne borde jamais de tiret : `folio-.maquette` se relirait en clé
+    /// « folio- », qui ne serait plus le slug de son propre nom.
+    #[test]
+    fn le_slug_ne_borde_pas_de_tiret() {
+        assert_eq!(slug("  Folio  ").as_deref(), Some("folio"));
+        assert_eq!(slug("— Folio —").as_deref(), Some("folio"));
+    }
+
+    /// Un nom qui ne s'écrit avec aucune lettre latine ne peut pas nommer un fichier.
+    /// Lui inventer « maquette-1 » cacherait le problème derrière un nom que
+    /// l'utilisateur n'a pas choisi et ne saurait pas retrouver.
+    #[test]
+    fn un_nom_sans_lettre_latine_n_a_pas_de_slug() {
+        assert_eq!(slug(""), None);
+        assert_eq!(slug("   "), None);
+        assert_eq!(slug("——"), None);
+        assert_eq!(slug("日本"), None);
     }
 
     /// Une `.maquette` est un document qu'on s'échange, et rien n'oblige celle qu'on
