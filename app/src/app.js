@@ -78,6 +78,19 @@ let attenteComposition = null;
 let compositionEnCours = false;
 let compositionARefaire = false;
 let veilleSuspendue = false;
+/**
+ * Le consentement du livre ouvert : un manuscrit y a été chargé.
+ *
+ * `deja_compose`, dans le projet, ne se lève qu'à une composition **réussie**. Il ne
+ * suffit donc pas : si la toute première échoue — police invalide, compte de chapitres
+ * faux —, la veille resterait muette et il n'y a plus de bouton pour reprendre. On
+ * corrigerait la cause et il ne se passerait rien.
+ *
+ * Cette variable est ce qui manque : elle dit qu'on a demandé, non qu'on a obtenu. Elle
+ * appartient au livre ouvert et retombe avec lui — un `.ozalid` rouvert ne consent pas,
+ * c'est tout l'objet du dispositif.
+ */
+let consenti = false;
 const DELAI_COMPOSITION = 400;
 
 const nb = (v, d = 2) => v.toLocaleString('fr-FR', {
@@ -353,6 +366,15 @@ function majPied() {
   sel.value = projet.livraison.courant;
 
   viderPied();
+  // Une composition qui tourne passe avant tout le reste, et en gris : elle dure des
+  // dizaines de secondes sur un vrai manuscrit, et personne ne l'a demandée. Laisser le
+  // pied crier « dos périmé » en rouge tout ce temps ferait lire une panne là où il n'y
+  // a qu'un travail en cours. C'est le mot que `#etat` disait à côté du bouton ; il n'a
+  // pas disparu avec lui, il a déménagé où le compte rendu vit désormais.
+  if (compositionEnCours) {
+    $('piedDos').textContent = '· composition…';
+    return;
+  }
   const perime = dosPerime(projet);
   const dos = dosCourant();
   const etat = perime ? 'dos périmé'
@@ -545,11 +567,16 @@ function afficherProjet(p) {
 /**
  * Recompose de soi-même quand la mesure du destinataire visé vient d'être périmée.
  *
- * Deux conditions, et il faut les deux. `deja_compose` est le **consentement** : ce
- * livre a déjà été composé à la main au moins une fois, donc on sait que son dos
- * intéresse quelqu'un. Avant ce premier clic, rien ne part tout seul — regarder une
- * première de couverture réclame un format, pas une composition, et faire payer une
- * minute de Typst à qui n'a rien demandé serait pire que le clic qu'on lui épargne.
+ * Deux conditions, et il faut les deux.
+ *
+ * Le **consentement** : `consenti` — un manuscrit a été chargé dans ce livre — ou
+ * `deja_compose` — il a déjà été composé au moins une fois, fût-ce dans une session
+ * précédente. Avant l'un des deux, rien ne part tout seul : regarder une première de
+ * couverture réclame un format, pas une composition, et faire payer une minute de Typst
+ * à qui ouvre un `.ozalid` pour le regarder serait pire que tout ce qu'on lui épargne.
+ * Les deux, et pas seulement le second : `deja_compose` ne se lève qu'à une réussite,
+ * et un premier échec n'aurait plus aucune reprise depuis que le bouton a disparu.
+ *
  * L'absence de mesure est le **besoin** : présente, il n'y a rien à recalculer.
  *
  * Débouncé, parce qu'un livre se modifie par rafales : changer le titre puis la
@@ -560,7 +587,7 @@ function veiller() {
     veilleSuspendue = false;
     return;
   }
-  if (!projet?.livraison.deja_compose || destinataireCourant()?.compose) return;
+  if (!(consenti || projet?.livraison.deja_compose) || destinataireCourant()?.compose) return;
   clearTimeout(attenteComposition);
   attenteComposition = setTimeout(() => recomposer(false), DELAI_COMPOSITION);
 }
@@ -587,7 +614,12 @@ async function recomposer(force) {
   try {
     await composer();
   } finally {
+    // Le pied est repeint **ici**, après que le drapeau est retombé, et pas seulement
+    // dans le `finally` de `composer` : celui-là court encore pendant que la
+    // composition est officiellement en cours, et le pied y resterait bloqué sur
+    // « composition… » jusqu'au prochain geste.
     compositionEnCours = false;
+    majPied();
   }
   // Reprogrammée sans repasser par `veiller` : la composition qui vient de finir a
   // déposé une mesure, et elle a l'air fraîche — mais elle a été lancée sur l'état
@@ -685,7 +717,7 @@ function oublierLaComposition() {
   // un message rouge appartient au texte qui l'a provoqué autant que le chiffre qu'il
   // commente. Effacer le chemin de l'épreuve en laissant l'erreur qui disait pourquoi
   // elle avait échoué donnerait à lire l'échec de l'ancien texte sous le nouveau.
-  for (const id of ['etat', 'etatEpreuve', 'etatPackages', 'etatEbooks', 'etatEnvois',
+  for (const id of ['etatEpreuve', 'etatPackages', 'etatEbooks', 'etatEnvois',
     'etatMaquettes']) {
     $(id).textContent = '';
     $(id).className = 'etat';
@@ -702,10 +734,12 @@ function oublierLaComposition() {
 function oublierLesSorties() {
   oublierLaComposition();
   // Un autre livre s'ouvre : la composition en attente était celle de celui qu'on
-  // quitte, et le premier rendu du nouveau ne doit rien déclencher.
+  // quitte, et le premier rendu du nouveau ne doit rien déclencher. Le consentement
+  // part avec elle — il appartenait au livre qu'on ferme, et ouvrir n'est pas demander.
   clearTimeout(attenteComposition);
   compositionARefaire = false;
   veilleSuspendue = true;
+  consenti = false;
   // L'étape courante est une sortie comme une autre : elle appartenait au projet qu'on
   // regardait. Rester sur la Livraison en ouvrant un autre livre donnerait à lire ses
   // packages sous le titre du nouveau.
@@ -843,7 +877,12 @@ async function importer() {
   await tente(async () => {
     const p = await invoke('projet_importer', { livreToml: choix });
     oublierLesSorties();
+    // Un `livre.toml` importé apporte son manuscrit : c'est le même geste que d'en
+    // choisir un, et il consent comme lui. Levé **après** `oublierLesSorties`, qui vient
+    // de le faire retomber pour le livre qu'on quitte.
+    consenti = true;
     afficherProjet(p);
+    recomposer(true);
   });
 }
 
@@ -921,9 +960,22 @@ async function majLivre() {
  * identique coûte une recomposition pour rien, comparer deux fois un roman entier à
  * chaque clic coûterait davantage, et se tromper de ce côté-là n'imprime rien de faux.
  */
+/**
+ * Un manuscrit vient d'arriver — réimporté, ou choisi ailleurs.
+ *
+ * C'est **le geste qui consent** : charger un manuscrit dit « ce livre m'intéresse »,
+ * là où ouvrir un `.ozalid` ne dit que « je regarde ». La composition part donc d'ici,
+ * et il n'y a plus de bouton pour la demander.
+ *
+ * `recomposer(true)` plutôt que `veiller()` : la mesure vient d'être effacée de toute
+ * façon, et le rendu qui suit n'a pas à attendre son débounce pour un geste dont on
+ * sait déjà qu'il périme tout.
+ */
 function manuscritRemplace(p) {
   oublierLaComposition();
+  consenti = true;
   afficherProjet(p);
+  recomposer(true);
 }
 
 async function reimporter() {
@@ -963,11 +1015,24 @@ async function majInterieur() {
  * regarde une fois ne mérite pas une place dans une légende qui suit partout.
  */
 
+/**
+ * Compose l'intérieur pour le destinataire visé.
+ *
+ * Plus personne ne l'appelle depuis un bouton : elle part du chargement d'un manuscrit,
+ * puis de la veille. Son compte rendu est donc une **légende** et non l'attente d'un
+ * clic — le pied dit « composition… » pendant, et les chiffres après.
+ *
+ * L'échec monte à la bande d'alerte, la seule que toutes les étapes partagent : il n'y a
+ * plus de bouton à côté duquel l'écrire, et une composition déclenchée depuis la
+ * Couverture n'a aucune raison d'échouer dans un coin de l'étape Livre.
+ *
+ * Ce message s'efface au geste suivant — `essai()` remet l'alerte à zéro à chaque
+ * tentative — et **ce n'est pas un trou à boucher** : tout geste qui l'efface relance
+ * aussi la composition, la mesure étant toujours absente, et la réécrit si la cause
+ * tient. Une garde qui le retiendrait ferait survivre l'échec à sa réparation.
+ */
 async function composer() {
-  const bt = $('btComposer');
-  bt.disabled = true;
-  $('etat').textContent = 'composition…';
-  $('etat').className = 'etat';
+  majPied();
   try {
     const c = await invoke('composer');
     // Le dos sort de la pagination qu'on vient de mesurer, et c'est le projet qui le
@@ -976,12 +1041,9 @@ async function composer() {
     // depuis ce lot, les pages, les chapitres, la gouttière et le repli avec.
     afficherProjet(c.projet);
     if (face === 'planche') demanderApercu();
-    $('etat').textContent = '';
   } catch (e) {
-    $('etat').textContent = String(e);
-    $('etat').className = 'etat erreur';
+    alerter(String(e));
   } finally {
-    bt.disabled = false;
     majPied();
     majEtapes();
   }
@@ -1102,7 +1164,6 @@ $('btReperes').addEventListener('click', basculerReperes);
 // Le seul écouteur de l'application qui ne réponde pas à un geste : c'est l'image
 // décodée qui donne au cadre sa taille, et elle ne l'est qu'après avoir été posée.
 $('apercu').addEventListener('load', poserRatio);
-$('btComposer').addEventListener('click', composer);
 $('btPackager').addEventListener('click', packager);
 $('btEbooks').addEventListener('click', ebooks);
 $('btEpreuve').addEventListener('click', epreuve);

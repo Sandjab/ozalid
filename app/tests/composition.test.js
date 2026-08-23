@@ -47,10 +47,39 @@ const PROJET = {
   livraison: livraison(LULU),
 };
 
+/**
+ * Le geste qui compose, depuis que le bouton n'existe plus : charger un manuscrit.
+ *
+ * C'est le consentement du chantier « intérieur sans onglet » — ouvrir un `.ozalid` ne
+ * compose pas, charger un manuscrit oui. Les tests qui ont besoin d'un livre composé
+ * passent donc par là, comme l'utilisateur.
+ */
+const faireComposer = async (els) => {
+  await els.get('btReimporter').declenche('click');
+  // `manuscritRemplace` lance la composition sans l'attendre — l'utilisateur non plus.
+  // Un tour de boucle pour qu'elle aboutisse avant qu'on regarde le résultat.
+  await new Promise((r) => setImmediate(r));
+};
+
 /** Fausse implémentation des commandes Rust. `sur` surcharge une commande. */
 function faux(providers, sur = {}) {
+  // Le projet que ce faux sert, quel que soit le chemin par lequel on l'a ouvert : c'est
+  // lui que `manuscrit_reimporter` doit rendre, et non un `PROJET` figé — un test qui
+  // vise CoolLibri repasserait chez Lulu au premier rechargement.
+  const servi = sur.projet_ouvrir ?? sur.projet_importer ?? PROJET;
   return async (cmd, args) => {
     if (cmd === 'providers_liste') return providers;
+    // Recharger un manuscrit périme tout ce qui a été mesuré : c'est la règle du Rust,
+    // et sans elle le front n'aurait rien à recomposer.
+    if (cmd === 'manuscrit_reimporter' && !(cmd in sur)) {
+      return {
+        ...servi,
+        livraison: {
+          ...servi.livraison,
+          destinataires: servi.livraison.destinataires.map(({ compose, ...d }) => d),
+        },
+      };
+    }
     if (cmd === 'polices_liste') return ['Bodoni Moda', 'Archivo', 'Spectral'];
     if (cmd === 'polices_texte_liste') return ['EB Garamond', 'Alegreya', 'Cardo'];
     if (cmd === 'jetons_liste') return ['%TITRE%', '%AUTEUR%', '%GENRE%', '%EDITEUR%', '%COLLECTION%', '%MONOGRAMME%'];
@@ -268,7 +297,7 @@ test('le pied porte les chiffres de la composition', async () => {
     open: async () => '/livres/LHC.ozalid',
   });
   await els.get('btOuvrir').declenche('click');
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
 
   assert.strictEqual(
     els.get('piedMesure').textContent,
@@ -276,6 +305,68 @@ test('le pied porte les chiffres de la composition', async () => {
   );
   assert.strictEqual(els.get('piedDos').textContent, '· dos 16,5 mm');
   assert.strictEqual(els.get('piedInterieur').textContent, '· intérieur');
+});
+
+/**
+ * Le consentement appartient au **livre ouvert**, pas à la fenêtre.
+ *
+ * Sans cela, avoir chargé un manuscrit dans un premier livre ferait composer le
+ * suivant au premier geste — alors même qu'on vient seulement de l'ouvrir. C'est le
+ * pari du chantier retourné contre lui-même : ouvrir n'est pas demander, et ça vaut
+ * aussi pour le deuxième livre de la session.
+ */
+test('ouvrir un autre livre retire le consentement du précédent', async () => {
+  const vus = [];
+  const base = faux([LULU], {
+    projet_ouvrir: PROJET,
+    composer: COMPOSITION,
+    livre_modifier: PROJET,
+  });
+  const invoke = async (cmd, args) => {
+    vus.push(cmd);
+    return base(cmd, args);
+  };
+  const { els } = await charge({ invoke, open: async () => '/livres/LHC.ozalid' });
+
+  await els.get('btOuvrir').declenche('click');
+  await faireComposer(els);
+  const apres = vus.length;
+
+  // Un autre livre s'ouvre. `PROJET` ne porte aucune mesure et n'a jamais été composé :
+  // si le consentement l'avait suivi, le premier geste ferait tourner Typst.
+  await els.get('btOuvrir').declenche('click');
+  els.get('inDedicace').value = 'À M.';
+  await els.get('inDedicace').declenche('change');
+  await new Promise((r) => setTimeout(r, 700));
+
+  assert.ok(
+    !vus.slice(apres).includes('composer'),
+    'le consentement du livre précédent a suivi dans le suivant',
+  );
+});
+
+/**
+ * L'import d'un `livre.toml` apporte un manuscrit : c'est le même geste que d'en choisir
+ * un, et il consent comme lui. Il ne passe pas par le même entonnoir du front — c'est
+ * exactement le déclencheur qu'on rate, et sans lui un livre importé resterait sans dos
+ * jusqu'au premier geste.
+ */
+test('importer un livre.toml compose, comme charger un manuscrit', async () => {
+  const vus = [];
+  const base = faux([LULU], { projet_importer: PROJET, composer: COMPOSITION });
+  const invoke = async (cmd, args) => {
+    vus.push(cmd);
+    return base(cmd, args);
+  };
+  const { els } = await charge({
+    invoke,
+    open: async () => '/dev/ozalid/build/LHC/livre.toml',
+  });
+
+  await els.get('btImporter').declenche('click');
+  await new Promise((r) => setImmediate(r));
+
+  assert.ok(vus.includes('composer'), 'un livre.toml importé n\'a rien composé');
 });
 
 /**
@@ -319,7 +410,7 @@ test('sans PDF sur le disque, le pied ne propose pas de lien', async () => {
     open: async () => '/livres/LHC.ozalid',
   });
   await els.get('btOuvrir').declenche('click');
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
 
   assert.strictEqual(els.get('piedInterieur').textContent, '');
   assert.match(els.get('piedMesure').textContent, /262 pages/,
@@ -361,7 +452,7 @@ test('une police composée par repli se signale au pied et sous la police', asyn
     open: async () => '/livres/LHC.ozalid',
   });
   await els.get('btOuvrir').declenche('click');
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
 
   assert.match(els.get('piedRepli').textContent, /repli/);
   assert.strictEqual(els.get('piedRepli').className, 'alerte');
@@ -393,7 +484,7 @@ test('une composition sans substitution n\'alerte nulle part', async () => {
     open: async () => '/livres/LHC.ozalid',
   });
   await els.get('btOuvrir').declenche('click');
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
 
   assert.strictEqual(els.get('piedRepli').textContent, '');
   assert.strictEqual(els.get('repliPolices').hidden, true);
@@ -414,7 +505,7 @@ test('un prestataire sans formule n\'affiche jamais de dos chiffré', async () =
     open: async () => '/livres/LHC.ozalid',
   });
   await els.get('btOuvrir').declenche('click');
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
 
   const dos = els.get('piedDos').textContent;
   assert.match(dos, /relevé sur le gabarit/);
@@ -425,15 +516,17 @@ test('un prestataire sans formule n\'affiche jamais de dos chiffré', async () =
 });
 
 /**
- * Une erreur de la chaîne doit rester lisible, et le bouton rendu.
+ * Une erreur de la chaîne doit rester lisible — et depuis qu'aucun bouton ne la
+ * provoque, elle monte à l'entête, la seule bande que toutes les étapes partagent. Une
+ * composition déclenchée depuis la Couverture n'a aucune raison d'échouer dans un coin
+ * de l'étape Livre, que personne ne regardera.
  *
- * Ce que ce test **ne demande plus** : que la légende du pied s'efface. Elle ne vient
- * plus du geste qui vient d'échouer mais du projet, et le projet, lui, porte toujours
- * la mesure de la dernière composition réussie — qui n'a pas cessé d'être vraie parce
- * qu'une autre a échoué. Ce qui la périmerait, c'est le Rust qui l'efface à la source,
- * et le pied dirait alors « dos périmé ».
+ * Ce que ce test **ne demande pas** : que la légende du pied s'efface. Elle ne vient
+ * pas du geste qui échoue mais du projet, et le projet porte toujours la mesure de la
+ * dernière composition réussie — qui n'a pas cessé d'être vraie parce qu'une autre a
+ * échoué. Ce qui la périmerait, c'est le Rust qui l'efface à la source.
  */
-test('une erreur de composition se lit, et rend le bouton', async () => {
+test('une erreur de composition monte à l\'entête', async () => {
   let echoue = false;
   const base = faux([LULU], { projet_ouvrir: PROJET });
   const invoke = async (cmd, args) => {
@@ -445,14 +538,13 @@ test('une erreur de composition se lit, et rend le bouton', async () => {
   };
   const { els } = await charge({ invoke, open: async () => '/livres/LHC.ozalid' });
   await els.get('btOuvrir').declenche('click');
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
   assert.match(els.get('piedMesure').textContent, /262 pages/);
 
   echoue = true;
-  await els.get('btComposer').declenche('click');
-  assert.match(els.get('etat').textContent, /64 chapitres attendus/);
-  assert.strictEqual(els.get('etat').className, 'etat erreur');
-  assert.strictEqual(els.get('btComposer').disabled, false, 'bouton laissé bloqué');
+  await faireComposer(els);
+  assert.match(els.get('alerte').textContent, /64 chapitres attendus/);
+  assert.strictEqual(els.get('alerte').className, 'etat erreur');
 });
 
 /** Une erreur d'ouverture doit s'afficher, pas disparaître dans la console. */

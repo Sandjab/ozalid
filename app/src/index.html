@@ -107,8 +107,10 @@
       <p class="chemin" id="cheminEpreuve"></p>
     </div>
 
-    <!-- Aucun sélecteur de prestataire ici : il est dans le pied, et il vaut pour toute
-         la fenêtre. « Composer » compose pour le destinataire visé. -->
+    <!-- Aucun bouton ici, et c'est le fait du chantier : la composition part au
+         chargement d'un manuscrit, puis se tient à jour toute seule. Aucun sélecteur de
+         prestataire non plus — il est dans le pied, et il vaut pour toute la fenêtre :
+         on compose pour le destinataire visé. -->
     <div class="bloc">
       <h2>Intérieur</h2>
       <label><span>Police</span><select id="inPoliceInterieur"></select></label>
@@ -118,12 +120,8 @@
            avertissement part sur un stderr qu'aucune fenêtre ne montre. -->
       <p class="note alerte" id="repliPolices" hidden></p>
       <p class="note">La police fixe la pagination, donc l'épaisseur du dos : en changer
-        périme le dos de la dernière composition. La planche reste sans dos tant que
-        l'intérieur n'a pas été recomposé.</p>
-      <div class="ligne">
-        <button id="btComposer" type="button">Composer l'intérieur</button>
-        <span id="etat" class="etat"></span>
-      </div>
+        relance la composition, et le pied dit où elle en est. La planche reste sans dos
+        le temps qu'elle tourne.</p>
     </div>
   </section>
 

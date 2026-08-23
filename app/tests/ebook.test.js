@@ -55,6 +55,32 @@ function faux(providers, sur = {}) {
     if (cmd === 'recents_liste') return [];
     if (cmd === 'garde_modifications') return 'ignorer';
     if (cmd === 'interface_prete') return null;
+    // Importer un `livre.toml`, c'est apporter un manuscrit — donc composer, sans
+    // qu'aucun test de ce fichier ne le demande. Une commande inattendue leur
+    // remonterait une erreur dans l'entête.
+    //
+    // La mesure **doit** entrer dans le projet rendu, comme le Rust le fait : la veille
+    // relance tant que le destinataire visé n'en porte pas, et une composition qui
+    // réussirait sans rien déposer tournerait en boucle.
+    if (cmd === 'composer') {
+      const mesure = { pages: 262, gouttiere: 25, blanche: true, dos: 16.513 };
+      return {
+        ...mesure,
+        chapitres: 64,
+        pdf: '/livres/LHC/lulu/interieur-lulu.pdf',
+        polices_introuvables: [],
+        projet: {
+          ...PROJET,
+          livraison: {
+            ...PROJET.livraison,
+            deja_compose: true,
+            destinataires: PROJET.livraison.destinataires.map((d) => (
+              d.provider === PROJET.livraison.courant ? { ...d, compose: mesure } : d
+            )),
+          },
+        },
+      };
+    }
     // L'accès au modèle de diffusion se lit au démarrage : il appartient à la
     // machine, et l'écran le montre avant qu'aucun projet ne soit ouvert.
     if (cmd === 'diffusion_lire') return { url: '', cle_posee: false };

@@ -130,6 +130,21 @@ function atelier({
   return { appels, invoke, noms: () => appels.map(([c]) => c) };
 }
 
+/**
+ * Le geste qui compose, depuis que le bouton n'existe plus : charger un manuscrit.
+ *
+ * C'est le consentement du chantier « intérieur sans onglet » — ouvrir un `.ozalid` ne
+ * compose pas, charger un manuscrit oui. Les tests qui ont besoin d'un livre composé
+ * passent donc par là, comme l'utilisateur.
+ *
+ * `manuscritRemplace` lance la composition sans l'attendre — l'utilisateur non plus.
+ * Un tour de boucle pour qu'elle aboutisse avant qu'on regarde le résultat.
+ */
+const faireComposer = async (els) => {
+  await els.get('btReimporter').declenche('click');
+  await new Promise((r) => setImmediate(r));
+};
+
 const ETAPES = ['livre', 'couverture', 'livraison', 'envois'];
 const montree = (els) =>
   ETAPES.filter((c) => els.get(`etape${c[0].toUpperCase()}${c.slice(1)}`).hidden === false);
@@ -541,7 +556,7 @@ test('une fois l\'intérieur composé, le pied porte le dos mesuré', async () =
   const { els } = await charge({ invoke: atelierCompose([LULU]) });
   await els.get('btNouveau').declenche('click');
 
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
 
   assert.equal(pied(els), 'lulu · dos 16,5 mm');
 });
@@ -609,7 +624,7 @@ function atelierCompose(liste, composition = COMPOSITION) {
 test('viser un autre destinataire renomme le pied et lui retire le dos', async () => {
   const { els } = await charge({ invoke: atelierCompose([LULU, KDP]) });
   await els.get('btNouveau').declenche('click');
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
   assert.equal(pied(els), 'lulu · dos 16,5 mm');
 
   els.get('inDestinataire').value = 'kdp-6x9';
@@ -621,7 +636,7 @@ test('viser un autre destinataire renomme le pied et lui retire le dos', async (
 test('changer de papier retire le dos du pied', async () => {
   const { els } = await charge({ invoke: atelierCompose([KDP]) });
   await els.get('btNouveau').declenche('click');
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
   assert.equal(pied(els), 'kdp-6x9 · dos 16,5 mm');
 
   els.get('dest-papier-kdp-6x9').value = 'blanc';
@@ -642,7 +657,7 @@ test('chez un prestataire à gabarit, le pied ne réclame pas une composition', 
   });
   await els.get('btNouveau').declenche('click');
 
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
 
   assert.equal(pied(els), 'coollibri-148x210 · dos relevé sur le gabarit');
 });
@@ -778,7 +793,7 @@ test('l\'onglet garde le nom de son étape sous le sous-libellé', async () => {
 test('un dos périmé par un changement de gabarit allume le témoin du pied', async () => {
   const { els } = await charge({ invoke: atelierCompose([LULU, KDP]) });
   await els.get('btNouveau').declenche('click');
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
   assert.equal(piedAlerte(els), false, 'un dos frais ne périme rien');
 
   els.get('inDestinataire').value = 'kdp-6x9';
@@ -795,12 +810,12 @@ test('un dos périmé par un changement de gabarit allume le témoin du pied', a
 test('recomposer éteint le témoin du pied', async () => {
   const { els } = await charge({ invoke: atelierCompose([LULU, KDP]) });
   await els.get('btNouveau').declenche('click');
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
   els.get('inDestinataire').value = 'kdp-6x9';
   await els.get('inDestinataire').declenche('change');
   assert.equal(piedAlerte(els), true, 'le dos devait être périmé avant');
 
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
 
   assert.equal(pied(els), 'kdp-6x9 · dos 16,5 mm');
   assert.equal(piedAlerte(els), false);
@@ -824,7 +839,7 @@ test('une police refusée n\'allume pas le témoin du pied', async () => {
   };
   const { els } = await charge({ invoke });
   await els.get('btNouveau').declenche('click');
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
 
   els.get('inPoliceInterieur').value = 'Alegreya';
   await els.get('inPoliceInterieur').declenche('change');
@@ -858,7 +873,7 @@ test('un dos jamais composé n\'allume pas le témoin du pied', async () => {
 test('changer de papier allume aussi le témoin du pied', async () => {
   const { els } = await charge({ invoke: atelierCompose([KDP]) });
   await els.get('btNouveau').declenche('click');
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
   assert.equal(piedAlerte(els), false);
 
   els.get('dest-papier-kdp-6x9').value = 'blanc';

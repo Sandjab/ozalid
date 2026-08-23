@@ -61,6 +61,21 @@ const COMPOSITION = {
   polices_introuvables: [],
 };
 
+/**
+ * Le geste qui compose, depuis que le bouton n'existe plus : charger un manuscrit.
+ *
+ * C'est le consentement du chantier « intérieur sans onglet » — ouvrir un `.ozalid` ne
+ * compose pas, charger un manuscrit oui. Les tests qui ont besoin d'un livre composé
+ * passent donc par là, comme l'utilisateur.
+ *
+ * `manuscritRemplace` lance la composition sans l'attendre — l'utilisateur non plus.
+ * Un tour de boucle pour qu'elle aboutisse avant qu'on regarde le résultat.
+ */
+const faireComposer = async (els) => {
+  await els.get('btReimporter').declenche('click');
+  await new Promise((r) => setImmediate(r));
+};
+
 function paquet(sur = {}) {
   return {
     provider: 'lulu',
@@ -520,7 +535,7 @@ test('l\'aperçu ne transporte plus de gabarit', async () => {
 
 test('une fois l\'intérieur composé, l\'aperçu de planche reçoit ce dos-là', async () => {
   const { els, appels } = await ouvre([LULU], { composer: COMPOSITION }, { couverture: {} });
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
   await face(els, 'Planche').declenche('click');
   await attendreApercu();
 
@@ -530,7 +545,7 @@ test('une fois l\'intérieur composé, l\'aperçu de planche reçoit ce dos-là'
 /** Composer, c'est composer pour le destinataire visé : plus rien à lui désigner. */
 test('composer ne transmet plus de prestataire', async () => {
   const { els, appels } = await ouvre([LULU], { composer: COMPOSITION });
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
   assert.deepStrictEqual(dernier(appels, 'composer')[1], undefined);
 });
 
@@ -544,7 +559,7 @@ test('viser un autre destinataire périme le dos de l\'aperçu', async () => {
   const { els, appels } = await ouvre([LULU, KDP], { composer: COMPOSITION }, {
     couverture: {}, destinataires: [chez(LULU), chez(KDP)],
   });
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
   await face(els, 'Planche').declenche('click');
   await attendreApercu();
   assert.strictEqual(dernier(appels, 'couverture_apercu')[1].dosMm, 16.513);
@@ -566,7 +581,7 @@ test('viser un autre destinataire périme le dos de l\'aperçu', async () => {
  */
 test('un dos calculé sur un autre papier ne vaut plus rien', async () => {
   const { els, appels } = await ouvre([KDP], { composer: COMPOSITION }, { couverture: {} });
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
   await face(els, 'Planche').declenche('click');
   await attendreApercu();
   assert.strictEqual(dernier(appels, 'couverture_apercu')[1].dosMm, 16.513);
@@ -588,7 +603,7 @@ test('un dos calculé sur un autre papier ne vaut plus rien', async () => {
  */
 test('un dos calculé pour une autre police ne vaut plus rien', async () => {
   const { els, appels } = await ouvre([LULU], { composer: COMPOSITION }, { couverture: {} });
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
   await face(els, 'Planche').declenche('click');
   await attendreApercu();
   assert.strictEqual(dernier(appels, 'couverture_apercu')[1].dosMm, 16.513);
@@ -623,7 +638,7 @@ test('revenir à un destinataire déjà composé retrouve son dos sans recompose
     await els.get('inDestinataire').declenche('change');
     await attendreComposition();
   };
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
   await face(els, 'Planche').declenche('click');
   await attendreApercu();
   assert.strictEqual(dernier(appels, 'couverture_apercu')[1].dosMm, 16.513);
@@ -646,7 +661,7 @@ test('revenir à un destinataire déjà composé retrouve son dos sans recompose
  */
 test('une modification recompose d\'elle-même, une fois le livre composé', async () => {
   const { els, appels } = await ouvre([LULU], { composer: COMPOSITION }, { couverture: {} });
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
   assert.strictEqual(combien(appels, 'composer'), 1);
 
   els.get('inPoliceInterieur').value = 'Cardo';
@@ -657,12 +672,16 @@ test('une modification recompose d\'elle-même, une fois le livre composé', asy
 });
 
 /**
- * L'autre moitié de la règle, et la plus importante : **rien ne part avant le premier
- * clic**. Une composition dure des secondes et écrit des fichiers ; la déclencher chez
- * quelqu'un qui n'a jamais rien composé — qui règle une couverture, par exemple —
- * coûterait plus cher que le clic qu'on lui épargne.
+ * L'autre moitié de la règle, et la plus importante : **ouvrir n'est pas demander**.
+ * Une composition dure des secondes et écrit des fichiers ; la déclencher chez
+ * quelqu'un qui a seulement ouvert un `.ozalid` — pour regarder une couverture, par
+ * exemple — coûterait bien plus que ce qu'on lui épargne.
+ *
+ * C'est le pari du chantier « intérieur sans onglet » : le consentement a quitté le
+ * bouton, qui n'existe plus, pour le chargement d'un manuscrit. Ce test est celui qui
+ * le garde — sans lui, rien n'empêcherait de faire tourner Typst à chaque ouverture.
  */
-test('rien ne se compose tout seul tant qu\'on ne l\'a pas demandé une fois', async () => {
+test('ouvrir un projet ne compose pas', async () => {
   const { els, appels } = await ouvre([LULU], { composer: COMPOSITION }, { couverture: {} });
 
   els.get('inPoliceInterieur').value = 'Cardo';
@@ -672,6 +691,74 @@ test('rien ne se compose tout seul tant qu\'on ne l\'a pas demandé une fois', a
   await attendreComposition();
 
   assert.strictEqual(combien(appels, 'composer'), 0, 'composé sans qu\'on le demande');
+});
+
+/**
+ * Et l'autre face : charger un manuscrit compose, **sans qu'on ait rien cliqué d'autre**.
+ * C'est le geste qui dit « ce livre m'intéresse », et il n'y a plus de bouton derrière.
+ */
+test('charger un manuscrit compose', async () => {
+  const { els, appels } = await ouvre([LULU], { composer: COMPOSITION }, { couverture: {} });
+  assert.strictEqual(combien(appels, 'composer'), 0, 'composé avant le manuscrit');
+
+  await faireComposer(els);
+
+  assert.strictEqual(combien(appels, 'composer'), 1, 'le manuscrit n\'a rien déclenché');
+});
+
+/**
+ * **Le test du consentement de session.** Si la toute première composition échoue,
+ * `deja_compose` reste faux dans le projet — il ne se lève qu'à une réussite. Sans une
+ * mémoire côté écran, corriger la cause ne relancerait rien, et il n'y a plus de bouton
+ * pour reprendre : on serait devant une impasse.
+ *
+ * C'est le trou que l'écriture du plan a trouvé, et le seul correctif de ce lot.
+ */
+test('un premier échec n\'empêche pas la reprise quand on corrige la cause', async () => {
+  let echoue = true;
+  const { els, appels } = await ouvre([LULU], {
+    composer: () => {
+      if (echoue) throw 'police d\'intérieur inconnue';
+      return COMPOSITION;
+    },
+  }, { couverture: {} });
+
+  await faireComposer(els);
+  assert.strictEqual(combien(appels, 'composer'), 1);
+  assert.match(els.get('alerte').textContent, /police d'intérieur inconnue/);
+
+  // On corrige la cause. Rien d'autre ne se passe : aucun bouton, et le projet ne porte
+  // toujours aucune mesure ni aucun `deja_compose`.
+  echoue = false;
+  els.get('inPoliceInterieur').value = 'Cardo';
+  await els.get('inPoliceInterieur').declenche('change');
+  await attendreComposition();
+
+  assert.strictEqual(combien(appels, 'composer'), 2,
+    'la correction n\'a rien relancé : le livre est dans une impasse');
+});
+
+/**
+ * Une composition dure des dizaines de secondes sur un vrai manuscrit, et personne ne
+ * l'a demandée. Le pied doit dire qu'elle tourne — laisser « dos périmé » en rouge tout
+ * ce temps ferait lire une panne là où il n'y a qu'un travail en cours. C'est le mot que
+ * `#etat` disait à côté du bouton, déménagé où le compte rendu vit désormais.
+ */
+test('le pied dit que la composition tourne', async () => {
+  const { els } = await ouvre([LULU], {
+    composer: async () => {
+      await new Promise((r) => setTimeout(r, 800));
+      return COMPOSITION;
+    },
+  }, { couverture: {} });
+
+  await faireComposer(els);
+  assert.strictEqual(els.get('piedDos').textContent, '· composition…');
+  assert.strictEqual(els.get('piedMesure').textContent, '',
+    'des chiffres sous une composition en cours');
+
+  await new Promise((r) => setTimeout(r, 1000));
+  assert.strictEqual(els.get('piedDos').textContent, '· dos 16,5 mm');
 });
 
 /**
@@ -694,7 +781,11 @@ test('une modification pendant la composition la fait recommencer, une fois', as
       return COMPOSITION;
     },
   }, { couverture: {} });
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
+  // Le geste ne rend plus la main quand la composition est finie mais quand elle est
+  // lancée — c'est tout le propos du chantier. Ce test-là compte les compositions à la
+  // milliseconde : il doit voir la première aboutir avant de bousculer la suivante.
+  await new Promise((r) => setTimeout(r, 1200));
 
   els.get('inPoliceInterieur').value = 'Cardo';
   await els.get('inPoliceInterieur').declenche('change');
@@ -716,11 +807,11 @@ test('une modification pendant la composition la fait recommencer, une fois', as
  */
 test('composer à la main pendant l\'attente annule la recomposition', async () => {
   const { els, appels } = await ouvre([LULU], { composer: COMPOSITION }, { couverture: {} });
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
 
   els.get('inPoliceInterieur').value = 'Cardo';
   await els.get('inPoliceInterieur').declenche('change');
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
   await attendreComposition();
 
   assert.strictEqual(combien(appels, 'composer'), 2, 'la veille a recomposé par-dessus');
@@ -755,7 +846,7 @@ test('ouvrir un livre dont la mesure est périmée ne compose rien', async () =>
  */
 test('un dos calculé avant la dédicace ne vaut plus rien', async () => {
   const { els, appels } = await ouvre([LULU], { composer: COMPOSITION }, { couverture: {} });
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
   await face(els, 'Planche').declenche('click');
   await attendreApercu();
   assert.strictEqual(dernier(appels, 'couverture_apercu')[1].dosMm, 16.513);
@@ -775,23 +866,35 @@ test('un dos calculé avant la dédicace ne vaut plus rien', async () => {
  * pagination. Un dos calculé sur le manuscrit d'avant ne vaut rien même si le gabarit,
  * le papier et la police n'ont pas bougé — c'est précisément ce qui la rend facile à
  * oublier. Les deux portes par lesquelles le texte est remplacé sont exercées ici.
+ *
+ * Ce qui se regarde a changé avec le chantier « intérieur sans onglet ». Charger un
+ * manuscrit périme le dos **et déclenche la composition qui le rétablit** — dans le
+ * faux, instantanément, si bien que la planche sans dos n'est jamais demandée : l'aperçu
+ * est débouncé, et la seule demande qui parte porte déjà le dos neuf.
+ *
+ * On fait donc échouer la composition déclenchée. Ce qui reste alors à l'écran est
+ * exactement ce que le front fait d'un dos périmé quand rien ne vient le rétablir — et
+ * c'est la question que ce test pose depuis le début.
  */
 test('un dos calculé sur un autre manuscrit ne vaut plus rien', async () => {
-  const { els, appels } = await ouvre([LULU], { composer: COMPOSITION }, { couverture: {} });
+  let compose = true;
+  const { els, appels } = await ouvre([LULU], {
+    composer: () => {
+      if (!compose) throw 'Typst indisponible';
+      return COMPOSITION;
+    },
+  }, { couverture: {} });
   const dernierDos = () => dernier(appels, 'couverture_apercu')[1].dosMm;
 
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
   await face(els, 'Planche').declenche('click');
   await attendreApercu();
   assert.strictEqual(dernierDos(), 16.513);
 
-  await els.get('btReimporter').declenche('click');
+  compose = false;
+  await faireComposer(els);
   await attendreApercu();
   assert.strictEqual(dernierDos(), null, 'dos gardé après une réimportation du manuscrit');
-
-  await els.get('btComposer').declenche('click');
-  await attendreApercu();
-  assert.strictEqual(dernierDos(), 16.513);
 
   await els.get('btChoisirManuscrit').declenche('click');
   await attendreApercu();
@@ -811,7 +914,7 @@ test('réimporter le manuscrit efface ce que l\'ancien texte avait fait afficher
     epreuve_tirer: '/livres/LHC/epreuve.pdf',
   }, { couverture: {} });
 
-  await els.get('btComposer').declenche('click');
+  await faireComposer(els);
   await els.get('btPackager').declenche('click');
   await els.get('btEpreuve').declenche('click');
   // Un envoi porte lui aussi un compte de pages et un dos ; le composer demanderait une

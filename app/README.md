@@ -128,7 +128,13 @@ projets récents. L'accueil est un état de l'application, pas un écran de plus
 devant les autres.
 
 Ce qui **refuse une saisie** monte à l'entête, la seule bande que toutes les étapes
-partagent : le geste est fini, et le message doit survivre au changement d'étape.
+partagent : le geste est fini, et le message doit survivre au changement d'étape. Ce
+qu'aucun geste n'a demandé y monte aussi, et pour la même raison : une composition
+partie toute seule et qui échoue n'a aucun bouton à côté de qui s'écrire, et une
+composition déclenchée depuis la Couverture n'a pas à échouer dans un coin du Livre.
+Ce message-là s'efface au geste suivant, et ce n'est pas un trou : tout geste qui
+l'efface relance aussi la composition — la mesure est toujours absente — et la réécrit
+si la cause tient.
 Ce qui rend compte d'un **travail long** — tirer une épreuve, générer les packages —
 reste à côté du bouton qui l'a lancé : on attend là où l'on a cliqué, et un compte
 rendu qui migre en haut de l'écran se lit comme une panne. Ce que **personne n'a
@@ -136,7 +142,8 @@ demandé** est la troisième catégorie, et elle se lit en **légende**, près d
 commente : l'aperçu de couverture, qui se recompose à chaque réglage et se raconte sous
 l'image ; la composition de l'intérieur, qui se rattrape d'elle-même dès que sa mesure
 est périmée et se raconte au pied. La composition avait un panneau tant qu'elle avait un
-bouton ; elle n'a plus qu'une ligne, à l'endroit où le dos l'attendait déjà.
+bouton ; elle n'a plus qu'une ligne, à l'endroit où le dos l'attendait déjà, et le mot
+« composition… » pendant qu'elle tourne.
 
 **Enregistrer n'est plus qu'un geste de menu** (⌘S, ⇧⌘S) : les deux boutons ont
 quitté l'écran, comme dans tout éditeur de document macOS. Une entrée de menu termine
@@ -146,6 +153,33 @@ son ancienne valeur. Le sous-menu **« Aller »**
 navigue entre les quatre étapes (⌘1 à ⌘4) ; sans projet ouvert, il ne mène nulle
 part sans rien casser — la garde est du côté que les onglets et le menu ont en
 commun.
+
+## Ce qui déclenche une composition
+
+Rien ne s'appelle « Composer » dans cette fenêtre, et c'est délibéré. Composer
+l'intérieur est ce dont **tout le reste découle** — la pagination, donc le dos, donc la
+planche — et ce n'est pas une étape du travail : c'est une conséquence. L'application la
+tient à jour comme un tableur tient ses formules.
+
+Le **consentement** est le chargement d'un manuscrit : « Réimporter », « Choisir un
+autre manuscrit… », ou l'import d'un `livre.toml`, qui en apporte un. Ce geste dit « ce
+livre m'intéresse ». **Ouvrir un `.ozalid` ne le dit pas** — on ouvre pour regarder une
+couverture, et faire tourner Typst une minute à qui n'a rien demandé coûterait bien plus
+que ce qu'on lui épargne. Un `.ozalid` rouvert montre ce que son archive porte : les
+chiffres de la dernière composition, sans rien recalculer.
+
+Ensuite, la **veille** : dès que la mesure du destinataire visé disparaît — la police,
+le papier, le gabarit, le texte, un champ du livre —, la composition repart d'elle-même,
+débouncée à 400 ms pour qu'une rafale de réglages n'en lance qu'une. Une seule à la
+fois, et la dernière gagne : ce qui a bougé pendant qu'elle tournait la fait
+recommencer, une fois.
+
+Une **réserve**, assumée : le consentement du livre ouvert vit dans la fenêtre, pas dans
+le `.ozalid`. Un projet dont la toute première composition a échoué, refermé puis
+rouvert, ne repart donc pas seul — il faut recharger son manuscrit, qui est aussi le
+geste par lequel on répare un manuscrit fautif. Le porter dans l'archive demanderait d'y
+distinguer « on a consenti » de « on a composé », et le témoin de dos périmé a besoin du
+second : les deux ne sont pas le même fait.
 
 ## Le prestataire, choisi une seule fois
 
