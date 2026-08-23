@@ -32,9 +32,13 @@ use serde::{Deserialize, Serialize};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
+/// Version 3 : l'éditeur, le monogramme, la collection, le prix et la mention sont au
+/// livre, là où la 2 les rangeait dans la maquette. Le livre dit ce qui est écrit, la
+/// maquette dit où et si ça se voit.
+///
 /// Version 2 : la maquette de couverture y est typée, dans le vocabulaire du moteur
 /// Typst, là où la 1 conservait le bloc de réglages brut de l'atelier HTML.
-pub const VERSION: u32 = 2;
+pub const VERSION: u32 = 3;
 const PROJET_TOML: &str = "projet.toml";
 const MANUSCRIT_MD: &str = "manuscrit.md";
 const IMAGES: &str = "images/";
@@ -385,6 +389,73 @@ pub struct Projet {
     pub images_envois: BTreeMap<String, Vec<u8>>,
 }
 
+/// Remonte au livre les textes qu'un projet en version 2 rangeait dans la maquette.
+///
+/// Sur le `toml::Value` et non sur les types : en v3, `Couverture` ne porte plus ces
+/// champs, il n'y a donc plus de structure Rust capable de les lire. Un projet déjà en
+/// v3 traverse sans que rien ne bouge.
+///
+/// Un champ vide côté v2 laisse sa valeur générique : ce qui n'a jamais été saisi n'a
+/// rien à remonter.
+///
+/// Rien n'est **retiré** de la maquette, et ce n'est pas un oubli : une fois
+/// `Couverture` allégée, ces champs y sont inconnus, serde les ignore, et aucune
+/// réécriture ne les conserve. Le résultat est celui visé, sans code de suppression.
+fn migre(mut v: toml::Value) -> Result<Metadonnees, String> {
+    let version = version_de(&v);
+    if version < VERSION as i64 {
+        // La collection explicite gagne ; la pastille, qui portait un nom de collection
+        // sous un autre nom, ne sert que de repli.
+        let repris: [(&str, &[&str], &[&str]); 5] = [
+            ("editeur", &["pied", "editeur"], &[]),
+            ("monogramme", &["pied", "monogramme"], &[]),
+            (
+                "collection",
+                &["quatrieme", "collection"],
+                &["pastille", "texte"],
+            ),
+            ("prix", &["quatrieme", "prix"], &[]),
+            ("mention", &["quatrieme", "mention"], &[]),
+        ];
+        for (vers, depuis, repli) in repris {
+            let valeur = maquette_texte(&v, depuis).or_else(|| maquette_texte(&v, repli));
+            if let (Some(valeur), Some(livre)) = (
+                valeur,
+                v.get_mut("livre").and_then(toml::Value::as_table_mut),
+            ) {
+                livre.insert(vers.to_string(), toml::Value::String(valeur));
+            }
+        }
+        if let Some(o) = v.get_mut("ozalid").and_then(toml::Value::as_table_mut) {
+            o.insert("version".into(), toml::Value::Integer(VERSION as i64));
+        }
+    }
+    v.try_into().map_err(|e| format!("{PROJET_TOML} : {e}"))
+}
+
+/// La version annoncée par le fichier, ou 0 s'il n'en porte pas.
+fn version_de(v: &toml::Value) -> i64 {
+    v.get("ozalid")
+        .and_then(|o| o.get("version"))
+        .and_then(toml::Value::as_integer)
+        .unwrap_or(0)
+}
+
+/// La chaîne non vide rangée sous `couverture.maquette.<chemin>`, si elle y est.
+fn maquette_texte(v: &toml::Value, chemin: &[&str]) -> Option<String> {
+    if chemin.is_empty() {
+        return None;
+    }
+    let mut courant = v.get("couverture")?.get("maquette")?;
+    for cle in chemin {
+        courant = courant.get(cle)?;
+    }
+    courant
+        .as_str()
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+}
+
 impl Projet {
     pub fn nouveau(livre: Livre, texte: String) -> Self {
         Self {
@@ -549,14 +620,17 @@ impl Projet {
         })?;
         let toml_brut = String::from_utf8(toml_brut)
             .map_err(|_| format!("{PROJET_TOML} n'est pas de l'UTF-8."))?;
-        let mut meta: Metadonnees =
+        let valeur: toml::Value =
             toml::from_str(&toml_brut).map_err(|e| format!("{PROJET_TOML} : {e}"))?;
-        if meta.ozalid.version > VERSION {
+        // Le contrôle de version précède la migration, et non l'inverse : un projet venu
+        // du futur doit être refusé plutôt que migré de travers.
+        let version = version_de(&valeur);
+        if version > VERSION as i64 {
             return Err(format!(
-                "projet en version {}, cette application lit jusqu'à la {VERSION}.",
-                meta.ozalid.version
+                "projet en version {version}, cette application lit jusqu'à la {VERSION}."
             ));
         }
+        let mut meta: Metadonnees = migre(valeur)?;
         meta.livraison.normalise();
 
         let texte = fichier(&mut zip, MANUSCRIT_MD)?
@@ -759,6 +833,95 @@ auteur = "Ivan Pjig"
         assert_eq!(m.livre.monogramme, "Monogramme");
         assert_eq!(m.livre.prix, "Prix");
         assert_eq!(m.livre.mention, "Mention");
+    }
+
+    /// Un `.ozalid` en version 2 porte ses textes dans la maquette. Ils remontent au
+    /// livre à l'ouverture, sans resaisie : c'est la première vraie migration du format,
+    /// et cinq champs courts par projet valent le code qui les sauve.
+    #[test]
+    fn un_projet_v2_remonte_ses_textes_de_la_maquette() {
+        let v2 = v2_avec(&[
+            (&["pied", "editeur"], "OZALID"),
+            (&["pied", "monogramme"], "O"),
+            (&["quatrieme", "collection"], "Les Heures"),
+            (&["quatrieme", "prix"], "18 €"),
+            (&["quatrieme", "mention"], "Dépôt légal"),
+        ]);
+        let m = migre(v2).expect("migration refusée");
+        assert_eq!(m.livre.editeur, "OZALID");
+        assert_eq!(m.livre.monogramme, "O");
+        assert_eq!(m.livre.collection, "Les Heures");
+        assert_eq!(m.livre.prix, "18 €");
+        assert_eq!(m.livre.mention, "Dépôt légal");
+        assert_eq!(m.ozalid.version, VERSION, "la version doit suivre");
+    }
+
+    /// La pastille portait un nom de collection sous un autre nom — « folio » dans la
+    /// maquette Folio. Elle supplée une collection vide : la laisser tomber ferait
+    /// perdre la seule chose que ce champ disait.
+    #[test]
+    fn la_pastille_supplee_une_collection_vide() {
+        let v2 = v2_avec(&[
+            (&["quatrieme", "collection"], ""),
+            (&["pastille", "texte"], "folio"),
+        ]);
+        assert_eq!(migre(v2).unwrap().livre.collection, "folio");
+    }
+
+    /// La collection explicite gagne toujours : le repli n'est qu'un repli.
+    #[test]
+    fn une_collection_explicite_bat_la_pastille() {
+        let v2 = v2_avec(&[
+            (&["quatrieme", "collection"], "Les Heures"),
+            (&["pastille", "texte"], "folio"),
+        ]);
+        assert_eq!(migre(v2).unwrap().livre.collection, "Les Heures");
+    }
+
+    /// Un champ que la v2 laissait vide n'a rien à remonter : la générique reste.
+    #[test]
+    fn un_champ_vide_en_v2_laisse_sa_generique() {
+        let v2 = v2_avec(&[(&["pied", "editeur"], "")]);
+        assert_eq!(migre(v2).unwrap().livre.editeur, "Editeur");
+    }
+
+    /// Un projet déjà en v3 ne doit rien remonter : ses textes sont au livre.
+    #[test]
+    fn un_projet_v3_traverse_la_migration_sans_bouger() {
+        let mut l = livre();
+        l.editeur = "Ozalid".into();
+        let p = Projet::nouveau(l, String::new());
+        let v3: toml::Value = toml::from_str(&toml::to_string_pretty(&p.meta).unwrap()).unwrap();
+        assert_eq!(migre(v3).unwrap().livre.editeur, "Ozalid");
+    }
+
+    /// Un projet en version 2, maquette Folio, avec les textes posés là où la v2 les
+    /// rangeait — sous `couverture.maquette`.
+    fn v2_avec(textes: &[(&[&str], &str)]) -> toml::Value {
+        let mut p = Projet::nouveau(livre(), String::new());
+        p.meta.couverture.maquette = crate::maquettes::par_cle("folio");
+        let brut = toml::to_string_pretty(&p.meta)
+            .unwrap()
+            .replace(&format!("version = {VERSION}"), "version = 2");
+        let mut v: toml::Value = toml::from_str(&brut).unwrap();
+        for (chemin, valeur) in textes {
+            let mut courant = v
+                .get_mut("couverture")
+                .and_then(|c| c.get_mut("maquette"))
+                .unwrap();
+            for cle in &chemin[..chemin.len() - 1] {
+                courant = courant
+                    .as_table_mut()
+                    .unwrap()
+                    .entry(*cle)
+                    .or_insert_with(|| toml::Value::Table(Default::default()));
+            }
+            courant.as_table_mut().unwrap().insert(
+                chemin[chemin.len() - 1].to_string(),
+                toml::Value::String((*valeur).into()),
+            );
+        }
+        v
     }
 
     fn livre() -> Livre {
