@@ -1016,8 +1016,7 @@ pages n'est connu qu'une fois la référence composée :
     verifie_pages(&envois.liste, base.pages)?;
 ```
 
-Vérifier le nom du champ portant le compte sur `Package` (`base.pages` d'après
-`envois.js`, qui affiche `r.package.pages`) et l'employer tel quel.
+`Package::pages` est bien le champ du compte : vérifié.
 
 `trace` lit la main de l'envoi et rend une `Trace` complète :
 
@@ -1295,8 +1294,8 @@ fn empreinte(s: &str) -> String {
 }
 ```
 
-Le nom des champs de `mesure` (`gouttiere`, `blanche`) est à vérifier sur le type
-réel : `grep -n "pub struct Compose" -A 10 app/src-tauri/src/projet.rs`.
+`Destinataire::compose` est un `Option<Mesure>`, et `Mesure` porte bien `pages`,
+`gouttiere` et `blanche` : vérifié.
 
 - [ ] **Step 2 : écrire `envoi_objet`**
 
@@ -1339,7 +1338,12 @@ pub fn envoi_objet(index: usize, atelier: State<Atelier>) -> Result<Objet, Strin
         None => typst,
     };
     typst.apercu(&src, &png, 1, OBJET_PPI)?;
-    let (l, h) = crate::image::dimensions(&std::fs::read(&png).map_err(|e| e.to_string())?)?;
+    // `dimensions` rend un `Option` : un PNG que Typst vient d'écrire et qu'on ne sait
+    // pas mesurer est une anomalie, pas un cas ordinaire — elle se dit plutôt que de
+    // rendre un ratio inventé, qui déformerait l'objet sous la souris.
+    let octets = std::fs::read(&png).map_err(|e| format!("objet illisible : {e}"))?;
+    let (l, h) = crate::image::dimensions(&octets)
+        .ok_or("l'objet rendu n'est pas une image mesurable.")?;
     Ok(Objet {
         image: donnee_png(&png)?,
         ratio: h as f64 / l as f64,
@@ -1361,9 +1365,8 @@ pub struct Objet {
 }
 ```
 
-`crate::image::dimensions` : vérifier le nom réel dans `image.rs`
-(`grep -n "pub fn" app/src-tauri/src/image.rs`) — le README annonce « dimensions
-naturelles d'une image ».
+`crate::image::dimensions(octets) -> Option<(u32, u32)>` : vérifié, la signature
+est celle-là.
 
 Et dans `interieur.rs`, la source d'un objet seul :
 
@@ -2666,10 +2669,9 @@ aussi.
 
 - **`envoi_vignettes` porte une branche morte volontaire** à la tâche 7, étape 1,
   avec l'instruction de la supprimer. Ne pas la recopier telle quelle.
-- **Trois noms sont à vérifier sur le code réel** avant usage : le champ du compte
-  de pages sur `Package` (tâche 5), les champs de la mesure enregistrée
-  (`compose.gouttiere`, `compose.blanche` — tâche 7), et `crate::image::dimensions`
-  (tâche 7). Le plan les nomme d'après le README et le front ; le code fait foi.
+- **Les trois noms douteux ont été relevés sur le code** : `Package::pages`,
+  `Mesure { pages, gouttiere, blanche }`, et `image::dimensions -> Option<(u32,
+  u32)>`. Le plan les emploie tels quels.
 - **`dom_shim.charge()`** ne sait peut-être charger qu'`app.js` : la tâche 9 le
   signale et demande de l'étendre. C'est un vrai petit chantier, pas une ligne.
 - **L'application est cassée à l'étape Envois entre les tâches 8 et 11.** C'est
