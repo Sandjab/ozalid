@@ -450,6 +450,24 @@ function poserApercu(a) {
   // sinon sa place, vide, entre la scène et le message qui dit qu'il n'y a rien à voir.
   if (!a) $('cadreApercu').style.removeProperty('--ratio');
   poserReperes(a?.reperes ?? null);
+  poserMesures(a?.mesures ?? null);
+}
+
+/**
+ * Écrit sous la planche ce qu'elle mesure — ou retire la ligne.
+ *
+ * Les quatre nombres viennent du Rust et ne se recomposent pas ici : la largeur d'une
+ * planche est deux couvertures, un dos et deux fonds perdus, et cette addition est déjà
+ * faite dans `planche::Gabarit`. Trois décimales au fond perdu et deux ailleurs, comme
+ * la Livraison : un fond perdu se relève au dixième de dixième sur les gabarits, un dos
+ * jamais.
+ */
+function poserMesures(m) {
+  const p = $('mesuresApercu');
+  p.hidden = !m;
+  if (!m) return;
+  p.textContent = `Planche ${nb(m.largeur)} × ${nb(m.hauteur)} mm — dos ${nb(m.dos)} mm`
+    + ` — fond perdu ${nb(m.fond_perdu, 3)} mm`;
 }
 
 /**

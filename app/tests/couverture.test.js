@@ -133,6 +133,11 @@ async function ouvre(couverture, sur = {}, dialogues = []) {
         reperes: args.face === 'planche'
           ? { x: 0.0129, y: 0.0175, pli_quatre: 0.4724, pli_une: 0.5276 }
           : null,
+        // Une poche Lulu de 108 × 175 à 3,175 mm de fond perdu, sur un dos de 16,6 :
+        // 2 × 108 + 16,6 + 2 × 3,175 de large, 175 + 2 × 3,175 de haut.
+        mesures: args.face === 'planche'
+          ? { largeur: 238.95, hauteur: 181.35, dos: 16.6, fond_perdu: 3.175 }
+          : null,
       };
     }
     // Viser un autre destinataire est un des gestes qui redemandent un aperçu : le
@@ -479,6 +484,44 @@ test('la planche marque la coupe et les deux plis que le Rust donne', async () =
   assert.strictEqual(cadre.style.getPropertyValue('--pli-quatre'), '0.4724');
   assert.strictEqual(cadre.style.getPropertyValue('--pli-une'), '0.5276');
   assert.strictEqual(els.get('reperes').hidden, false, 'repères non marqués sur la planche');
+});
+
+/**
+ * Les quatre nombres écrits sous la planche sont ceux du fichier remis au prestataire :
+ * c'est en les comparant à son gabarit qu'on vérifie qu'on lui envoie la bonne planche.
+ * Ils viennent du Rust en millimètres et ne se recomposent pas ici — refaire l'addition
+ * dans la fenêtre, c'est la voir dériver le jour où un prestataire compte autrement.
+ * Le fond perdu porte trois décimales et le reste deux, comme la Livraison : un fond
+ * perdu se relève au millième de millimètre sur les gabarits, un dos jamais.
+ */
+test('la planche écrit sous elle ce qu\'elle mesure', async () => {
+  const { els } = await ouvre(maquette());
+  await face(els, 'Planche').declenche('click');
+  await attendreApercu();
+  const p = els.get('mesuresApercu');
+  assert.strictEqual(p.hidden, false, 'mesures absentes sous la planche');
+  assert.strictEqual(
+    p.textContent,
+    'Planche 238,95 × 181,35 mm — dos 16,60 mm — fond perdu 3,175 mm',
+  );
+});
+
+/**
+ * Une face rognée n'a ni dos ni fond perdu à annoncer, et sa largeur est celle du
+ * format — que le pied de la fenêtre donne déjà. Comme pour la coupe, le détour par la
+ * planche est ce qui fait le test : `#mesuresApercu` naît masqué, et sans lui on
+ * vérifierait qu'une ligne jamais écrite reste absente.
+ */
+test('une face sans fond perdu n\'écrit aucune mesure', async () => {
+  const { els } = await ouvre(maquette());
+  await face(els, 'Planche').declenche('click');
+  await attendreApercu();
+  assert.strictEqual(els.get('mesuresApercu').hidden, false);
+
+  await face(els, '1ère').declenche('click');
+  await attendreApercu();
+  assert.strictEqual(
+    els.get('mesuresApercu').hidden, true, 'mesures de la planche restées sous la 1ère');
 });
 
 /**

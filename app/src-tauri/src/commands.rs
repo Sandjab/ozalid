@@ -721,6 +721,27 @@ pub struct Apercu {
     /// le déduise d'un nom de face : le jour où une face gagne du fond perdu, elle
     /// gagne ses repères sans qu'on y pense.
     pub reperes: Option<Reperes>,
+    /// Ce que la planche mesure, en millimètres, pour l'écrire sous l'aperçu.
+    ///
+    /// Séparé des repères, avec lesquels il voyage pourtant toujours : les repères sont
+    /// des fractions posées **sur** l'image, ceux-ci des millimètres écrits **sous**
+    /// elle. Les confondre ferait porter à l'habillage une unité qui n'y survit pas.
+    pub mesures: Option<Mesures>,
+}
+
+/// Les quatre mesures d'une planche, en millimètres.
+///
+/// Elles ne se recalculent pas dans la fenêtre : la largeur d'une planche est deux
+/// couvertures, un dos et deux fonds perdus, et cette règle est déjà écrite une fois,
+/// dans `planche::Gabarit`. Redite en JavaScript, elle dériverait le jour où un
+/// prestataire compterait autrement — et le chiffre affiché ne serait plus celui du
+/// fichier remis.
+#[derive(Serialize)]
+pub struct Mesures {
+    pub largeur: f64,
+    pub hauteur: f64,
+    pub dos: f64,
+    pub fond_perdu: f64,
 }
 
 /// Où la planche se coupe et où elle se plie, en fraction de ses propres dimensions.
@@ -776,6 +797,7 @@ pub fn couverture_apercu(
     // Seule la planche se compose avec du fond perdu : les trois autres faces n'ont
     // rien à faire marquer.
     let mut reperes = None;
+    let mut mesures = None;
     let src = match face.as_str() {
         "une" => couverture::source_une(&o.projet.meta.livre, cv, pr.format, une.as_ref(), dos_mm),
         "quatre" => {
@@ -812,6 +834,12 @@ pub fn couverture_apercu(
                 pli_quatre,
                 pli_une,
             });
+            mesures = Some(Mesures {
+                largeur: g.largeur(),
+                hauteur: g.hauteur(),
+                dos: g.dos,
+                fond_perdu: g.fond_perdu,
+            });
             planche::source(&o.projet.meta.livre, cv, &g, une.as_ref(), quatre.as_ref())?
         }
         autre => return Err(format!("face inconnue : {autre}")),
@@ -825,6 +853,7 @@ pub fn couverture_apercu(
     Ok(Apercu {
         image: donnee_png(&png)?,
         reperes,
+        mesures,
     })
 }
 

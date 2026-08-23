@@ -527,9 +527,21 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
    contrôles était le vrai coût de la partie haute. */
 .face {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   gap: .5rem;
   min-height: 0;
+}
+
+/* Les mesures de la planche, en chasse fixe et centrées sous elle : ce sont des
+   chiffres qu'on relève et qu'on compare à un gabarit, pas une phrase qu'on lit. La
+   chasse fixe est la même que celle du chemin du projet, en tête — partout où
+   l'application donne un relevé plutôt qu'un mot. */
+.mesures {
+  margin: 0;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .72rem;
+  color: var(--gris);
 }
 
 /* La scène a la hauteur ; l'image y garde ses proportions. Sans elle, une planche

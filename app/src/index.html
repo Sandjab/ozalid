@@ -154,6 +154,12 @@
             <div class="reperes" id="reperes" hidden></div>
           </div>
         </div>
+        <!-- Ce que la planche mesure, sous la planche : c'est là qu'on vérifie que le
+             fichier remis a bien les dimensions du gabarit. Les millimètres viennent du
+             Rust — la largeur d'une planche est une règle, pas une addition à refaire
+             ici. Masquée sur les trois autres faces, qui n'ont ni dos ni fond perdu à
+             annoncer. -->
+        <p class="mesures" id="mesuresApercu" hidden></p>
         <p class="note" id="etatApercu"></p>
       </div>
       <div id="reglages" class="reglages"></div>
