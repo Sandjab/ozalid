@@ -7,24 +7,36 @@
    Ce que le choix coûte est écrit dans la spec (§ 1) : l'application perd le caractère
    qui la distinguait d'un formulaire, à retrouver dans la typographie, les espacements
    et le soin des états, pas dans le fond.
+   Le gris chaud est parti à son tour : chaud, il restait du crème, et la couverture s'y
+   jugeait encore mal. La coquille est neutre — le gris clair d'`index.html` —, et la
+   scène où la couverture est posée prend le carton gris 18 % de l'atelier, celui sur
+   lequel une épreuve se juge depuis toujours : un blanc y reste blanc, un crème y reste
+   crème. C'est le seul endroit sombre de la fenêtre, et c'est celui qu'on regarde.
    Les gris ne sont pas quatre nuances au hasard : `--gris` est le plus clair qui tienne
    4,5:1 sur les trois fonds où l'on écrit — `--fond`, `--surface` et `--survol`, le plus
    sombre des trois — et tout ce qui est écrit dessous descend. Éclaircir l'un des fonds
-   sans relire ce rapport, c'est perdre un sous-libellé sous le curseur.
+   sans relire ce rapport, c'est perdre un sous-libellé sous le curseur. La neutralisation
+   a été faite à luminance égale, précisément pour que ce rapport survive : mesuré, le
+   pire des trois passe de 4,66 à 4,71.
    `--survol` et `--eteint` sont voisins et ne disent pas la même chose : l'un est le
    creux passager sous le curseur, l'autre l'état d'un champ qui n'attend rien. Les
    confondre ferait passer un bouton survolé pour un bouton mort. */
 :root {
-  --fond: #eceae6;
+  --fond: #ecece9;
   --surface: #fff;
-  --encre: #1a1917;
-  --encre-survol: #35322d;
-  --gris: #625e57;
-  --gris-fort: #514d47;
+  --encre: #191917;
+  --encre-survol: #333330;
+  --gris: #5f5f5c;
+  --gris-fort: #4f4f4c;
   --rouge: #c00000;
-  --trait: #d5d1c9;
-  --survol: #dedbd3;
-  --eteint: #e3e0d9;
+  --trait: #d3d3d0;
+  --survol: #ddddda;
+  --eteint: #e2e2df;
+  /* Le carton de l'établi, et son creux : un dégradé radial très court, qui ne se lit
+     pas comme une couleur mais comme la lumière d'un plan de travail. Repris tel quel
+     d'`index.html`, valeurs comprises — c'est une convention d'atelier, pas un goût. */
+  --etabli: #7a7b78;
+  --etabli-creux: #6a6b68;
   --onglets-flux: column;
   /* La coquille, en quatre bandes à la hauteur exacte de la fenêtre. Passer au rail
      vertical serait une autre valeur ici et un `--onglets-flux: row` : le balisage,
@@ -483,7 +495,7 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
   gap: .9rem;
 }
 
-.couv[data-face="dos"] .scene { align-items: center; padding-bottom: 0; }
+.couv[data-face="dos"] .scene { align-items: center; }
 
 /* La seule image de l'application qui prenne toute sa boîte : le bandeau du dos n'a pas
    de hauteur à respecter, c'est sa largeur qui le dimensionne. */
@@ -528,11 +540,17 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
   align-items: flex-start;
   justify-content: center;
   min-height: 0;
-  /* L'ombre portée déborde d'une douzaine de pixels sous l'image : sans ce
+  /* L'ombre portée déborde d'une vingtaine de pixels sous l'image : sans ce
      rembourrage, l'aperçu au plus haut de la scène se ferait couper son ombre par
-     l'`overflow` — la couverture paraîtrait posée à même le bord. */
-  padding-bottom: .9rem;
+     l'`overflow` — la couverture paraîtrait posée à même le bord. Le rembourrage est
+     désormais tout autour : le carton se voit de partout, et une couverture collée au
+     bord de son établi ne se juge pas mieux qu'une couverture collée au bord de l'écran. */
+  padding: 1rem;
   overflow: hidden;
+  /* L'ellipse est très plate et très courte : elle ne doit pas se lire comme un
+     dégradé, seulement comme le creux de lumière d'un plan de travail. */
+  background: radial-gradient(ellipse at 50% 40%, var(--etabli) 0%, var(--etabli-creux) 100%);
+  border-radius: 2px;
 }
 
 .onglets button {
@@ -568,6 +586,15 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
   height: auto;
   background: var(--surface);
   box-shadow: 0 8px 20px -8px rgba(0, 0, 0, .4);
+}
+
+/* L'ombre de l'établi, et d'elle seule : l'aperçu d'un envoi est posé dans un bloc
+   clair, où cette ombre-là serait une tache. Deux ombres, comme dans l'atelier — la
+   longue porte le livre au-dessus du carton, la courte le recolle à lui par sa tranche.
+   Une seule ombre douce sur un fond sombre ne se voit pas : c'est le contact qui manque,
+   et la couverture flotte. */
+.scene .apercu {
+  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, .45), 0 2px 6px rgba(0, 0, 0, .3);
 }
 
 /* Le cadre de l'aperçu : il n'a pas d'apparence, il n'existe que pour donner à
