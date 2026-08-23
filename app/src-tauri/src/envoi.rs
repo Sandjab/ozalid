@@ -398,16 +398,19 @@ mod tests {
     /// et sa blanche en 2 —, là où les projets d'avant le portaient.
     #[test]
     fn un_placement_neuf_repose_l_envoi_sur_la_page_de_titre() {
-        let p = Place::default();
-        assert_eq!(p.page, 3);
-        assert_eq!(p.x, 0.5);
-        assert!((0.0..=1.0).contains(&p.y), "y hors page : {}", p.y);
-        assert!(
-            (0.0..=1.0).contains(&p.taille),
-            "taille hors page : {}",
-            p.taille
+        // Les cinq valeurs, et non des bornes : ce que ce défaut promet, c'est qu'un
+        // projet d'avant la v4 retrouve son envoi **là où il était**. Se contenter de
+        // « y est dans la page » laisserait le remonter du bas au haut sans rien casser.
+        assert_eq!(
+            Place::default(),
+            Place {
+                page: 3,
+                x: 0.5,
+                y: 0.80,
+                taille: 0.60,
+                angle: 0.0,
+            }
         );
-        assert_eq!(p.angle, 0.0);
     }
 
     /// Le fait que cette spec ajoute, et le seul que rien d'autre ne protège : deux
@@ -497,6 +500,8 @@ mod tests {
             ..Envois::default()
         };
         let err = e.verifie().unwrap_err();
-        assert!(err.contains('1'), "le rang manque : {err}");
+        // En tête, et non quelque part : un « 1 » venu du nom d'une main ou d'un
+        // numéro de version ferait passer ce test pour un message qui ne désigne rien.
+        assert!(err.starts_with("envoi 1 :"), "le rang manque : {err}");
     }
 }
