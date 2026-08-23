@@ -66,10 +66,17 @@ n'a pas été pris tant que la diffusion reste confidentielle.
 ## L'écran
 
 Quatre bandes, et la fenêtre elle-même ne défile plus : une **entête** qui nomme le
-livre ouvert, son chemin et son état d'enregistrement ; une rangée de cinq
-**onglets** — Livre, Intérieur, Couverture, Livraison, Envois — dans l'ordre où le
-livre se fait ; l'**étape** courante, seule ; un **pied** où l'on choisit pour qui
-l'on regarde, et qui dit ce que vaut le dos.
+livre ouvert, son chemin et son état d'enregistrement ; une rangée de quatre
+**onglets** — Livre, Couverture, Livraison, Envois — dans l'ordre où le livre se
+fait ; l'**étape** courante, seule ; un **pied** où l'on choisit pour qui l'on
+regarde, et qui dit ce que vaut le dos.
+
+L'étape **Intérieur** a existé, entre Livre et Couverture, et elle ne portait que deux
+champs et deux boutons. La police et l'épreuve ont rejoint le Livre — la première parce
+qu'elle est un attribut du livre au même titre que le genre, la seconde parce qu'elle
+sert à relire le manuscrit, qui est juste au-dessus. Une étape n'est pas un tiroir où
+ranger ce qui va ensemble : c'est un moment de la fabrication, et la pagination n'en est
+pas un — elle est une conséquence.
 
 Les deux bandes du haut tiennent chacune sur **une ligne** : le chemin du `.ozalid` à
 côté du titre, tronqué s'il le faut et entier au survol ; l'état d'une étape à côté de
@@ -83,7 +90,7 @@ tombe, elle, dans le filet de la bande de contenu : c'est le cas de la Livraison
 le deuxième compte rendu de génération, et la barre qui paraît alors est un défaut
 de mise en page, pas un ascenseur qu'on offre.
 
-Les cinq onglets se traversent aux flèches, et une seule tabulation suffit à sortir
+Les quatre onglets se traversent aux flèches, et une seule tabulation suffit à sortir
 de la bande : c'est le pattern `tablist`, tenu en entier.
 
 La coquille est en **gris chauds**, blanc pour les surfaces de travail — les champs,
@@ -92,11 +99,18 @@ d'un outil qui s'efface : sur un fond crème, un blanc paraît bleu et un beige 
 neutre, et une couverture ne s'y juge pas. Elle est ici le seul objet coloré.
 
 Chaque onglet porte un sous-libellé qui énonce où en est son étape — le nombre de
-chapitres, la police, la maquette — et un témoin rouge quand elle réclame :
-manuscrit qui ne correspond plus au contrôle d'intégrité (Livre), dos que la
-dernière composition ne vaut plus (Intérieur, parce que c'est là qu'on le
-recompose), couverture sans maquette (Couverture). Trois témoins et pas un de plus :
-un manuscrit absent est un état, pas une anomalie.
+chapitres, la maquette — et un témoin rouge quand elle réclame : manuscrit qui ne
+correspond plus au contrôle d'intégrité (Livre), couverture sans maquette
+(Couverture). Deux témoins et pas un de plus : un manuscrit absent est un état, pas
+une anomalie.
+
+Le troisième s'allumait à l'Intérieur — un dos que la dernière composition ne vaut
+plus — parce que c'était là qu'on le recomposait. Il est descendu au **pied** avec
+l'étape qui a disparu, et il y est mieux : le pied portait déjà le dos, et c'est la
+Couverture qui souffre la première d'une mesure périmée, sans qu'on ait à la quitter
+pour aller le lire. Le pied a donc quatre états et non trois — périmé, à relever sur
+le gabarit, non composé, chiffré — et « périmé » n'est pas « non composé » : un livre
+qu'on n'a jamais composé ne réclame rien.
 
 Sans projet ouvert, les onglets sont inertes et un **accueil** prend la place de
 l'étape : Nouveau projet, Ouvrir un `.ozalid`, Importer un `livre.toml`, et les
@@ -116,7 +130,7 @@ quitté l'écran, comme dans tout éditeur de document macOS. Une entrée de men
 d'abord la saisie en cours : un champ que le clavier tient encore n'a rien envoyé — le
 menu natif ne lui prend pas le focus — et ⌘S enregistrait sans lui, puis le remettait à
 son ancienne valeur. Le sous-menu **« Aller »**
-navigue entre les cinq étapes (⌘1 à ⌘5) ; sans projet ouvert, il ne mène nulle
+navigue entre les quatre étapes (⌘1 à ⌘4) ; sans projet ouvert, il ne mène nulle
 part sans rien casser — la garde est du côté que les onglets et le menu ont en
 commun.
 

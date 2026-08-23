@@ -89,9 +89,24 @@
         <button id="btChoisirManuscrit" type="button">Choisir un autre manuscrit…</button>
       </div>
     </div>
-  </section>
 
-  <section id="etapeInterieur" class="etape" role="tabpanel" hidden>
+    <!-- L'épreuve suit le manuscrit dont elle sort, et la police ferme la marche parce
+         qu'elle regarde vers le livre fini. Ce n'est pas l'ordre de l'étape d'où ils
+         viennent : là-bas, composer passait avant relire. -->
+    <div class="bloc">
+      <h2>Épreuve</h2>
+      <p class="note">Le manuscrit sur A4, fer à gauche, avec les numéros de ligne et une
+        marge pour annoter. Ce n'est pas le livre : c'est de quoi le relire. Les numéros de
+        ligne ne valent que pour ce tirage-là.</p>
+      <label><span>Corps</span>
+        <input type="number" id="inEpreuveCorps" min="8" max="18" step="0.5" value="12"></label>
+      <div class="ligne">
+        <button id="btEpreuve" type="button">Tirer une épreuve</button>
+        <span id="etatEpreuve" class="etat"></span>
+      </div>
+      <p class="chemin" id="cheminEpreuve"></p>
+    </div>
+
     <!-- Aucun sélecteur de prestataire ici : il est dans le pied, et il vaut pour toute
          la fenêtre. « Composer » compose pour le destinataire visé. -->
     <div class="bloc">
@@ -105,20 +120,6 @@
         <span id="etat" class="etat"></span>
       </div>
       <div id="resultat" class="resultat" hidden></div>
-    </div>
-
-    <div class="bloc">
-      <h2>Épreuve</h2>
-      <p class="note">Le manuscrit sur A4, fer à gauche, avec les numéros de ligne et une
-        marge pour annoter. Ce n'est pas le livre : c'est de quoi le relire. Les numéros de
-        ligne ne valent que pour ce tirage-là.</p>
-      <label><span>Corps</span>
-        <input type="number" id="inEpreuveCorps" min="8" max="18" step="0.5" value="12"></label>
-      <div class="ligne">
-        <button id="btEpreuve" type="button">Tirer une épreuve</button>
-        <span id="etatEpreuve" class="etat"></span>
-      </div>
-      <p class="chemin" id="cheminEpreuve"></p>
     </div>
   </section>
 

@@ -65,16 +65,14 @@ function faux(providers, sur = {}) {
 /* ---------- intérieur ---------- */
 
 test('la police d\'intérieur du projet est celle qui paraît au panneau', async () => {
-  const { els, menu } = await charge({
+  const { els } = await charge({
     invoke: faux([LULU], { projet_importer: PROJET }),
     open: async () => '/dev/ozalid/build/LHC/livre.toml',
   });
   await els.get('btImporter').declenche('click');
-  // L'ouverture arrive au Livre ; l'Intérieur est à une étape de là, et le panneau
-  // qu'on y trouve porte déjà la police du projet.
+  // L'ouverture arrive au Livre, et la police y est : elle a quitté l'étape Intérieur
+  // pour le bloc qui ferme celle-ci, sans plus rien à traverser pour l'atteindre.
   assert.strictEqual(els.get('etapeLivre').hidden, false);
-  await menu('aller.interieur');
-  assert.strictEqual(els.get('etapeInterieur').hidden, false);
   assert.strictEqual(els.get('inPoliceInterieur').value, 'Alegreya');
 });
 

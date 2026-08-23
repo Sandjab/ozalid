@@ -110,23 +110,18 @@ pub fn poser(app: &AppHandle) -> tauri::Result<()> {
                 .build(app)?,
         )
         .item(
-            &MenuItemBuilder::with_id("aller.interieur", "Intérieur")
+            &MenuItemBuilder::with_id("aller.couverture", "Couverture")
                 .accelerator("CmdOrCtrl+2")
                 .build(app)?,
         )
         .item(
-            &MenuItemBuilder::with_id("aller.couverture", "Couverture")
+            &MenuItemBuilder::with_id("aller.livraison", "Livraison")
                 .accelerator("CmdOrCtrl+3")
                 .build(app)?,
         )
         .item(
-            &MenuItemBuilder::with_id("aller.livraison", "Livraison")
-                .accelerator("CmdOrCtrl+4")
-                .build(app)?,
-        )
-        .item(
             &MenuItemBuilder::with_id("aller.envois", "Envois")
-                .accelerator("CmdOrCtrl+5")
+                .accelerator("CmdOrCtrl+4")
                 .build(app)?,
         )
         .build()?;

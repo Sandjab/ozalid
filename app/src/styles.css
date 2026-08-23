@@ -165,6 +165,13 @@ body {
 
 #pied p { margin: 0; }
 
+/* Le dos périmé, seul état du pied qui réclame quelque chose. Le rouge suffit : le pied
+   est sur fond clair, contrairement aux boutons du dialogue des maquettes où un
+   `color: var(--rouge)` sur fond noir s'était révélé illisible. Pas de pastille `●`
+   comme sur les onglets — la bande porte déjà ses `·` séparateurs, et un second point
+   de ponctuation à côté d'eux se lirait comme un troisième. */
+#piedDos.alerte { color: var(--rouge); }
+
 /* Le pointeur du pied : un libellé et son choix côte à côte, et non la grille à deux
    colonnes que `label` impose partout ailleurs — le pied est une bande, pas un
    formulaire. */
@@ -214,24 +221,24 @@ main {
 /* Les blocs coulent en colonnes au lieu de se ranger en grille. C'est la hauteur qui
    manque à la fenêtre, jamais la largeur : une colonne unique de 46rem laissait la
    moitié de l'écran vide en réclamant un ascenseur pour le reste. Mais la grille
-   alignait ses rangées, et Intérieur partageait la sienne avec Prestataire, alourdi de
-   son bloc de résultat : trois cents pixels de vide à gauche pendant que la droite
-   débordait, et Épreuve renvoyée à la rangée suivante au lieu de remonter dans ce
-   vide. Un flux, lui, remplit une colonne avant d'ouvrir la suivante — il rend
+   alignait ses rangées, et l'étape Intérieur — depuis absorbée par Livre — partageait
+   la sienne avec Prestataire, alourdie de son bloc de résultat : trois cents pixels de
+   vide à gauche pendant que la droite débordait, et Épreuve renvoyée à la rangée
+   suivante au lieu de remonter dans ce vide. Un flux, lui, remplit une colonne avant d'ouvrir la suivante — il rend
    exactement la place que la grille gaspillait.
    Deux colonnes réclament 848 px de fenêtre : 2 × `column-width`, plus le
    `column-gap`, plus les 2 × 2rem de `main`. `minWidth` en donne 900 dans
    `tauri.conf.json` — il reste 52 px, et qui touche à l'un de ces trois-là dépense
    dessus. Retomber à une colonne à la taille minimale, c'est l'ascenseur qui revient.
-   Le rembourrage est compté aussi serré, et pour la même raison : l'étape Intérieur
-   composée demande 589 px, la fenêtre par défaut (1040 × 780) en offre 563, et c'est
-   en resserrant ici qu'elle tient — avec moins de dix pixels de marge. Une ligne de
-   plus au bloc de résultat, ou un chemin de PDF qui se replie une fois de plus, la
-   rouvre.
-   Ce qu'elle ne rattrape pas, et qui est assumé : à 900 × 640, l'étape Intérieur
-   composée déborde encore, et c'est le filet de `main` qui la reprend. La compaction
-   du bloc de résultat part au lot 4 ; cet ascenseur-là s'en ira avec elle. */
-#etapeLivre, #etapeInterieur, #etapeEnvois {
+   Le rembourrage est compté aussi serré, et pour la même raison : c'est l'étape Livre
+   qui porte désormais le bloc de résultat, avec quatre autres blocs, et c'est en
+   resserrant ici qu'elle tient. Une ligne de plus au résultat, ou un chemin de PDF qui
+   se replie une fois de plus, rouvre l'ascenseur.
+   Ce qu'elle ne rattrape pas, et qui est assumé : à 900 × 640, l'étape Livre composée
+   déborde, et c'est le filet de `main` qui la reprend. Le bloc de résultat descend au
+   pied au lot 2 du chantier « intérieur sans onglet » ; cet ascenseur-là s'en ira avec
+   lui. */
+#etapeLivre, #etapeEnvois {
   columns: 23rem;
   column-gap: 3rem;
   /* Seule des quatre étapes à ne pas prendre la hauteur de la bande : un flux doit
@@ -247,7 +254,7 @@ main {
    Le filet qui les séparait quand ils s'empilaient ne veut plus rien dire une fois
    qu'ils coulent en colonnes — il ne courrait que sous la première, au hasard de
    l'ordre du balisage. C'est le blanc qui sépare désormais. */
-#etapeLivre > .bloc, #etapeInterieur > .bloc, #etapeEnvois > .bloc {
+#etapeLivre > .bloc, #etapeEnvois > .bloc {
   break-inside: avoid;
   padding: 0;
   margin-bottom: 1rem;

@@ -130,7 +130,7 @@ function atelier({
   return { appels, invoke, noms: () => appels.map(([c]) => c) };
 }
 
-const ETAPES = ['livre', 'interieur', 'couverture', 'livraison', 'envois'];
+const ETAPES = ['livre', 'couverture', 'livraison', 'envois'];
 const montree = (els) =>
   ETAPES.filter((c) => els.get(`etape${c[0].toUpperCase()}${c.slice(1)}`).hidden === false);
 
@@ -189,12 +189,12 @@ test('les flèches traversent les étapes et la sélection les suit', async () =
   const ev = touche('ArrowRight');
   await els.get('etapes').declenche('keydown', ev);
 
-  assert.deepEqual(montree(els), ['interieur']);
-  assert.equal(els.get('onglet-interieur').getAttribute('aria-selected'), 'true');
+  assert.deepEqual(montree(els), ['couverture']);
+  assert.equal(els.get('onglet-couverture').getAttribute('aria-selected'), 'true');
   // Une flèche qui change d'onglet ne doit pas, en plus, faire défiler la bande sous
   // elle : le geste est pris, il n'est pas partagé.
   assert.equal(ev.defaut, false, 'la flèche a gardé son effet par défaut');
-  assert.equal(contexte.document.activeElement, els.get('onglet-interieur'),
+  assert.equal(contexte.document.activeElement, els.get('onglet-couverture'),
     'le focus est resté sur l\'onglet quitté');
 });
 
@@ -517,6 +517,10 @@ const COMPOSITION = {
 
 /** Ce que le pied donne à lire : le destinataire choisi, puis l'état de son dos. */
 const pied = (els) => `${els.get('inDestinataire').value} ${els.get('piedDos').textContent}`.trim();
+// Le témoin du dos périmé : il a quitté l'onglet Intérieur pour le pied, qui portait
+// déjà le dos. Le texte et le rouge sont deux affirmations distinctes — l'un dit ce
+// qu'on lit, l'autre qu'on le remarque sans le chercher.
+const piedAlerte = (els) => els.get('piedDos').className === 'alerte';
 
 test('le pied nomme le prestataire et dit le dos non composé', async () => {
   const a = atelier();
@@ -596,6 +600,11 @@ function atelierCompose(liste, composition = COMPOSITION) {
  * Les deux causes que le pied porte lui-même : le destinataire qu'il vise, et le papier
  * qui périme le dos sans rien changer d'autre à l'écran. Un pied qui ne repart pas sur
  * ces gestes-là dit un dos qui vaut pour un autre livre que celui qu'on regarde.
+ *
+ * « Périmé » et non « non composé » : les deux se ressemblaient tant que le pied n'avait
+ * que trois états, et c'est précisément ce que le quatrième sépare — un livre qu'on n'a
+ * jamais composé et un livre dont la mesure vient d'être périmée ne réclament pas la
+ * même chose.
  */
 test('viser un autre destinataire renomme le pied et lui retire le dos', async () => {
   const { els } = await charge({ invoke: atelierCompose([LULU, KDP]) });
@@ -606,7 +615,7 @@ test('viser un autre destinataire renomme le pied et lui retire le dos', async (
   els.get('inDestinataire').value = 'kdp-6x9';
   await els.get('inDestinataire').declenche('change');
 
-  assert.equal(pied(els), 'kdp-6x9 · dos non composé');
+  assert.equal(pied(els), 'kdp-6x9 · dos périmé');
 });
 
 test('changer de papier retire le dos du pied', async () => {
@@ -618,7 +627,7 @@ test('changer de papier retire le dos du pied', async () => {
   els.get('dest-papier-kdp-6x9').value = 'blanc';
   await els.get('dest-papier-kdp-6x9').declenche('change');
 
-  assert.equal(pied(els), 'kdp-6x9 · dos non composé');
+  assert.equal(pied(els), 'kdp-6x9 · dos périmé');
 });
 
 /**
@@ -742,15 +751,6 @@ test('une maquette en place nomme son mode et éteint le témoin', async () => {
   assert.equal(alerte(els, 'couverture'), false);
 });
 
-test('sans composition, l\'onglet Intérieur nomme la police et n\'alerte pas', async () => {
-  const a = atelier();
-  const { els } = await charge({ invoke: a.invoke });
-  await els.get('btNouveau').declenche('click');
-
-  assert.equal(sous(els, 'interieur'), 'EB Garamond');
-  assert.equal(alerte(els, 'interieur'), false);
-});
-
 /**
  * Le sous-libellé s'ajoute au nom de l'étape, il ne le remplace pas. Les deux textes
  * vivent dans le même bouton, et un onglet qui ne dirait plus que « 12 chapitres »
@@ -767,39 +767,43 @@ test('l\'onglet garde le nom de son étape sous le sous-libellé', async () => {
 
 /**
  * Changer de gabarit périme le dos : le même manuscrit ne fait pas le même nombre de
- * pages en poche et en grand format. Le témoin dit où le réparer — à l'Intérieur, la
- * seule étape qui recompose.
+ * pages en poche et en grand format. Le témoin le signale au pied, qui portait déjà le
+ * dos — l'étape Intérieur, qui le portait avant, n'existe plus, et la Couverture est la
+ * première à souffrir d'une mesure périmée sans qu'on ait à la quitter pour le lire.
+ *
+ * Le voisin de ce test lit le *texte* du pied ; celui-ci lit le *rouge*. Ce sont deux
+ * affirmations : un état qu'on ne peut pas nommer et un état qu'on ne remarque pas
+ * échouent différemment.
  */
-test('un dos périmé par un changement de gabarit allume le témoin de l\'Intérieur', async () => {
+test('un dos périmé par un changement de gabarit allume le témoin du pied', async () => {
   const { els } = await charge({ invoke: atelierCompose([LULU, KDP]) });
   await els.get('btNouveau').declenche('click');
   await els.get('btComposer').declenche('click');
-  assert.equal(alerte(els, 'interieur'), false, 'un dos frais ne périme rien');
+  assert.equal(piedAlerte(els), false, 'un dos frais ne périme rien');
 
   els.get('inDestinataire').value = 'kdp-6x9';
   await els.get('inDestinataire').declenche('change');
 
-  assert.equal(sous(els, 'interieur'), 'dos périmé');
-  assert.equal(alerte(els, 'interieur'), true);
+  assert.equal(piedAlerte(els), true);
 });
 
 /**
- * Le témoin dit où réparer ; il doit donc s'éteindre quand on y répare. Recomposer est
- * le seul geste qui rend un dos juste : un témoin qui survivrait à sa réparation
- * enverrait recomposer un livre déjà composé.
+ * Le témoin dit qu'il faut réparer ; il doit donc s'éteindre quand on a réparé.
+ * Recomposer est le seul geste qui rend un dos juste : un témoin qui survivrait à sa
+ * réparation enverrait recomposer un livre déjà composé.
  */
-test('recomposer éteint le témoin de l\'Intérieur', async () => {
+test('recomposer éteint le témoin du pied', async () => {
   const { els } = await charge({ invoke: atelierCompose([LULU, KDP]) });
   await els.get('btNouveau').declenche('click');
   await els.get('btComposer').declenche('click');
   els.get('inDestinataire').value = 'kdp-6x9';
   await els.get('inDestinataire').declenche('change');
-  assert.equal(alerte(els, 'interieur'), true, 'le dos devait être périmé avant');
+  assert.equal(piedAlerte(els), true, 'le dos devait être périmé avant');
 
   await els.get('btComposer').declenche('click');
 
-  assert.equal(sous(els, 'interieur'), 'EB Garamond');
-  assert.equal(alerte(els, 'interieur'), false);
+  assert.equal(pied(els), 'kdp-6x9 · dos 16,5 mm');
+  assert.equal(piedAlerte(els), false);
 });
 
 /**
@@ -812,7 +816,7 @@ test('recomposer éteint le témoin de l\'Intérieur', async () => {
  * livre déjà juste. Le lot 3 l'a fermé en faisant lire le projet plutôt que les
  * contrôles ; ce test dit ce qui doit se voir, et resterait vrai d'une autre solution.
  */
-test('une police refusée n\'allume pas le témoin de l\'Intérieur', async () => {
+test('une police refusée n\'allume pas le témoin du pied', async () => {
   const base = atelierCompose([LULU]);
   const invoke = async (cmd, args) => {
     if (cmd === 'interieur_modifier') throw new Error('police d\'intérieur inconnue');
@@ -828,40 +832,39 @@ test('une police refusée n\'allume pas le témoin de l\'Intérieur', async () =
   assert.match(els.get('alerte').textContent, /police d'intérieur inconnue/);
   assert.equal(els.get('inPoliceInterieur').value, 'EB Garamond',
     'le panneau n\'est pas revenu au projet : le témoin ne prouverait rien');
-  assert.equal(sous(els, 'interieur'), 'EB Garamond');
-  assert.equal(alerte(els, 'interieur'), false);
+  assert.equal(piedAlerte(els), false);
 });
 
 /**
  * Un dos jamais composé ne réclame rien : c'est l'état d'un projet qu'on vient
- * d'ouvrir, et le pied le dit déjà. Seul un dos qui a existé et ne vaut plus allume.
+ * d'ouvrir. Seul un dos qui a existé et ne vaut plus allume — et le pied, qui dit les
+ * deux, doit les dire différemment.
  */
-test('un dos jamais composé n\'allume pas le témoin de l\'Intérieur', async () => {
+test('un dos jamais composé n\'allume pas le témoin du pied', async () => {
   const { els } = await charge({ invoke: atelierCompose([LULU, KDP]) });
   await els.get('btNouveau').declenche('click');
 
   els.get('inDestinataire').value = 'kdp-6x9';
   await els.get('inDestinataire').declenche('change');
 
-  assert.equal(sous(els, 'interieur'), 'EB Garamond');
-  assert.equal(alerte(els, 'interieur'), false);
+  assert.equal(pied(els), 'kdp-6x9 · dos non composé');
+  assert.equal(piedAlerte(els), false);
 });
 
 /**
  * Le papier périme le dos sans rien changer d'autre à l'écran : c'est le geste où un
  * témoin qui ne repartirait pas serait le plus difficile à démentir.
  */
-test('changer de papier allume aussi le témoin de l\'Intérieur', async () => {
+test('changer de papier allume aussi le témoin du pied', async () => {
   const { els } = await charge({ invoke: atelierCompose([KDP]) });
   await els.get('btNouveau').declenche('click');
   await els.get('btComposer').declenche('click');
-  assert.equal(alerte(els, 'interieur'), false);
+  assert.equal(piedAlerte(els), false);
 
   els.get('dest-papier-kdp-6x9').value = 'blanc';
   await els.get('dest-papier-kdp-6x9').declenche('change');
 
-  assert.equal(sous(els, 'interieur'), 'dos périmé');
-  assert.equal(alerte(els, 'interieur'), true);
+  assert.equal(piedAlerte(els), true);
 });
 
 /**

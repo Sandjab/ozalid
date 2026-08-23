@@ -86,27 +86,33 @@ const nb = (v, d = 2) => v.toLocaleString('fr-FR', {
 /* ---------- coquille ---------- */
 
 /**
- * Les cinq étapes, dans l'ordre où le livre se fait : leur clé — celle des entrées
+ * Les quatre étapes, dans l'ordre où le livre se fait : leur clé — celle des entrées
  * `aller.*` du menu, au préfixe près — leur libellé d'onglet, et la section montrée.
  *
  * La table est la seule source de ce qu'elle porte : les onglets, le routage du menu et
  * le masquage des sections en sortent tous, et aucune de ces trois listes n'est à tenir
  * d'accord avec les autres.
  *
- * Ce qu'elle ne porte pas, en revanche, et qu'ajouter une étape demande encore : la
- * section dans `index.html`, l'entrée dans `menu.rs`, la clé dans `ETAPES` de
- * `coquille.test.js` — et, si l'étape est un formulaire, les deux sélecteurs de
- * `styles.css` qui énumèrent `#etapeLivre, #etapeInterieur`. Les oublier ne casse rien
- * de visible : l'étape hérite du `height: 100%` des autres, ses blocs ne coulent pas en
- * colonnes, et c'est la mise en page qui paraît de travers sans qu'on sache pourquoi.
- * Le README décrit l'écran, lui aussi. Six fichiers, donc, pas trois.
+ * Ce qu'elle ne porte pas, en revanche, et qu'ajouter ou retirer une étape demande
+ * encore : la section dans `index.html`, l'entrée dans `menu.rs` — écrite à la main,
+ * elle, avec son accélérateur —, la clé dans `ETAPES` de `coquille.test.js`, et si
+ * l'étape est un formulaire, les deux sélecteurs de `styles.css` qui énumèrent
+ * `#etapeLivre, #etapeEnvois`. Les oublier ne casse rien de visible : l'étape hérite du
+ * `height: 100%` des autres, ses blocs ne coulent pas en colonnes, et c'est la mise en
+ * page qui paraît de travers sans qu'on sache pourquoi.
+ *
+ * Le README décrit l'écran, lui aussi. Et quatre fichiers de test nomment la structure
+ * plutôt que les identifiants : `coquille` (la table, la navigation, les témoins),
+ * `composition` (la liste des sections masquées), `contrats` (la règle CSS, lue par une
+ * expression régulière littérale) et `epreuve` (la section qu'un projet ouvert montre).
+ * Ceux qui pilotent un bouton par son `id` ne bougent pas — un élément qui déménage sans
+ * être renommé leur est invisible. Onze fichiers, donc, pas trois.
  */
 const ETAPES = [
   ['livre', '1 · Livre', 'etapeLivre'],
-  ['interieur', '2 · Intérieur', 'etapeInterieur'],
-  ['couverture', '3 · Couverture', 'etapeCouverture'],
-  ['livraison', '4 · Livraison', 'etapeLivraison'],
-  ['envois', '5 · Envois', 'etapeEnvois'],
+  ['couverture', '2 · Couverture', 'etapeCouverture'],
+  ['livraison', '3 · Livraison', 'etapeLivraison'],
+  ['envois', '4 · Envois', 'etapeEnvois'],
 ];
 
 /** L'étape montrée. Sans projet, aucune ne l'est : l'accueil prend leur place. */
@@ -189,13 +195,33 @@ function allerA(cle) {
 }
 
 /**
+ * Un dos existe et ne vaut plus : ni « jamais composé », qui ne réclame rien, ni
+ * « à jour ».
+ *
+ * `deja_compose` fait toute la différence : sans lui, un livre jamais composé et un
+ * livre dont la mesure vient d'être périmée se ressembleraient trait pour trait, et le
+ * premier serait signalé en alerte pour un travail qu'on ne lui a jamais demandé.
+ *
+ * Nommé plutôt que recopié : le pied le dit à qui regarde, `etatEtapes` s'en servait
+ * pour son témoin, et deux copies d'une même condition finissent par diverger — c'est
+ * ce qui a déjà fait mentir deux fois la liste des jetons recopiée dans le HTML.
+ */
+function dosPerime(p) {
+  return p.livraison.deja_compose && !destinataireCourant()?.compose;
+}
+
+/**
  * Ce que chaque onglet dit de son étape : un sous-libellé qui énonce où en est le
  * projet, et un témoin quand l'étape réclame attention.
  *
- * Trois témoins, et pas un de plus. Un manuscrit qui ne correspond plus au contrôle
- * d'intégrité ; une couverture sans maquette ; un dos qui ne vaut plus pour ce qui est
- * affiché, et qui s'allume à l'Intérieur parce que c'est là qu'on le répare. Un
- * manuscrit absent n'en est pas un : c'est l'état d'un projet neuf, pas une anomalie.
+ * Deux témoins, et pas un de plus. Un manuscrit qui ne correspond plus au contrôle
+ * d'intégrité ; une couverture sans maquette. Un manuscrit absent n'en est pas un :
+ * c'est l'état d'un projet neuf, pas une anomalie.
+ *
+ * Le troisième — un dos qui ne vaut plus — s'allumait à l'Intérieur, parce que c'était
+ * là qu'on le réparait. Cette étape n'existe plus, et il est descendu au pied, qui
+ * portait déjà le dos : il se lit désormais depuis n'importe quelle étape, ce qui vaut
+ * mieux pour une mesure dont la Couverture est la première à souffrir.
  *
  * Tout se déduit de `p` : `dosCourant()` compare le dos mesuré au gabarit, au papier et
  * à la police que le *projet* porte, jamais à ce que les contrôles affichent. L'ordre
@@ -205,23 +231,12 @@ function allerA(cle) {
 function etatEtapes(p) {
   const attendu = p.livre.chapitres;
   const ecart = attendu !== null && attendu !== undefined && attendu !== p.chapitres_trouves;
-  // Un dos existe et ne vaut plus : ni « jamais composé », qui ne réclame rien, ni
-  // « à jour ».
-  // Un dos existe et ne vaut plus. `deja_compose` fait toute la différence : sans lui,
-  // un livre jamais composé et un livre dont la mesure vient d'être périmée se
-  // ressembleraient trait pour trait, et le premier serait signalé en alerte pour un
-  // travail qu'on ne lui a jamais demandé.
-  const dosPerime = p.livraison.deja_compose && !destinataireCourant()?.compose;
   return {
     livre: {
       sous: ecart
         ? `${p.chapitres_trouves} chapitres, ${attendu} attendus`
         : (p.manuscrit_absent ? 'aucun manuscrit' : `${p.chapitres_trouves} chapitres`),
       alerte: ecart,
-    },
-    interieur: {
-      sous: dosPerime ? 'dos périmé' : p.interieur.police,
-      alerte: dosPerime,
     },
     couverture: {
       sous: p.couverture ? libelleMode(p.couverture.mode) : 'aucune maquette',
@@ -301,10 +316,22 @@ function alerter(message) {
  * répond — parce qu'un dos périmé écrit en bas de l'écran est exactement ce qu'on ne
  * relirait pas.
  *
- * Trois états, pas deux : chez un prestataire qui ne publie pas de formule de dos, il
- * n'y a jamais rien à composer, et « non composé » ferait recomposer en boucle un livre
- * dont la pagination est déjà juste. Ce qui manque alors est un relevé sur le gabarit,
- * pas un calcul — c'est le vocabulaire que `noteFormat` emploie déjà pour le fond perdu.
+ * Quatre états, et un seul à la fois :
+ *
+ * - **périmé**, en rouge, prioritaire sur tout : c'est le témoin qui s'allumait sur
+ *   l'onglet Intérieur, descendu ici avec l'étape qui a disparu. Il tenait sa place de
+ *   ce qu'on allait y réparer ; il tient celle-ci de ce que le pied portait déjà le
+ *   dos, et de ce qu'on ne quitte pas la Couverture pour aller lire un onglet.
+ * - **relevé sur le gabarit** : chez un prestataire qui ne publie pas de formule, il n'y
+ *   a jamais rien à composer, et « non composé » ferait recomposer en boucle un livre
+ *   dont la pagination est déjà juste. Ce qui manque est un relevé, pas un calcul —
+ *   c'est le vocabulaire que `noteFormat` emploie déjà pour le fond perdu.
+ * - **non composé** : jamais composé, et rien à réclamer pour autant.
+ * - **le chiffre**, quand il vaut.
+ *
+ * Périmé passe avant « non composé » et n'est pas son synonyme : sans lui, un livre
+ * qu'on n'a jamais composé et un livre dont on vient de périmer la mesure se liraient
+ * pareil, et le second passerait pour un projet neuf.
  */
 function majPied() {
   // Le prestataire, pas seulement le projet : un démarrage qui n'a pas pu lire les
@@ -316,6 +343,7 @@ function majPied() {
   if (!p) {
     sel.replaceChildren();
     $('piedDos').textContent = '';
+    $('piedDos').className = '';
     return;
   }
   sel.replaceChildren();
@@ -324,11 +352,14 @@ function majPied() {
   }
   sel.value = projet.livraison.courant;
 
+  const perime = dosPerime(projet);
   const dos = dosCourant();
-  const etat = !p.dos_publie ? 'dos relevé sur le gabarit'
-    : dos === null ? 'dos non composé'
-      : `dos ${nb(dos, 1)} mm`;
+  const etat = perime ? 'dos périmé'
+    : !p.dos_publie ? 'dos relevé sur le gabarit'
+      : dos === null ? 'dos non composé'
+        : `dos ${nb(dos, 1)} mm`;
   $('piedDos').textContent = `· ${etat}`;
+  $('piedDos').className = perime ? 'alerte' : '';
 }
 
 /* ---------- prestataires ---------- */

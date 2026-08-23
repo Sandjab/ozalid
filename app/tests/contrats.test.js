@@ -259,7 +259,7 @@ test('un récent du Rust est reconnu comme récent par le front', async () => {
 test('deux colonnes tiennent dans la fenêtre minimale', () => {
   const css = source('src', 'styles.css');
 
-  const etapes = css.match(/#etapeLivre, #etapeInterieur, #etapeEnvois \{[^}]*\}/s);
+  const etapes = css.match(/#etapeLivre, #etapeEnvois \{[^}]*\}/s);
   assert.ok(etapes, 'la règle des étapes en colonnes a changé de forme');
   const colonne = etapes[0].match(/columns: ([\d.]+)rem/);
   const gouttiere = etapes[0].match(/column-gap: ([\d.]+)rem/);
