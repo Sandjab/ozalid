@@ -158,7 +158,7 @@ résultats. Tout le reste est testable sans fenêtre.
 | `import` | Un `livre.toml` et un PNG de l'atelier → un projet et sa maquette |
 | `image` | Dimensions naturelles d'une image, et cadrage dans une zone |
 | `couverture` | Maquette typée → source Typst des deux faces |
-| `maquettes` | Folio, Blanche et Surimpression |
+| `maquettes` | Le format `.maquette`, les trois fournies embarquées, et leur lecture |
 | `typst` | Invocation du sidecar : mesurer la pagination, compiler, rendre un aperçu |
 | `interieur` | Source Typst de l'intérieur, police du livre, et convergence gouttière/parité |
 | `envoi` | L'envoi autographe : la main du livre, ses envois, et les noms qu'ils prennent sur le disque |
@@ -240,6 +240,36 @@ en `epreuve.pdf` : elle ne vise aucun prestataire, elle n'a rien à faire dans l
 répertoires. Les ebooks n'en visent pas davantage, et ils ont pourtant leur
 répertoire, `ebook/`, frère de ceux des prestataires : ils sont deux fichiers et non
 un, et les poser à la racine mêlerait le livre du lecteur à l'épreuve du relecteur.
+
+## Le fichier .maquette
+
+Une archive du même genre, et pour la même raison — une maquette porte des images, elle
+ne peut donc pas être un TOML seul :
+
+```
+maquette.toml   le nom affiché, et la couverture entière
+images/         couverture.ext et quatrieme.ext, quand la maquette en porte
+```
+
+Elle emporte la couverture **telle qu'elle est à l'écran** : les modes, le cadre, les
+styles, la pastille, le dos, le voile, le cadrage et le résumé de 4ème. Pas l'identité du
+livre — l'éditeur, la collection, le monogramme, le prix et la mention sont au livre, et
+une maquette ne peut donc pas les emporter. Le résumé de 4ème, lui, reconnaît les
+jetons : une maquette peut porter un `%TITRE%, un %GENRE% de %AUTEUR%.` qui se résout
+pour chaque livre où on la charge.
+
+Les trois **fournies** — Folio, Blanche, Surimpression — vivent dans
+`app/src-tauri/maquettes/` et sont incorporées au binaire par `include_bytes!` : il n'y a
+aucun chemin à résoudre sur le poste, aucun mode dégradé, aucun écart entre développement
+et livraison, et leur immuabilité est un fait plutôt qu'une règle applicative. Ce sont des
+**sources**, au même titre qu'un `.rs` : elles ont été gravées une fois depuis les
+constructeurs qui les portaient, et ces constructeurs ont été retirés. Une archive
+illisible est **ignorée** avec un mot sur la sortie d'erreur — ce qui se perd est un point
+de départ, et refuser la liste entière coûterait les autres.
+
+Comme le `.ozalid`, une maquette ne porte **pas de champ `version`** : tout futur champ
+arrive avec son `#[serde(default = …)]`, et une archive écrite par une version antérieure
+se relit.
 
 ## Le cycle de vie d'un projet
 

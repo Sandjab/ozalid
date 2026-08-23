@@ -53,7 +53,6 @@ En tête de `app/src-tauri/src/maquettes.rs`, remplacer le bloc `use` actuel par
 ```rust
 use std::collections::BTreeMap;
 use std::io::{Read, Seek, Write};
-use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use zip::write::SimpleFileOptions;
@@ -408,7 +407,11 @@ Transitoire : ce test disparaît à la tâche 6, avec les constructeurs qui le n
 
 - [ ] **Step 1: Écrire le test de gravure**
 
-Dans le module `tests` de `app/src-tauri/src/maquettes.rs` :
+Ajouter `use std::path::Path;` au bloc `use` de tête — c'est ici qu'il commence à servir,
+et pas avant : posé à la tâche 1, il aurait fait échouer `clippy -D warnings` sur un
+import inutilisé.
+
+Puis, dans le module `tests` de `app/src-tauri/src/maquettes.rs` :
 
 ```rust
     /// **Transitoire** — part à la tâche 6, avec les constructeurs.
@@ -1020,6 +1023,29 @@ Claude-Session: https://claude.ai/code/session_01AyXS78gurZmV9m6yFQ8LwL
 EOF
 )"
 ```
+
+---
+
+## Ce que l'exécution a corrigé au plan
+
+Écrit après coup, pour que les lots 2 et 3 ne rejouent pas les mêmes trous :
+
+- **Les tâches 1 à 5 ont fait un seul commit.** `clippy -D warnings` refuse le code
+  mort : tant que rien n'appelle `lire` en production — c'est-à-dire tant que `toutes`
+  n'est pas implantée, tâche 4 — le module ne compile pas en mode livraison. Découper
+  plus fin aurait demandé des commits qui ne passent pas les vérifications du projet.
+- **`ecrire` porte `#[cfg_attr(not(test), allow(dead_code))]`**, pour la même raison :
+  son premier appelant de production est le « Enregistrer la couverture actuelle » du
+  lot 2, qui lèvera l'attribut.
+- **`use std::path::Path` n'arrive qu'à la tâche 3**, sans quoi il est un import
+  inutilisé et clippy le refuse.
+- **Les deux tests de propriété du module ont été migrés à la tâche 4, pas à la 6** : la
+  signature de `toutes` change, ils ne compilaient plus. Bénéfice imprévu — ils ont été
+  vus rouges sur le stub qui rend une liste vide, ce qui vaut mieux que la mutation
+  d'archive prévue en tâche 6 (faite quand même : `mode = "typo"` dans `folio.maquette`
+  rend bien `les_trois_maquettes_sont_de_modes_distincts` rouge).
+- **`examples/maquette.rs`** : `cv` y devient un `&Couverture`, donc les deux `&cv` des
+  appels à `source_une` / `source_quatre` sont à retirer (`needless_borrow`).
 
 ---
 
