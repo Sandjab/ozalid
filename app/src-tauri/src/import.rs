@@ -62,6 +62,9 @@ pub fn lire_livre_toml(contenu: &str) -> Result<(Livre, Designations), String> {
             .titre_page
             .unwrap_or_else(crate::projet::titre_page_defaut),
         auteur: s.auteur,
+        // « roman » et non le générique d'un projet neuf : importer n'est pas créer.
+        // Un `livre.toml` sans genre vient d'une chaîne qui en supposait un ; lui coller
+        // « Genre » remplacerait une devinette plausible par un mot à remplir.
         genre: s.genre.unwrap_or_else(|| "roman".into()),
         // Un `livre.toml` de la chaîne Python ne porte aucune de ces cinq désignations :
         // elles prennent leurs génériques, comme la dédicace juste en dessous.

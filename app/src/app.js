@@ -734,7 +734,7 @@ function livre() {
     titre: $('inTitre').value.trim(),
     titre_page: $('inTitrePage').value.trim(),
     auteur: $('inAuteur').value.trim(),
-    genre: $('inGenre').value.trim() || 'roman',
+    genre: $('inGenre').value.trim(),
     editeur: $('inEditeur').value.trim(),
     collection: $('inCollection').value.trim(),
     monogramme: $('inMonogramme').value.trim(),

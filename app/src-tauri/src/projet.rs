@@ -87,12 +87,34 @@ pub struct Livre {
     pub chapitres: Option<u32>,
 }
 
-fn genre_defaut() -> String {
-    "roman".into()
+pub(crate) fn genre_defaut() -> String {
+    "Genre".into()
 }
 
 pub(crate) fn titre_page_defaut() -> String {
     "%TITRE%".into()
+}
+
+/// L'année en cours, pour dater le copyright d'un projet neuf.
+///
+/// Prise sur `epub::horodatage`, dont le format `AAAA-MM-JJT…` est stable et entièrement
+/// ASCII : le projet n'a aucune dépendance de date, il porte son propre calendrier —
+/// l'algorithme de Hinnant dans `epub::civil` — et en avoir deux implantations serait
+/// pire que ce découpage.
+fn annee_courante() -> String {
+    crate::epub::horodatage(std::time::SystemTime::now())[..4].to_string()
+}
+
+/// Le copyright d'un projet neuf : l'auteur cité, l'année **écrite**.
+///
+/// L'année est figée à la création et non citée par un jeton : un `%ANNEE%` résolu à
+/// chaque composition ferait dire 2028 au copyright d'un livre déposé en 2026, et le
+/// dépôt légal ne se rattrape pas.
+fn copyright_defaut() -> String {
+    format!(
+        "© %AUTEUR%, {}.\nTous droits réservés.\nMaquette de couverture : atelier Ozalid",
+        annee_courante()
+    )
 }
 
 fn editeur_defaut() -> String {
@@ -121,14 +143,14 @@ impl Livre {
     /// qui ne le porte pas.
     pub fn vide() -> Self {
         Self {
-            titre: String::new(),
+            titre: "Titre".into(),
             titre_page: titre_page_defaut(),
-            auteur: String::new(),
+            auteur: "Auteur".into(),
             genre: genre_defaut(),
             editeur: editeur_defaut(),
             collection: collection_defaut(),
             monogramme: monogramme_defaut(),
-            copyright: String::new(),
+            copyright: copyright_defaut(),
             prix: prix_defaut(),
             mention: mention_defaut(),
             dedicace: String::new(),
@@ -922,6 +944,51 @@ auteur = "Ivan Pjig"
             );
         }
         v
+    }
+
+    /// Un projet neuf montre la maquette telle qu'elle est : ses champs portent de
+    /// vraies valeurs, que le Rust reçoit et que la composition compose partout où la
+    /// maquette les montre.
+    #[test]
+    fn un_livre_neuf_porte_ses_generiques() {
+        let l = Livre::vide();
+        assert_eq!(l.titre, "Titre");
+        assert_eq!(l.auteur, "Auteur");
+        assert_eq!(l.genre, "Genre");
+        assert_eq!(l.editeur, "Editeur");
+        assert_eq!(l.collection, "Collection");
+        assert_eq!(l.monogramme, "Monogramme");
+        assert_eq!(l.prix, "Prix");
+        assert_eq!(l.mention, "Mention");
+    }
+
+    /// La dédicace fait exception et naît vide : elle est le seul champ sans
+    /// interrupteur, et `interieur.rs` lui compose une belle page et sa blanche dès
+    /// qu'elle n'est pas vide. Deux pages de plus sur tout projet neuf, donc un dos plus
+    /// épais, que rien à l'écran n'attribuerait à un défaut que personne n'a choisi.
+    #[test]
+    fn la_dedicace_est_la_seule_a_naitre_vide() {
+        assert!(Livre::vide().dedicace.is_empty());
+        assert_eq!(Livre::vide().dedicace(), None);
+    }
+
+    /// Le copyright cite l'auteur et porte l'année de création — figée, pas un jeton :
+    /// un `%ANNEE%` résolu à chaque composition ferait dire 2028 au copyright d'un livre
+    /// déposé en 2026, et le dépôt légal ne se rattrape pas.
+    #[test]
+    fn le_copyright_neuf_cite_l_auteur_et_date_de_cette_annee() {
+        let mut l = Livre::vide();
+        assert!(l.copyright.contains("%AUTEUR%"), "{}", l.copyright);
+        assert!(l.copyright.contains("Tous droits réservés."));
+        assert!(l.copyright.contains("atelier Ozalid"));
+        // L'année est écrite, pas citée : elle ne doit pas bouger d'une composition à
+        // l'autre.
+        assert!(!l.copyright.contains("%ANNEE%"));
+        assert_eq!(l.copyright.lines().count(), 3);
+
+        l.auteur = "Ivan Pjig".into();
+        assert!(l.copyright().starts_with("© Ivan Pjig, 2"));
+        assert!(!l.copyright().contains('%'));
     }
 
     fn livre() -> Livre {

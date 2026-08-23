@@ -1818,9 +1818,9 @@ mod tests {
     #[test]
     fn un_livre_vide_prend_le_genre_par_defaut() {
         let l = Livre::vide();
-        assert_eq!(l.genre, "roman");
-        assert!(l.titre.is_empty());
-        assert!(l.auteur.is_empty());
+        assert_eq!(l.genre, "Genre");
+        assert_eq!(l.titre, "Titre");
+        assert_eq!(l.auteur, "Auteur");
         assert_eq!(l.chapitres, None);
         assert_eq!(l.titre_page, "%TITRE%");
     }
