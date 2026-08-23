@@ -158,7 +158,7 @@ résultats. Tout le reste est testable sans fenêtre.
 | `import` | Un `livre.toml` et un PNG de l'atelier → un projet et sa maquette |
 | `image` | Dimensions naturelles d'une image, et cadrage dans une zone |
 | `couverture` | Maquette typée → source Typst des deux faces |
-| `maquettes` | Le format `.maquette`, les trois fournies embarquées, et leur lecture |
+| `maquettes` | Le format `.maquette`, les fournies embarquées, les personnalisées du poste, et le slug |
 | `typst` | Invocation du sidecar : mesurer la pagination, compiler, rendre un aperçu |
 | `interieur` | Source Typst de l'intérieur, police du livre, et convergence gouttière/parité |
 | `envoi` | L'envoi autographe : la main du livre, ses envois, et les noms qu'ils prennent sur le disque |
@@ -266,6 +266,23 @@ et livraison, et leur immuabilité est un fait plutôt qu'une règle applicative
 constructeurs qui les portaient, et ces constructeurs ont été retirés. Une archive
 illisible est **ignorée** avec un mot sur la sortie d'erreur — ce qui se perd est un point
 de départ, et refuser la liste entière coûterait les autres.
+
+Les **personnalisées** vivent dans `<config>/maquettes/`, à côté de `preferences.toml` :
+elles appartiennent à la machine, non au livre — un `.ozalid` reste auto-portant, sa
+couverture étant dans l'archive, et une maquette n'est qu'un point de départ. Le nom
+saisi est l'identité ; le slug qui en dérive — accents décapés, casse ignorée, le reste
+en tirets — nomme le fichier et sert de clé. Deux noms qui donnent le même slug sont le
+même nom : l'écriture refuse et dit qui tient la place, fournies comprises. La lecture,
+elle, reste au mieux ; l'écriture seule échoue fort, parce qu'un « Enregistrer » manqué
+perd du travail.
+
+Une maquette emporte **tout**, cadrage et images compris, et la charger pose ses images
+à la place de celles du projet, rôle par rôle : une maquette qui ne porte pas de photo de
+1ère laisse celle du livre où elle est. La discipline — des images neutres, un résumé de
+4ème en jetons — appartient à l'utilisateur : filtrer demanderait au code de deviner ce
+qui est générique, et il devinerait mal. Rien ne borne le nombre ni le poids des
+maquettes — une maquette avec deux photos pèse ce que pèsent les photos ; le répertoire
+se regarde et s'élague à la main.
 
 Comme le `.ozalid`, une maquette ne porte **pas de champ `version`** : tout futur champ
 arrive avec son `#[serde(default = …)]`, et une archive écrite par une version antérieure
