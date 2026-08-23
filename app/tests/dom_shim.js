@@ -181,6 +181,24 @@ class El {
    */
   focus() {
     if (this._doc && !this.disabled) this._doc.activeElement = this;
+    this._valeurAuFocus = this.value;
+  }
+
+  /**
+   * Le focus s'en va — et la valeur saisie part avec lui, comme dans le navigateur.
+   *
+   * `change` ne se déclenche qu'à la perte du focus, et seulement si la valeur a bougé
+   * depuis qu'il a été pris : c'est cette règle-là que l'application exploite pour
+   * qu'un ⌘S n'enregistre pas l'ancienne valeur d'un champ encore en cours de frappe.
+   * Un faux DOM qui blurerait sans rien signaler ferait passer le correctif pour bon.
+   *
+   * Sans `await` sur `declenche`, comme le navigateur : l'écouteur est asynchrone, et
+   * le rendre attendu ici donnerait à l'application une garantie qu'elle n'a pas.
+   */
+  blur() {
+    if (!this._doc || this._doc.activeElement !== this) return;
+    this._doc.activeElement = null;
+    if (this.value !== this._valeurAuFocus) this.declenche('change');
   }
 
   /** Textes des descendants d'un type donné — pour lire un rendu. */

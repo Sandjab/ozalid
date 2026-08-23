@@ -112,7 +112,10 @@ couverture n'est ni l'un ni l'autre : **personne ne l'a demandé**, il se recomp
 chaque réglage, et ce qu'il dit de lui-même se lit sous l'image comme une légende.
 
 **Enregistrer n'est plus qu'un geste de menu** (⌘S, ⇧⌘S) : les deux boutons ont
-quitté l'écran, comme dans tout éditeur de document macOS. Le sous-menu **« Aller »**
+quitté l'écran, comme dans tout éditeur de document macOS. Une entrée de menu termine
+d'abord la saisie en cours : un champ que le clavier tient encore n'a rien envoyé — le
+menu natif ne lui prend pas le focus — et ⌘S enregistrait sans lui, puis le remettait à
+son ancienne valeur. Le sous-menu **« Aller »**
 navigue entre les cinq étapes (⌘1 à ⌘5) ; sans projet ouvert, il ne mène nulle
 part sans rien casser — la garde est du côté que les onglets et le menu ont en
 commun.

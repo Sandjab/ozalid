@@ -413,3 +413,39 @@ test('un projet illisible ne détruit pas les sorties de celui qui est ouvert', 
   assert.equal(els.get('cheminEpreuve').textContent, '/livres/A/epreuve.pdf');
   assert.match(els.get('alerte').textContent, /illisible/);
 });
+
+/**
+ * Un champ que le clavier tient encore n'a rien envoyé : `change` n'arrive qu'à la
+ * perte du focus, et l'accélérateur du menu natif ne la provoque pas — la page garde
+ * son focus pendant que le Rust enregistre.
+ *
+ * Sans la validation de la saisie, ⌘S écrivait le fichier avec l'ancienne valeur, puis
+ * `afficherProjet` réécrivait le champ avec elle : la frappe était perdue deux fois, et
+ * l'écran ne montrait rien qui l'annonce.
+ */
+test('⌘S enregistre ce que le champ porte encore, sans l\'avoir quitté', async () => {
+  const a = atelier();
+  let livre = null;
+  const invoke = async (cmd, args) => {
+    // Le Rust rend le livre qu'on lui a envoyé : un faux qui rendrait toujours le même
+    // ne montrerait jamais la valeur revenir dans le champ.
+    if (cmd === 'livre_modifier') livre = args.livre;
+    const p = await a.invoke(cmd, args);
+    return livre && p ? { ...p, livre: { ...p.livre, ...livre } } : p;
+  };
+  const { els, contexte, menu } = await charge({ invoke });
+  await els.get('btNouveau').declenche('click');
+
+  const champ = els.get('inTitre');
+  champ.focus();
+  champ.value = 'Les Heures pleines';
+  await menu('fichier.enregistrer');
+
+  const noms = a.noms();
+  assert.ok(noms.includes('livre_modifier'), 'la frappe en cours n\'est jamais partie');
+  assert.ok(noms.indexOf('livre_modifier') < noms.lastIndexOf('projet_enregistrer'),
+    'le fichier a été écrit avant que la frappe n\'arrive');
+  assert.equal(livre.titre, 'Les Heures pleines');
+  assert.equal(champ.value, 'Les Heures pleines', 'le champ est revenu en arrière');
+  assert.equal(contexte.document.activeElement, null);
+});

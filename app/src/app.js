@@ -511,7 +511,12 @@ async function recomposer(force) {
  * réglage est fini quand il est fini — mais la garde des modifications, elle, doit
  * savoir si l'enregistrement a réellement écrit avant de laisser fermer.
  */
-async function tente(fn) {
+function tente(fn) {
+  derniereTentative = essai(fn);
+  return derniereTentative;
+}
+
+async function essai(fn) {
   try {
     alerter('');
     await fn();
@@ -523,6 +528,33 @@ async function tente(fn) {
     if (projet) afficherProjet(projet);
     return false;
   }
+}
+
+/**
+ * Le dernier geste parti au Rust, pour pouvoir l'attendre.
+ *
+ * Tout ce qui modifie le projet passe par `tente` : le retenir ici est ce qui permet à
+ * `terminerSaisie` de rendre la main une fois la frappe réellement arrivée, et non
+ * seulement envoyée. Deux commandes lancées coup sur coup n'arrivent pas dans l'ordre
+ * où elles sont parties — le Rust les sert sur son exécuteur, pas dans une file.
+ */
+let derniereTentative = Promise.resolve(true);
+
+/**
+ * Termine la saisie en cours, et attend qu'elle soit arrivée.
+ *
+ * Un champ que le clavier tient encore n'a rien envoyé : `change` n'arrive qu'à la
+ * perte du focus, et l'accélérateur d'un menu natif ne la provoque pas — la fenêtre
+ * garde son focus pendant que le Rust travaille. Sans cette ligne, ⌘S enregistrait
+ * l'ancienne valeur, puis `afficherProjet` réécrivait le champ avec elle : la frappe
+ * était perdue deux fois, et rien à l'écran ne l'annonçait.
+ *
+ * Le `blur` suffit à la faire partir — l'écouteur de `change` fait le reste, quel que
+ * soit le champ et sans que rien ait à savoir lequel avait le focus.
+ */
+function terminerSaisie() {
+  document.activeElement?.blur?.();
+  return derniereTentative;
 }
 
 /**
@@ -637,6 +669,9 @@ async function afficherRecents() {
  * fichiers dont « Enregistrer sous… » a besoin.
  */
 async function garde() {
+  // La frappe en cours d'abord : le Rust ne sait pas encore qu'elle a eu lieu, et il
+  // répondrait « rien à enregistrer » sur un projet qu'on vient de modifier.
+  await terminerSaisie();
   const choix = await invoke('garde_modifications');
   if (choix === 'enregistrer') return enregistrerQuelquePart();
   if (choix === 'ignorer') return true;
@@ -920,6 +955,9 @@ async function quitter() {
 }
 
 async function routerMenu(id) {
+  // Le menu natif ne prend pas le focus de la page : c'est la seule porte de
+  // l'application par laquelle un geste peut arriver sur une frappe non terminée.
+  await terminerSaisie();
   // Retirer le préfixe, jamais découper sur « : » — un chemin peut en contenir un.
   if (id.startsWith(RECENT)) {
     if (!await garde()) return;
