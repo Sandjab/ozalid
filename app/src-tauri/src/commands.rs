@@ -626,15 +626,20 @@ pub fn epreuve_tirer(corps_pt: f64, atelier: State<Atelier>) -> Result<String, S
 pub struct MaquetteVue {
     cle: String,
     libelle: String,
+    /// Ni renommable, ni effaçable. La fenêtre s'en sert pour ne pas offrir des gestes
+    /// que le Rust refuserait de toute façon — l'interface est une politesse, le refus
+    /// est ailleurs.
+    fournie: bool,
 }
 
 #[tauri::command]
-pub fn maquettes_liste() -> Vec<MaquetteVue> {
-    maquettes::toutes(None)
+pub fn maquettes_liste(app: tauri::AppHandle) -> Vec<MaquetteVue> {
+    maquettes::toutes(config(&app).as_deref())
         .into_iter()
         .map(|m| MaquetteVue {
             cle: m.cle,
             libelle: m.nom,
+            fournie: m.fournie,
         })
         .collect()
 }
@@ -644,15 +649,51 @@ pub fn polices_liste() -> Vec<&'static str> {
     couverture::POLICES.to_vec()
 }
 
-/// Charge une maquette de départ. Elle remplace la mise en page, jamais l'identité du
-/// livre : le titre et l'auteur imprimés restent ceux du projet.
+/// Charge une maquette de départ. Elle remplace la mise en page **et les images**,
+/// jamais l'identité du livre : le titre et l'auteur imprimés restent ceux du projet.
+///
+/// Les images se posent rôle par rôle : une maquette qui porte une photo de 1ère la
+/// pose, une maquette qui n'en porte pas laisse celle du livre où elle est. Sans quoi
+/// charger une maquette purement typographique effacerait la photo du livre.
 #[tauri::command]
-pub fn maquette_choisir(cle: String, atelier: State<Atelier>) -> Result<ProjetVue, String> {
-    let m = maquettes::par_cle(None, &cle).ok_or_else(|| format!("maquette inconnue : {cle}"))?;
+pub fn maquette_choisir(
+    cle: String,
+    app: tauri::AppHandle,
+    atelier: State<Atelier>,
+) -> Result<ProjetVue, String> {
+    let m = maquettes::par_cle(config(&app).as_deref(), &cle)
+        .ok_or_else(|| format!("maquette inconnue : {cle}"))?;
     let mut garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_mut().ok_or_else(aucun_projet)?;
     o.projet.meta.couverture.maquette = Some(m.couverture);
+    for (nom, octets) in m.images {
+        poser_image(&mut o.projet.images, nom, octets);
+    }
     vue_modifiee(o)
+}
+
+/// Enregistre la couverture du projet ouvert comme maquette personnalisée.
+///
+/// Le projet n'est pas touché : ce geste écrit à côté, dans le répertoire de
+/// configuration, et ne rend donc aucune `ProjetVue`. La fenêtre rafraîchit sa liste en
+/// rappelant `maquettes_liste`, seule source de vérité.
+#[tauri::command]
+pub fn maquette_enregistrer(
+    nom: String,
+    app: tauri::AppHandle,
+    atelier: State<Atelier>,
+) -> Result<(), String> {
+    let dir = config(&app).ok_or("répertoire de configuration introuvable.")?;
+    let garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_ref().ok_or_else(aucun_projet)?;
+    let cv = o
+        .projet
+        .meta
+        .couverture
+        .maquette
+        .as_ref()
+        .ok_or("aucune maquette : en choisir une avant de l'enregistrer.")?;
+    maquettes::ecrire(&dir, &nom, cv, &o.projet.images)
 }
 
 #[tauri::command]

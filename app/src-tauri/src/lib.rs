@@ -98,6 +98,7 @@ pub fn run() {
             commands::interieur_modifier,
             commands::epreuve_tirer,
             commands::maquette_choisir,
+            commands::maquette_enregistrer,
             commands::couverture_modifier,
             commands::image_choisir,
             commands::couverture_apercu,
