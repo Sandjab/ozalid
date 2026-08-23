@@ -696,6 +696,35 @@ pub fn maquette_enregistrer(
     maquettes::ecrire(&dir, &nom, cv, &o.projet.images)
 }
 
+/// Clone une maquette, fournie ou non, sous un nom que le Rust fabrique.
+///
+/// Aucun nom n'est demandé : « Folio (copie) » convient neuf fois sur dix, et
+/// « Renommer » est à côté pour la dixième. Faire saisir ce nom aurait obligé le
+/// dialogue à se donner un mode — un champ qui veut dire tantôt « enregistrer », tantôt
+/// « cloner ceci ».
+#[tauri::command]
+pub fn maquette_cloner(cle: String, app: tauri::AppHandle) -> Result<(), String> {
+    let dir = config(&app).ok_or("répertoire de configuration introuvable.")?;
+    let m =
+        maquettes::par_cle(Some(&dir), &cle).ok_or_else(|| format!("maquette inconnue : {cle}"))?;
+    let nom = maquettes::nom_de_copie(Some(&dir), &m.nom);
+    maquettes::ecrire(&dir, &nom, &m.couverture, &m.images)
+}
+
+/// Renomme une personnalisée. Le refus sur une fournie est dans `maquettes`, pas ici :
+/// c'est lui la garantie, l'interface ne fait que ne pas offrir le bouton.
+#[tauri::command]
+pub fn maquette_renommer(cle: String, nom: String, app: tauri::AppHandle) -> Result<(), String> {
+    let dir = config(&app).ok_or("répertoire de configuration introuvable.")?;
+    maquettes::renommer(&dir, &cle, &nom)
+}
+
+#[tauri::command]
+pub fn maquette_effacer(cle: String, app: tauri::AppHandle) -> Result<(), String> {
+    let dir = config(&app).ok_or("répertoire de configuration introuvable.")?;
+    maquettes::effacer(&dir, &cle)
+}
+
 #[tauri::command]
 pub fn couverture_modifier(
     couverture: Couverture,
