@@ -583,8 +583,20 @@ impl Projet {
     /// Un envoi retiré emporte son image : sans cet élagage, l'archive garderait le mot
     /// manuscrit d'une personne à qui l'on n'envoie plus rien, et le `.ozalid` grossirait
     /// d'un fichier que plus rien ne nomme.
+    ///
+    /// La police personnelle est **reposée depuis le projet** et non reprise de la
+    /// saisie : c'est ce que l'archive porte, relevé dans son fichier à l'ouverture, et
+    /// une saisie qui la nommerait ferait déclarer bonne une main que Typst ne
+    /// trouverait pas — l'envoi partirait chez le dédicataire dans l'écriture de repli.
+    /// `Envois::reprend` tenait cette garde tant que l'interface renvoyait l'objet
+    /// entier ; elle la tient ici depuis que la main appartient à l'envoi.
     pub fn regler_envois(&mut self, saisie: crate::envoi::Envois) -> Result<(), String> {
-        self.meta.envois = self.meta.envois.reprend(saisie)?;
+        let envois = crate::envoi::Envois {
+            personnelle: self.meta.envois.personnelle.clone(),
+            ..saisie
+        };
+        envois.verifie()?;
+        self.meta.envois = envois;
         self.elaguer_images_envois();
         Ok(())
     }
@@ -650,31 +662,52 @@ impl Projet {
             .map(|p| p.famille)
     }
 
-    /// Embarque la police de l'auteur, et en fait la main du livre.
+    /// Embarque la police de l'auteur, et la donne aux envois qui s'écrivent.
     ///
     /// Une seule à la fois : la précédente s'en va, comme la photo d'une face s'en va
-    /// quand on en choisit une autre. Faire du livre sa main dans le même geste est ce
-    /// qu'on vient de demander — importer une écriture pour ne pas s'en servir n'a pas
-    /// d'usage, et l'oublier laisserait le livre dans son écriture d'avant.
+    /// quand on en choisit une autre. S'en servir dans le même geste est ce qu'on vient
+    /// de demander — importer une écriture pour ne pas l'employer n'a pas d'usage, et
+    /// l'oublier laisserait les exemplaires dans leur écriture d'avant.
+    ///
+    /// **Seuls les envois qui composent du texte** la reçoivent : celui qui porte une
+    /// photo d'écriture ou une image générée garde sa forme. Depuis que la main
+    /// appartient à l'exemplaire et non au livre, ce geste peut croiser un choix
+    /// délibéré ; substituer une police à une photo effacerait le mot que l'auteur a
+    /// écrit de sa main, ce qui est d'un autre ordre que remplacer une écriture par la
+    /// sienne.
     pub fn poser_police(&mut self, nom: &str, octets: Vec<u8>) -> Result<(), String> {
         let famille = crate::police::examine(&octets)?.famille;
         self.polices.clear();
         self.polices.insert(nom.to_string(), octets);
         self.meta.envois.personnelle = Some(famille.clone());
-        self.meta.envois.main = crate::envoi::Main::Police { police: famille };
+        for e in &mut self.meta.envois.liste {
+            if matches!(e.main, crate::envoi::Main::Police { .. }) {
+                e.main = crate::envoi::Main::Police {
+                    police: famille.clone(),
+                };
+            }
+        }
         Ok(())
     }
 
-    /// Retire la police de l'auteur, et rend au livre une main qu'il sait composer.
+    /// Retire la police de l'auteur, et rend aux envois qui la nommaient une main
+    /// qu'on sait composer.
     ///
-    /// Laisser la main sur une police qui vient de partir ferait refuser la composition :
-    /// exact, mais inutilement — c'est le geste de l'utilisateur qui l'a retirée, et il
-    /// n'a pas demandé un livre qui ne compose plus.
+    /// Laisser un envoi sur une police qui vient de partir ferait refuser la
+    /// composition : exact, mais inutilement — c'est le geste de l'utilisateur qui l'a
+    /// retirée, et il n'a pas demandé un livre qui ne compose plus.
+    ///
+    /// **Ceux-là seuls** sont ramenés au défaut : un exemplaire écrit en Caveat n'a
+    /// aucune raison de changer d'écriture parce qu'un autre perd la sienne.
     pub fn retirer_police(&mut self) {
         self.polices.clear();
-        self.meta.envois.personnelle = None;
-        if self.meta.envois.verifie().is_err() {
-            self.meta.envois.main = crate::envoi::Main::default();
+        let Some(partie) = self.meta.envois.personnelle.take() else {
+            return;
+        };
+        for e in &mut self.meta.envois.liste {
+            if matches!(&e.main, crate::envoi::Main::Police { police } if *police == partie) {
+                e.main = crate::envoi::Main::default();
+            }
         }
     }
 
