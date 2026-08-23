@@ -15,10 +15,10 @@ use serde::{Deserialize, Serialize};
 /// guillemets, apostrophe courbe — et non sur la fiche de son fondeur.
 pub const MAINS: &[&str] = &["Caveat", "Dancing Script", "Petit Formal Script"];
 
-/// D'où vient l'écriture des envois de ce livre.
+/// D'où vient l'écriture d'un envoi.
 ///
-/// Le livre fixe sa main, l'envoi apporte son contenu : tous les exemplaires d'un même
-/// livre se ressemblent, comme dans la réalité.
+/// Elle se pose sur l'envoi et non sur le livre : rien n'oblige deux exemplaires du
+/// même livre à s'écrire dans la même main.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "mode", rename_all = "lowercase")]
 pub enum Main {
@@ -29,19 +29,15 @@ pub enum Main {
     /// Une image écrite à la main, une par envoi : l'auteur écrit son mot sur une
     /// feuille, le photographie, et c'est cette image-là qui s'imprime.
     Image,
-    /// Une image par envoi, produite par un modèle de diffusion à partir du `gabarit`
-    /// du livre, dans lequel le mot de chaque envoi s'insère.
+    /// Une image par envoi, produite par un modèle de diffusion à partir du gabarit du
+    /// livre, dans lequel le mot de chaque envoi s'insère.
     ///
-    /// Le livre ne porte que le gabarit : l'adresse du modèle et la clé appartiennent à
-    /// la machine, et vivent dans les préférences. Une image acceptée est figée dans
-    /// l'archive comme celle du mode précédent — composer ne rappelle jamais le réseau.
-    ///
-    /// Le gabarit est facultatif : on choisit cette main **avant** d'écrire le prompt,
-    /// et un `.ozalid` qui l'aurait perdu doit s'ouvrir pour qu'on puisse le réécrire.
-    Diffusion {
-        #[serde(default)]
-        gabarit: String,
-    },
+    /// Le gabarit vit sur `Envois` et non ici : c'est le style d'écriture du livre, et
+    /// le réécrire pour chaque personne n'aurait pas de sens. L'adresse du modèle et la
+    /// clé appartiennent à la machine, et vivent dans les préférences. Une image
+    /// acceptée est figée dans l'archive comme celle du mode précédent — composer ne
+    /// rappelle jamais le réseau.
+    Diffusion,
 }
 
 impl Default for Main {
@@ -52,76 +48,127 @@ impl Default for Main {
     }
 }
 
+/// Où l'envoi se pose sur sa page.
+///
+/// **En fractions de la page, jamais en millimètres** : c'est la règle de l'atelier
+/// gelé — « tout réglage est en pourcentage de la largeur de couverture » — et c'est
+/// ce qui rend un placement portable du poche au grand format. Les fractions portent
+/// sur la page entière, marges comprises, ce qui les met en correspondance 1:1 avec le
+/// canevas de l'interface, qui montre la page entière.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Place {
+    /// Page physique du PDF, à partir de 1 : celle que la vignette montre. Le
+    /// `counter(page)` de l'intérieur n'est jamais remis à zéro — seul son affichage
+    /// est masqué jusqu'au corps —, si bien que ce numéro désigne bien la n-ième page
+    /// du fichier.
+    pub page: u32,
+    /// Centre de l'objet, en fraction de la largeur et de la hauteur de page. Le
+    /// centre et non le coin : la rotation tourne autour de lui, en CSS comme en Typst.
+    pub x: f64,
+    pub y: f64,
+    /// Largeur de l'objet, en fraction de la largeur de page.
+    pub taille: f64,
+    /// Degrés, positif dans le sens horaire.
+    pub angle: f64,
+}
+
+impl Default for Place {
+    /// La page de titre, au bas — là où les projets d'avant cette spec portaient leur
+    /// envoi. Le faux-titre est en page 1, sa blanche en 2.
+    fn default() -> Self {
+        Self {
+            page: 3,
+            x: 0.5,
+            y: 0.80,
+            taille: 0.60,
+            angle: 0.0,
+        }
+    }
+}
+
 /// Un mot adressé à une personne, sur son exemplaire.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Envoi {
     pub dedicataire: String,
+    /// D'où vient l'écriture de **cet** exemplaire. Elle appartenait au livre jusqu'à
+    /// la v4 du format : un auteur ne pouvait pas écrire son mot à la main pour l'une
+    /// et le faire composer pour l'autre.
+    #[serde(default)]
+    pub main: Main,
     /// Ce que la main réclame : le texte à composer. Vide quand la main est une image.
     #[serde(default)]
     pub contenu: String,
-    /// Nom, sous `envois/` dans l'archive, de l'image de cet envoi. Deux champs pour
-    /// trois formes plutôt qu'un champ par forme : la ligne d'envoi change de nature
-    /// avec la main, elle ne s'encombre pas de ce que la main ne réclame pas.
+    /// Nom, sous `envois/` dans l'archive, de l'image de cet envoi.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
+    #[serde(default)]
+    pub place: Place,
 }
 
-/// La main du livre et ses envois.
+/// Les envois du livre, et ce qu'ils partagent.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Envois {
-    #[serde(default)]
-    pub main: Main,
     /// Famille de la police personnelle embarquée sous `polices/`, quand le livre en
     /// porte une.
     ///
     /// Le nom figure ici pour que `projet.toml` reste lisible dézippé, mais **c'est le
-    /// fichier qui fait foi** : à l'ouverture, `normalise` le relève dans l'archive et
-    /// écrase ce que le TOML annonçait. Un nom recopié à la main dans le TOML ferait
-    /// sinon composer une police que Typst ne trouverait pas — c'est-à-dire une autre.
+    /// fichier qui fait foi** : à l'ouverture, `Projet::ouvrir` le relève dans
+    /// l'archive et écrase ce que le TOML annonçait. Un nom recopié à la main dans le
+    /// TOML ferait sinon composer une police que Typst ne trouverait pas — c'est-à-dire
+    /// une autre.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub personnelle: Option<String>,
+    /// Le patron de prompt des envois générés, partagé par tous : c'est le style
+    /// d'écriture du livre, pas le mot d'une personne. `{envoi}` y marque l'endroit où
+    /// le mot de chacun s'insère.
+    #[serde(default)]
+    pub gabarit: String,
     #[serde(default)]
     pub liste: Vec<Envoi>,
 }
 
 impl Envois {
-    /// Refuse une main que Typst ne saurait pas trouver.
+    /// Refuse une main que Typst ne saurait pas trouver, en nommant l'envoi fautif.
     ///
     /// Sans ce contrôle, Typst composerait dans sa police par défaut **sans lever
     /// d'erreur** : `--ignore-system-fonts` empêche une substitution par le système,
     /// pas une substitution par le défaut du binaire. C'est le contrôle
     /// d'`Interieur::verifie`, pour la même raison.
-    pub fn verifie(&self) -> Result<(), String> {
-        // Une image n'a pas de nom de police à trouver : elle se pose telle quelle.
-        // Ce qui lui manque — l'image d'un envoi qui n'en a pas — se refuse à la
-        // composition, pas ici : on écrit la liste avant de choisir les images.
-        let Main::Police { police } = &self.main else {
-            return Ok(());
-        };
-        if MAINS.contains(&police.as_str()) || self.personnelle.as_deref() == Some(police) {
-            return Ok(());
-        }
-        let mut attendu: Vec<&str> = MAINS.to_vec();
-        attendu.extend(self.personnelle.as_deref());
-        Err(format!(
-            "main inconnue : « {police} ». Attendu : {}.",
-            attendu.join(", ")
-        ))
-    }
-
-    /// La saisie de l'interface, reprise sans ce qu'elle n'a pas à dire.
     ///
-    /// La police personnelle n'est pas un réglage : c'est ce que l'archive porte, relevé
-    /// dans son fichier. Laisser la saisie la nommer ferait déclarer bonne, par le
-    /// contrôle qui suit, une main que Typst ne trouverait pas — et l'envoi partirait
-    /// chez le dédicataire dans l'écriture de repli.
-    pub fn reprend(&self, saisie: Envois) -> Result<Envois, String> {
-        let e = Envois {
-            personnelle: self.personnelle.clone(),
-            ..saisie
-        };
-        e.verifie()?;
-        Ok(e)
+    /// Le dédicataire est nommé parce qu'une liste de vingt envois dont un seul est
+    /// fautif laisserait sinon chercher lequel.
+    pub fn verifie(&self) -> Result<(), String> {
+        for (i, e) in self.liste.iter().enumerate() {
+            // Une image n'a pas de nom de police à trouver : elle se pose telle quelle.
+            // Ce qui lui manque — l'image d'un envoi qui n'en a pas — se refuse à la
+            // composition, pas ici : on écrit la liste avant de choisir les images.
+            let Main::Police { police } = &e.main else {
+                continue;
+            };
+            if MAINS.contains(&police.as_str()) || self.personnelle.as_deref() == Some(police) {
+                continue;
+            }
+            let mut attendu: Vec<&str> = MAINS.to_vec();
+            attendu.extend(self.personnelle.as_deref());
+            return Err(format!(
+                "{} : main inconnue « {police} ». Attendu : {}.",
+                designe(e, i),
+                attendu.join(", ")
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Comment nommer un envoi dans un message d'erreur.
+///
+/// Le rang plutôt que rien quand la ligne est anonyme : « main inconnue » tout court
+/// laisserait chercher dans une liste où plusieurs lignes le sont.
+fn designe(e: &Envoi, i: usize) -> String {
+    if e.dedicataire.trim().is_empty() {
+        format!("envoi {}", i + 1)
+    } else {
+        e.dedicataire.clone()
     }
 }
 
@@ -247,14 +294,12 @@ mod tests {
     fn une_main_generee_se_choisit_avant_d_avoir_son_gabarit() {
         let sans: Main = serde_json::from_str(r#"{"mode":"diffusion"}"#)
             .expect("une main générée sans gabarit est refusée");
-        assert_eq!(
-            sans,
-            Main::Diffusion {
-                gabarit: String::new()
-            }
-        );
+        assert_eq!(sans, Main::Diffusion);
         let e = Envois {
-            main: sans,
+            liste: vec![Envoi {
+                main: sans,
+                ..Envoi::default()
+            }],
             ..Envois::default()
         };
         assert!(e.verifie().is_ok());
@@ -266,19 +311,21 @@ mod tests {
     #[test]
     fn une_main_en_image_n_a_pas_de_police_a_verifier() {
         let e = Envois {
-            main: Main::Image,
-            personnelle: None,
-            liste: vec![],
+            liste: vec![Envoi {
+                main: Main::Image,
+                ..Envoi::default()
+            }],
+            ..Envois::default()
         };
         assert!(e.verifie().is_ok());
     }
 
-    /// Un livre neuf sait écrire sans qu'on lui règle quoi que ce soit, comme il sait
-    /// déjà composer son intérieur en EB Garamond.
+    /// Un envoi neuf sait écrire sans qu'on lui règle quoi que ce soit, comme le livre
+    /// sait déjà composer son intérieur en EB Garamond.
     #[test]
-    fn un_livre_neuf_a_deja_une_main() {
+    fn un_envoi_neuf_a_deja_une_main() {
         assert_eq!(
-            Envois::default().main,
+            Envoi::default().main,
             Main::Police {
                 police: MAINS[0].into()
             }
@@ -290,9 +337,12 @@ mod tests {
     #[test]
     fn une_main_hors_liste_est_refusee() {
         let e = Envois {
-            main: Main::Police {
-                police: "Comic Sans".into(),
-            },
+            liste: vec![Envoi {
+                main: Main::Police {
+                    police: "Comic Sans".into(),
+                },
+                ..Envoi::default()
+            }],
             ..Envois::default()
         };
         let err = e.verifie().unwrap_err();
@@ -306,11 +356,14 @@ mod tests {
     #[test]
     fn la_police_personnelle_est_admise_tant_que_l_archive_la_porte() {
         let mut e = Envois {
-            main: Main::Police {
-                police: "Ma Main".into(),
-            },
             personnelle: Some("Ma Main".into()),
-            liste: vec![],
+            liste: vec![Envoi {
+                main: Main::Police {
+                    police: "Ma Main".into(),
+                },
+                ..Envoi::default()
+            }],
+            ..Envois::default()
         };
         assert!(e.verifie().is_ok(), "police personnelle refusée");
 
@@ -319,53 +372,131 @@ mod tests {
         assert!(err.contains("Ma Main"), "{err}");
     }
 
-    /// L'interface renvoie l'objet entier, police personnelle comprise puisqu'elle l'a
-    /// reçu ainsi. Le nom qu'elle porte n'engage qu'elle : seul le fichier de l'archive
-    /// dit ce que Typst saura trouver.
-    #[test]
-    fn une_saisie_ne_peut_pas_inventer_une_police_personnelle() {
-        let porte = Envois {
-            personnelle: Some("Ma Main".into()),
-            ..Envois::default()
-        };
-        let saisie = Envois {
-            main: Main::Police {
-                police: "Écriture d'Emma".into(),
-            },
-            personnelle: Some("Écriture d'Emma".into()),
-            liste: vec![],
-        };
-        let err = porte.reprend(saisie).unwrap_err();
-        assert!(err.contains("Écriture d'Emma"), "{err}");
-
-        let bonne = Envois {
-            main: Main::Police {
-                police: "Ma Main".into(),
-            },
-            personnelle: None,
-            liste: vec![],
-        };
-        assert_eq!(
-            porte.reprend(bonne).unwrap().personnelle.as_deref(),
-            Some("Ma Main"),
-            "la police de l'archive a été perdue en chemin"
-        );
-    }
-
     /// L'erreur doit nommer ce qui est offert, la police personnelle comprise : sans
     /// elle, le message dirait de choisir parmi trois mains alors que le livre en a
     /// quatre.
     #[test]
     fn l_erreur_de_main_nomme_aussi_la_police_personnelle() {
         let e = Envois {
-            main: Main::Police {
-                police: "Comic Sans".into(),
-            },
             personnelle: Some("Ma Main".into()),
-            liste: vec![],
+            liste: vec![Envoi {
+                main: Main::Police {
+                    police: "Comic Sans".into(),
+                },
+                ..Envoi::default()
+            }],
+            ..Envois::default()
         };
         let err = e.verifie().unwrap_err();
         assert!(err.contains("Ma Main"), "{err}");
         assert!(err.contains(MAINS[0]), "{err}");
+    }
+
+    /// Un placement s'exprime en fractions de page et non en millimètres : c'est ce
+    /// qui rend une maquette de placement portable du poche au grand format. Le
+    /// défaut repose l'envoi sur la page de titre — page 3, le faux-titre étant en 1
+    /// et sa blanche en 2 —, là où les projets d'avant le portaient.
+    #[test]
+    fn un_placement_neuf_repose_l_envoi_sur_la_page_de_titre() {
+        let p = Place::default();
+        assert_eq!(p.page, 3);
+        assert_eq!(p.x, 0.5);
+        assert!((0.0..=1.0).contains(&p.y), "y hors page : {}", p.y);
+        assert!(
+            (0.0..=1.0).contains(&p.taille),
+            "taille hors page : {}",
+            p.taille
+        );
+        assert_eq!(p.angle, 0.0);
+    }
+
+    /// Le fait que cette spec ajoute, et le seul que rien d'autre ne protège : deux
+    /// exemplaires du même livre peuvent s'écrire dans deux mains différentes. Un mot
+    /// composé pour Léa et une photo d'écriture pour Marc ne s'excluent plus.
+    #[test]
+    fn deux_envois_du_meme_livre_ont_chacun_leur_main() {
+        let e = Envois {
+            liste: vec![
+                Envoi {
+                    dedicataire: "Léa".into(),
+                    main: Main::Police {
+                        police: MAINS[0].into(),
+                    },
+                    contenu: "Pour Léa.".into(),
+                    ..Envoi::default()
+                },
+                Envoi {
+                    dedicataire: "Marc".into(),
+                    main: Main::Image,
+                    image: Some("Marc.jpg".into()),
+                    ..Envoi::default()
+                },
+            ],
+            ..Envois::default()
+        };
+        assert!(e.verifie().is_ok(), "{:?}", e.verifie());
+    }
+
+    /// L'erreur doit nommer le dédicataire fautif : une liste de vingt envois dont un
+    /// porte une main inconnue laisserait sinon chercher lequel.
+    #[test]
+    fn une_main_inconnue_nomme_le_dedicataire() {
+        let e = Envois {
+            liste: vec![Envoi {
+                dedicataire: "Marc".into(),
+                main: Main::Police {
+                    police: "Comic Sans".into(),
+                },
+                ..Envoi::default()
+            }],
+            ..Envois::default()
+        };
+        let err = e.verifie().unwrap_err();
+        assert!(err.contains("Marc"), "{err}");
+        assert!(err.contains("Comic Sans"), "{err}");
+    }
+
+    /// Le contrôle regarde toute la liste, et pas seulement sa première ligne : une
+    /// photo d'écriture en tête ne dispense pas les suivantes d'être vérifiées. C'est
+    /// le seul endroit où le passage d'une main unique à une main par envoi peut se
+    /// perdre en silence — et l'exemplaire fautif partirait dans l'écriture de repli.
+    #[test]
+    fn un_envoi_en_image_ne_couvre_pas_les_suivants() {
+        let e = Envois {
+            liste: vec![
+                Envoi {
+                    main: Main::Image,
+                    ..Envoi::default()
+                },
+                Envoi {
+                    dedicataire: "Marc".into(),
+                    main: Main::Police {
+                        police: "Comic Sans".into(),
+                    },
+                    ..Envoi::default()
+                },
+            ],
+            ..Envois::default()
+        };
+        let err = e.verifie().unwrap_err();
+        assert!(err.contains("Marc"), "{err}");
+    }
+
+    /// Un envoi sans dédicataire doit se dire quand même : « main inconnue » tout
+    /// court laisserait chercher dans une liste où plusieurs lignes sont anonymes.
+    #[test]
+    fn un_envoi_anonyme_se_designe_par_son_rang() {
+        let e = Envois {
+            liste: vec![Envoi {
+                dedicataire: "  ".into(),
+                main: Main::Police {
+                    police: "Comic Sans".into(),
+                },
+                ..Envoi::default()
+            }],
+            ..Envois::default()
+        };
+        let err = e.verifie().unwrap_err();
+        assert!(err.contains('1'), "le rang manque : {err}");
     }
 }
