@@ -219,6 +219,19 @@ pub struct ElementDos {
     pub place: PlaceDos,
     /// Ordre au sein d'une même place, du début de la lecture vers la fin.
     pub rang: u8,
+    /// Quart de tour d'affichage, en degrés depuis la lecture de bas en haut.
+    ///
+    /// Zéro est le sens du dos : le texte se lit le livre couché sur le dos, ou la tête
+    /// penchée à gauche. 180 le retourne. Les deux quarts de tour le couchent **en
+    /// travers** du dos — le sens d'une mention de collection qui se lit le livre
+    /// debout, sans pencher la tête. Ce qu'il occupe alors le long du dos n'est plus la
+    /// longueur de sa ligne mais sa hauteur d'encre, et réciproquement : c'est pourquoi
+    /// [`crate::planche::source_mesures`] mesure le texte déjà tourné.
+    ///
+    /// Facultatif à la lecture : un projet écrit avant que le sens n'existe s'ouvre
+    /// dans celui du dos.
+    #[serde(default)]
+    pub sens: u16,
     pub style: Style,
 }
 
@@ -238,6 +251,8 @@ pub struct Dos {
     pub titre: ElementDos,
     #[serde(default = "dos_editeur")]
     pub editeur: ElementDos,
+    #[serde(default = "dos_collection")]
+    pub collection: ElementDos,
     /// Écart entre deux éléments d'une même place, % de la largeur de couverture.
     #[serde(default = "dos_ecart")]
     pub ecart: f64,
@@ -269,6 +284,7 @@ fn element(place: PlaceDos, rang: u8) -> ElementDos {
         actif: true,
         place,
         rang,
+        sens: 0,
         style: dos_style(),
     }
 }
@@ -283,6 +299,18 @@ fn dos_titre() -> ElementDos {
 
 fn dos_editeur() -> ElementDos {
     element(PlaceDos::Pied, 1)
+}
+
+/// La collection, au pied avec la mention d'éditeur — et **éteinte**.
+///
+/// Allumée d'office, elle ajouterait un texte au dos de tous les livres qui portent une
+/// collection, donc leur réclamerait de l'épaisseur, pour un réglage que personne n'a
+/// demandé. Les projets écrits avant qu'elle n'existe s'ouvrent ainsi inchangés.
+fn dos_collection() -> ElementDos {
+    ElementDos {
+        actif: false,
+        ..element(PlaceDos::Pied, 2)
+    }
 }
 
 // Les deux écarts que le CSS d'origine fixait en dur, devenus réglables.
@@ -303,6 +331,7 @@ fn dos_defaut() -> Dos {
         auteur: dos_auteur(),
         titre: dos_titre(),
         editeur: dos_editeur(),
+        collection: dos_collection(),
         ecart: dos_ecart(),
         marge: dos_marge(),
         fond_propre: false,

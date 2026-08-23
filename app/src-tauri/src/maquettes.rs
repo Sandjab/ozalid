@@ -57,6 +57,7 @@ fn dos(couleur: &str) -> Dos {
         auteur: encre(d.auteur),
         titre: encre(d.titre),
         editeur: encre(d.editeur),
+        collection: encre(d.collection),
         ..Dos::defaut()
     }
 }

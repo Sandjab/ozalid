@@ -153,10 +153,41 @@ fn composes<'a>(
         ("auteur", &cv.dos.auteur, livre.auteur.trim()),
         ("titre", &cv.dos.titre, livre.titre.trim()),
         ("editeur", &cv.dos.editeur, livre.editeur.trim()),
+        ("collection", &cv.dos.collection, livre.collection.trim()),
     ]
     .into_iter()
     .filter(|(_, el, texte)| el.actif && !texte.is_empty())
     .collect()
+}
+
+/// Le contenu d'un élément, tourné du sens que sa maquette lui donne.
+///
+/// Trois choses s'y jouent, et chacune a été vue rater :
+///
+/// `reflow: true` — sans lui, Typst tourne le dessin et laisse la boîte de mise en page
+/// où elle était : un quart de tour occuperait la longueur de sa ligne le long du dos,
+/// là où il n'en occupe plus que la hauteur d'encre, et les voisins se poseraient
+/// dessus. C'est aussi ce qui permet à [`source_mesures`] de mesurer le texte couché en
+/// mesurant simplement le contenu.
+///
+/// `box` — une rotation qui refoule est un **bloc**, et un bloc dans une ligne la coupe :
+/// mesuré dans la fenêtre, la mention de collection couchée se composait *sous* la
+/// mention d'éditeur au lieu de se ranger à côté d'elle, et les prises, elles, la
+/// plaçaient bien à côté. La boîte la rend inline, comme le texte qu'elle porte.
+///
+/// `baseline: 50%` — un quart de tour dresse la boîte : sa hauteur devient la longueur
+/// de la ligne. Posée sur la ligne d'écriture, elle déborderait vers la tête de tout ce
+/// qu'elle a gagné et sortirait de l'épaisseur du dos ; centrée sur cette ligne, elle y
+/// reste. Le demi-tour n'en a pas besoin — sa boîte garde la hauteur qu'elle avait.
+///
+/// Le sens nul n'écrit rien : une rotation de zéro degré est une boîte de plus dans la
+/// source pour rien, et ces sources-là se relisent.
+fn tourne(sens: u16, contenu: &str) -> String {
+    match sens % 360 {
+        0 => contenu.into(),
+        s @ (90 | 270) => format!("box(baseline: 50%, rotate({s}deg, reflow: true, {contenu}))"),
+        s => format!("box(rotate({s}deg, reflow: true, {contenu}))"),
+    }
 }
 
 /// La rangée d'une place, dans l'ordre de lecture du dos : du pied vers la tête.
@@ -181,7 +212,7 @@ pub struct BoiteDos {
     pub fin: f64,
 }
 
-/// La source qui mesure les trois textes du dos, et ne compose rien.
+/// La source qui mesure les textes du dos, et ne compose rien.
 ///
 /// Typst est le seul à savoir ce qu'un texte occupe : la longueur d'une ligne dépend de
 /// chaque glyphe, là où sa hauteur d'encre ne dépend que de la famille — c'est pourquoi
@@ -195,7 +226,7 @@ pub fn source_mesures(livre: &Livre, cv: &Couverture, format: (f64, f64)) -> Str
         .map(|(cle, el, texte)| {
             format!(
                 "{cle}: measure({}).width / 1mm",
-                el.style.applique(fw, texte)
+                tourne(el.sens, &el.style.applique(fw, texte))
             )
         })
         .collect();
@@ -282,6 +313,13 @@ pub fn boites_dos(
 ///
 /// Les éléments d'un même dos se rangent côte à côte le long du dos, jamais l'un sous
 /// l'autre : c'est donc le plus haut qui commande, pas leur somme.
+///
+/// **Ce que la mesure ne couvre pas** : un élément couché en travers du dos — un quart
+/// de tour, voir [`ElementDos::sens`] — n'y occupe plus sa hauteur d'encre mais la
+/// longueur de sa ligne, que seul Typst connaît et qu'aucune table ne donne. Ce qui est
+/// rendu ici reste vrai — le dos doit bien au moins cette épaisseur-là — mais ne suffit
+/// plus à garantir qu'un tel élément tienne. Il se voit rogné sur la face Dos, qui
+/// compose à la largeur réelle du dos ; c'est aujourd'hui le seul signal.
 pub fn dos_requis(livre: &Livre, cv: &Couverture, largeur: f64) -> f64 {
     let els = composes(livre, cv);
     if els.is_empty() {
@@ -317,8 +355,9 @@ fn zone(dx: f64, largeur: f64, hauteur: f64, contenu: &str) -> String {
 
 /// Le dos : fond sur toute la hauteur, texte en lecture de bas en haut.
 ///
-/// Auteur, titre et éditeur s'y placent chacun où sa maquette le dit — au pied, au
-/// centre ou en tête — et dans l'ordre que fixe son rang. Le texte est calé sur la
+/// Auteur, titre, éditeur et collection s'y placent chacun où sa maquette le dit — au
+/// pied, au centre ou en tête —, dans l'ordre que fixe son rang et dans le sens qu'elle
+/// leur donne. Le texte est calé sur la
 /// couverture **rognée**, pas sur la planche : le fond perdu n'est pas de la surface
 /// imprimée utile.
 fn bloc_dos(
@@ -363,7 +402,10 @@ fn bloc_dos(
     // éditeur, ou un dos qui ne porte que le titre.
     let mut places: [Vec<(u8, String)>; 3] = [Vec::new(), Vec::new(), Vec::new()];
     for (_, el, texte) in composes(livre, cv) {
-        places[rangee(el.place)].push((el.rang, format!("#{}", el.style.applique(fw, texte))));
+        places[rangee(el.place)].push((
+            el.rang,
+            format!("#{}", tourne(el.sens, &el.style.applique(fw, texte))),
+        ));
     }
     if places.iter().all(Vec::is_empty) {
         return s;
@@ -721,7 +763,7 @@ mod tests {
         assert!(s.contains("Ozalid"), "éditeur du livre absent du dos");
     }
 
-    /// Les trois éléments du dos se règlent séparément : le rang les ordonne au sein
+    /// Les éléments du dos se règlent séparément : le rang les ordonne au sein
     /// d'une place, la place les envoie d'un bout à l'autre. Une maquette qui met le
     /// titre en tête et l'auteur au pied doit produire exactement cela.
     #[test]
@@ -1144,5 +1186,107 @@ mod tests {
         let elements = composes(&l, &cv);
         let editeur = elements.iter().find(|(cle, _, _)| *cle == "editeur");
         assert_eq!(editeur.map(|(_, _, t)| *t), Some("Ozalid"));
+    }
+
+    /// La collection est le quatrième élément du dos, et elle vient du livre comme les
+    /// trois autres. Éteinte par défaut : une maquette qui l'allumerait d'office
+    /// ajouterait un texte au dos de tous les livres qui en portent une, donc
+    /// réclamerait une épaisseur, sans que personne l'ait demandé.
+    #[test]
+    fn la_collection_se_compose_comme_les_trois_autres() {
+        let mut l = livre();
+        l.collection = "Domaine français".into();
+        let mut cv = maquettes::folio();
+        assert!(!cv.dos.collection.actif, "allumée d'office");
+
+        cv.dos.collection.actif = true;
+        let elements = composes(&l, &cv);
+        let collection = elements.iter().find(|(cle, _, _)| *cle == "collection");
+        assert_eq!(collection.map(|(_, _, t)| *t), Some("Domaine français"));
+
+        let g = gabarit("lulu", 244);
+        let s = source_dos(&l, &cv, g.format, g.dos, None);
+        assert!(s.contains("Domaine français"), "absente du dos :\n{s}");
+    }
+
+    /// Le sens tourne l'élément, et lui seul : un dos dont l'auteur se lit de haut en
+    /// bas garde son titre dans l'autre sens. La rotation est posée **sur le texte**,
+    /// dans la cellule, et non sur le bloc entier — sur le bloc, elle retournerait le
+    /// dos et l'ordre des places avec lui.
+    #[test]
+    fn le_sens_ne_retourne_que_son_element() {
+        let l = livre();
+        let mut cv = maquettes::folio();
+        cv.dos.auteur.sens = 180;
+        let g = gabarit("lulu", 244);
+        let s = source_dos(&l, &cv, g.format, g.dos, None);
+
+        // Le contenu tourné va de la rotation au crochet qui referme le texte : c'est
+        // ce qu'écrit `Style::applique`, et aucun titre n'y entre par accident.
+        let retourne: Vec<&str> = s
+            .match_indices("rotate(180deg, reflow: true")
+            .map(|(i, _)| &s[i..i + s[i..].find(']').unwrap()])
+            .collect();
+        assert_eq!(retourne.len(), 1, "un seul élément retourné :\n{s}");
+        assert!(
+            retourne[0].contains(&l.auteur) && !retourne[0].contains(&l.titre),
+            "c'est l'auteur qui est retourné :\n{}",
+            retourne[0]
+        );
+    }
+
+    /// **Ce qu'une rotation nue casse** : un `rotate` qui refoule est un bloc, et un bloc
+    /// dans une ligne la coupe. Vu dans la fenêtre : la collection couchée se composait
+    /// sous la mention d'éditeur, à l'autre bout de l'épaisseur, pendant que sa prise se
+    /// posait sagement à côté — le dos réglé à l'écran n'était pas celui qui s'imprimait.
+    ///
+    /// La mesure et la composition écrivent la même boîte : c'est la même fonction qui
+    /// la produit, et ce test la lit des deux côtés pour que ça le reste.
+    #[test]
+    fn un_element_tourne_est_mis_en_boite_pour_rester_dans_sa_ligne() {
+        let mut l = livre();
+        l.collection = "Domaine français".into();
+        let mut cv = maquettes::folio();
+        cv.dos.collection.actif = true;
+        cv.dos.collection.sens = 270;
+        cv.dos.titre.sens = 180;
+        let g = gabarit("lulu", 244);
+
+        for s in [
+            source_dos(&l, &cv, g.format, g.dos, None),
+            source_mesures(&l, &cv, g.format),
+        ] {
+            assert!(
+                s.contains("box(baseline: 50%, rotate(270deg, reflow: true, text("),
+                "quart de tour hors boîte :\n{s}"
+            );
+            assert!(
+                s.contains("box(rotate(180deg, reflow: true, text("),
+                "demi-tour hors boîte :\n{s}"
+            );
+        }
+    }
+
+    /// Un quart de tour couche l'élément en travers du dos : ce qu'il occupe le long du
+    /// dos n'est plus la longueur de sa ligne mais sa hauteur d'encre. La mesure doit
+    /// donc porter sur le texte **déjà tourné**, sans quoi la prise se poserait sur
+    /// vingt millimètres de dos là où le texte n'en occupe que trois.
+    #[test]
+    fn la_mesure_dun_quart_de_tour_porte_sur_le_texte_couche() {
+        let l = livre();
+        let mut cv = maquettes::folio();
+        cv.dos.collection.actif = true;
+        cv.dos.collection.sens = 90;
+        let s = source_mesures(&l, &cv, (108.0, 175.0));
+
+        assert!(
+            s.contains("collection: measure(box(baseline: 50%, rotate(90deg, reflow: true, text("),
+            "mesure prise sur le texte debout :\n{s}"
+        );
+        // Les autres se mesurent comme avant : une rotation nulle n'a rien à écrire.
+        assert!(
+            !s.contains("titre: measure(rotate("),
+            "rotation posée sur un élément qui n'en a pas :\n{s}"
+        );
     }
 }

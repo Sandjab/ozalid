@@ -52,20 +52,28 @@ function style(prefixe, libelle, opts = {}) {
 const PLACES_DOS = [['pied', 'Pied'], ['centre', 'Centre'], ['tete', 'Tête']];
 
 /**
- * Un élément du dos : où il se place, dans quel ordre, et son style entier.
+ * Un élément du dos : où il se place, dans quel sens, et son style entier.
  *
- * Les trois éléments ont exactement les mêmes réglages — le dos d'une collection met
+ * Les quatre éléments ont exactement les mêmes réglages — le dos d'une collection met
  * le titre en tête et l'auteur au pied, celui d'une autre les groupe : rien ici ne
  * doit privilégier un usage.
+ *
+ * La place, le rang et le sens sont `cache` : leurs contrôles existent, mais le panneau
+ * ne les montre pas. Ils se règlent sur l'aperçu — on traîne le texte au tiers qu'on
+ * veut, on le retourne par l'icône posée dans son coin — et trois contrôles de plus par
+ * élément rediraient dans une colonne de 13,5 rem ce que le dos montre déjà. Ils
+ * restent néanmoins des contrôles, et c'est délibéré : le geste y pose sa valeur, la
+ * commande la relit avec toutes les autres, et rien n'a de chemin à lui.
  */
 function elementDos(cle, libelle) {
   return {
-    ...style(`dos.${cle}.style`, `Dos — ${libelle}`),
+    ...style(`dos.${cle}.style`, libelle),
     face: 'dos',
     avant: [
       { chemin: `dos.${cle}.actif`, libelle: 'Afficher', type: 'case' },
-      { chemin: `dos.${cle}.place`, libelle: 'Position', type: 'liste', options: PLACES_DOS },
-      { chemin: `dos.${cle}.rang`, libelle: 'Ordre à cette position', type: 'nombre', min: 1, max: 9, pas: 1 },
+      { chemin: `dos.${cle}.place`, libelle: 'Position', type: 'liste', options: PLACES_DOS, cache: true },
+      { chemin: `dos.${cle}.rang`, libelle: 'Ordre à cette position', type: 'nombre', min: 1, max: 9, pas: 1, cache: true },
+      { chemin: `dos.${cle}.sens`, libelle: 'Sens', type: 'nombre', min: 0, max: 270, pas: 90, cache: true },
     ],
   };
 }
@@ -193,8 +201,11 @@ const SCHEMA = [
     // Le dos n'a pas de contrôle de largeur : elle vient de la pagination. C'est le
     // seul réglage de la maquette que l'utilisateur ne peut pas toucher, et c'est
     // exactement ce que l'application apporte.
-    titre: 'Dos — fond et espacements',
+    titre: 'Fond et espacements',
     face: 'dos',
+    // Ce groupe ne règle pas un texte mais le dos lui-même : la feuille de style l'en
+    // sépare, sans quoi il se lisait comme une cinquième colonne de texte.
+    classe: 'groupe-dos-fond',
     champs: [
       { chemin: 'dos.fond_propre', libelle: 'Fond distinct du papier', type: 'case' },
       { chemin: 'dos.fond', libelle: 'Couleur du fond', type: 'couleur' },
@@ -202,9 +213,10 @@ const SCHEMA = [
       { chemin: 'dos.ecart', libelle: 'Écart entre éléments', type: 'nombre', min: 0, max: 20, pas: 0.5, unite: '% larg.' },
     ],
   },
-  elementDos('auteur', 'auteur'),
-  elementDos('titre', 'titre'),
-  elementDos('editeur', 'éditeur'),
+  elementDos('auteur', 'Auteur'),
+  elementDos('titre', 'Titre'),
+  elementDos('editeur', 'Éditeur'),
+  elementDos('collection', 'Collection'),
   {
     titre: '4ème — pied et ISBN',
     face: 'quatre',
@@ -326,14 +338,17 @@ function construireReglages() {
   controles = [];
   blocs = [];
   for (const g of groupes()) {
-    const bloc = h('div', undefined, 'groupe');
+    const bloc = h('div', undefined, g.classe ? `groupe ${g.classe}` : 'groupe');
     bloc.append(h('h3', g.titre));
     for (const c of g.champs) {
       const ligne = h('label');
       const lib = c.unite ? `${c.libelle} (${c.unite})` : c.libelle;
       const el = controle(c);
       ligne.append(h('span', lib), el);
-      bloc.append(ligne);
+      // Un champ `cache` a bien son contrôle — le geste y pose sa valeur, la commande
+      // l'y relit — mais sa ligne n'entre pas dans le panneau : elle n'est nulle part,
+      // plutôt que posée et masquée, pour qu'aucun réglage de mode ne la ramène.
+      if (!c.cache) bloc.append(ligne);
       controles.push({ champ: c, el, ligne });
     }
     blocs.push({ el: bloc, face: g.face ?? 'une', modes: g.modes ?? null });
@@ -773,9 +788,21 @@ function hauteurBloc(cv) {
  */
 const PLACES_DOS_ORDRE = ['pied', 'centre', 'tete'];
 
+/**
+ * Les quatre éléments du dos : la clé du modèle, et le suffixe de leurs identifiants.
+ *
+ * Une seule liste pour les prises, leurs icônes de sens et le câblage des gestes : ces
+ * trois-là recopiées à la main ont déjà divergé une fois — l'arrivée de la collection
+ * l'a montré, une prise posée sans geste ne fait rien et ne dit rien.
+ */
+const ELEMENTS_DOS = [
+  ['auteur', 'Auteur'], ['titre', 'Titre'],
+  ['editeur', 'Editeur'], ['collection', 'Collection'],
+];
+
 /** Toutes les prises du balisage, pour les éteindre d'un bloc avant de choisir. */
 const PRISES = ['priseImage', 'priseBloc', 'priseBandeau',
-  'priseDosAuteur', 'priseDosTitre', 'priseDosEditeur'];
+  ...ELEMENTS_DOS.map(([, b]) => `priseDos${b}`)];
 
 /** La place que vise un dépôt, par tiers du dos. */
 const placeVisee = (u) => PLACES_DOS_ORDRE[Math.min(2, Math.max(0, Math.floor(u * 3)))];
@@ -829,12 +856,12 @@ function poserPrises() {
  * une face montrée avant que la mesure ne soit revenue, n'offre simplement rien.
  */
 function poserPrisesDos() {
-  for (const b of ['Auteur', 'Titre', 'Editeur']) {
+  for (const [cle, b] of ELEMENTS_DOS) {
     const el = $(`priseDos${b}`);
-    const cle = b.toLowerCase();
     const boite = boitesDos.find((x) => x.cle === cle);
     el.hidden = !boite;
     if (!boite) continue;
+    poserSens(cle, b);
     // La prise saisie suit la souris ; les deux autres restent où le texte est. Elle
     // seule porte son nom, et seulement le temps du geste : au repos, la prise est posée
     // sur son propre texte, qui se nomme mieux qu'aucun libellé — et un libellé par
@@ -847,6 +874,40 @@ function poserPrisesDos() {
   const zones = $('zonesDos');
   zones.hidden = !geste?.cle;
   if (geste?.cle) zones.setAttribute('data-cible', placeVisee(geste.u));
+}
+
+/**
+ * Le sens de lecture des trois textes du livre, tel que la flèche le montre.
+ *
+ * La flèche dit le sens **courant**, et non ce que le clic ferait : c'est le seul
+ * endroit de la fenêtre où se lise qu'un dos est montant ou descendant, et un aperçu
+ * couché ne le montre pas — les deux s'y lisent de gauche à droite.
+ */
+function poserSens(cle, b) {
+  const bt = $(`sensDos${b}`);
+  if (!bt) return;
+  const montant = valeurSaisie(`dos.${cle}.sens`) !== 180;
+  bt.textContent = montant ? '↑' : '↓';
+  bt.title = montant
+    ? 'Texte montant, du pied vers la tête — cliquer pour le retourner'
+    : 'Texte descendant, de la tête vers le pied — cliquer pour le retourner';
+}
+
+/**
+ * Tourne un élément du dos d'un quart ou d'un demi-tour.
+ *
+ * Le modulo avant `poserValeur` n'est pas une précaution : le schéma borne le sens à
+ * 270, et un quart de tour de plus s'y arrêterait au lieu de revenir à zéro — la
+ * collection resterait couchée en travers du dos sans qu'aucun clic ne l'en sorte.
+ */
+function tournerDos(cle, quart) {
+  const chemin = `dos.${cle}.sens`;
+  poserValeur(chemin, (valeurSaisie(chemin) + quart + 360) % 360);
+  poserPrises();
+  // La promesse est rendue, et c'est ce qui rend le geste éprouvable : le tour n'est
+  // fini que lorsque la maquette est revenue, et deux clics enchaînés plus vite que
+  // l'aller-retour verraient sinon le premier réécrire le champ que le second a posé.
+  return majCouverture();
 }
 
 /**
@@ -1015,17 +1076,24 @@ function cablerPrises() {
     });
   }
 
-  // Les trois textes du dos. Rien ne se commet en chemin : la place et le rang n'ont
+  // Les quatre textes du dos. Rien ne se commet en chemin : la place et le rang n'ont
   // de valeur qu'une fois le doigt levé, et une recomposition par tiers traversé
   // ferait clignoter le dos sous la souris.
-  for (const b of ['Auteur', 'Titre', 'Editeur']) {
-    const cle = b.toLowerCase();
+  for (const [cle, b] of ELEMENTS_DOS) {
     saisir($(`priseDos${b}`), {
-      chemins: ['auteur', 'titre', 'editeur'].flatMap(
-        (c) => [`dos.${c}.place`, `dos.${c}.rang`]),
+      chemins: ELEMENTS_DOS.flatMap(
+        ([c]) => [`dos.${c}.place`, `dos.${c}.rang`]),
       cle,
       deposer: (u) => deposerDos(cle, u),
     });
+    // Les icônes de sens vivent dans la prise : sans cet arrêt, presser l'une d'elles
+    // commencerait aussi à traîner le texte qui la porte.
+    for (const [id, quart] of cle === 'collection'
+      ? [[`sensDos${b}Gauche`, -90], [`sensDos${b}Droite`, 90]]
+      : [[`sensDos${b}`, 180]]) {
+      $(id).addEventListener('pointerdown', (e) => e.stopPropagation());
+      $(id).addEventListener('click', () => tournerDos(cle, quart));
+    }
   }
 
   // La molette sur la photo : l'échelle. Pas de sélection à faire d'abord — la scène ne

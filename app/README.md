@@ -396,10 +396,19 @@ tout ce qui se voit se vérifie dans l'application.
   papier nu tant qu'on n'avait pas grossi l'image à la main.
 - **La planche ne porte aucun trait de coupe.** Lulu, KDP et Bookvault les refusent
   explicitement ; le fond perdu suffit à dire où couper.
-- **Le dos se règle élément par élément.** Auteur, titre et éditeur y ont chacun leur
-  style, leur place — pied, centre ou tête — et leur rang, parce que les collections
-  ne s'accordent pas là-dessus. Seule sa **largeur** échappe au réglage : elle vient
-  de la pagination, et c'est tout l'objet de l'application.
+- **Le dos se règle élément par élément.** Auteur, titre, éditeur et collection y ont
+  chacun leur style, leur place — pied, centre ou tête —, leur rang et leur sens de
+  lecture, parce que les collections ne s'accordent pas là-dessus. La collection est
+  éteinte par défaut : allumée d'office, elle ajouterait un texte au dos de tous les
+  livres qui en portent une. Seule la **largeur** du dos échappe au réglage : elle
+  vient de la pagination, et c'est tout l'objet de l'application.
+- **La place, le rang et le sens ne se règlent qu'à la souris.** On traîne le texte au
+  tiers du dos qu'on veut ; l'icône posée dans son coin le retourne — et, pour la
+  collection seule, le couche en travers du dos, d'un quart de tour à gauche ou à
+  droite. Le panneau ne les offre pas : il redirait ce que l'aperçu montre déjà.
+  Une réserve à connaître : l'épaisseur qu'un élément couché en travers réclame est la
+  longueur de sa ligne, que seul Typst connaît — `dos_requis` ne la mesure pas, et un
+  tel élément trop long se voit rogné sur la face Dos sans autre signal.
 - **Le dos a sa face, et elle est couchée.** L'étape Couverture en compte quatre —
   1ère, 4ème, Dos, Planche — et le Dos s'y compose seul, sans fond perdu, sur une page
   d'un quart de tour. À sa taille : treize millimètres restent treize millimètres, et

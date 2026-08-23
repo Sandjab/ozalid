@@ -194,7 +194,7 @@
                 <i class="poignee droite" id="poigneeDroite"></i>
               </div>
               <div class="prise prise-bandeau" id="priseBandeau"></div>
-              <!-- Le dos couché : ses trois textes se saisissent et se rangent d'une
+              <!-- Le dos couché : ses quatre textes se saisissent et se rangent d'une
                    place à l'autre. Les trois zones ne paraissent que pendant le geste —
                    hors geste, elles diraient une structure qu'on ne cherche pas, et le
                    dos est déjà une bande de soixante pixels. -->
@@ -203,9 +203,26 @@
                 <div class="zone-dos" data-place="centre">Centre</div>
                 <div class="zone-dos" data-place="tete">Tête</div>
               </div>
-              <div class="prise prise-dos" id="priseDosAuteur"><span>Auteur</span></div>
-              <div class="prise prise-dos" id="priseDosTitre"><span>Titre</span></div>
-              <div class="prise prise-dos" id="priseDosEditeur"><span>Éditeur</span></div>
+              <!-- L'icône posée dans le coin de chaque texte en règle le sens de
+                   lecture. Une seule pour les trois textes du livre — ils n'ont que le
+                   montant et le descendant, et la flèche dit lequel court —, deux pour
+                   la collection, qui peut aussi se coucher en travers du dos et qu'un
+                   quart de tour à gauche ou à droite y amène. -->
+              <div class="prise prise-dos" id="priseDosAuteur"><span>Auteur</span>
+                <button type="button" class="sens" id="sensDosAuteur">↑</button>
+              </div>
+              <div class="prise prise-dos" id="priseDosTitre"><span>Titre</span>
+                <button type="button" class="sens" id="sensDosTitre">↑</button>
+              </div>
+              <div class="prise prise-dos" id="priseDosEditeur"><span>Éditeur</span>
+                <button type="button" class="sens" id="sensDosEditeur">↑</button>
+              </div>
+              <div class="prise prise-dos" id="priseDosCollection"><span>Collection</span>
+                <button type="button" class="sens" id="sensDosCollectionGauche"
+                        title="Tourner d'un quart de tour vers la gauche">↺</button>
+                <button type="button" class="sens" id="sensDosCollectionDroite"
+                        title="Tourner d'un quart de tour vers la droite">↻</button>
+              </div>
             </div>
             <div class="reperes" id="reperes" hidden></div>
           </div>

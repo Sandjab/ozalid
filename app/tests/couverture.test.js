@@ -17,8 +17,8 @@ const style = (police, taille, couleur) => ({
 const CADRAGE = { proportions: false, x: 0.5, y: 0.5, zoom: 1, etirement: 1 };
 
 /** Un élément du dos, au format que sérialise le Rust. */
-const elementDos = (place, rang) => ({
-  actif: true, place, rang, style: style('Archivo', 2.6, '#191917'),
+const elementDos = (place, rang, sur = {}) => ({
+  actif: true, place, rang, sens: 0, style: style('Archivo', 2.6, '#191917'), ...sur,
 });
 
 /** Maquette au format exact que sérialise le Rust. */
@@ -68,6 +68,7 @@ function maquette(mode = 'bandeau') {
       auteur: elementDos('pied', 1),
       titre: elementDos('pied', 2),
       editeur: elementDos('tete', 1),
+      collection: elementDos('pied', 2, { actif: false }),
       ecart: 2,
       marge: 3,
       fond_propre: false,
@@ -309,22 +310,96 @@ test('basculer sur la 4ème change les groupes offerts', async () => {
 /**
  * Les réglages du dos n'ont de sens que sur la face qui le montre. Les offrir sur la
  * 1ère donnerait à régler un élément absent de l'aperçu affiché.
+ *
+ * Les colonnes ne redisent plus « Dos » : la face est déjà nommée par l'onglet allumé,
+ * et le préfixe mangeait la moitié de titres qui tiennent dans 13,5 rem.
  */
-test('les trois éléments du dos ne sont offerts que sur la face Dos', async () => {
+test('les quatre éléments du dos ne sont offerts que sur la face Dos', async () => {
   const { els } = await ouvre(maquette());
   const titres = () => [...els.get('reglages').children]
     .filter((g) => !g.hidden)
     .map((g) => g.children[0].textContent);
 
-  assert.ok(!titres().some((t) => t.startsWith('Dos')), 'dos offert sur la 1ère');
+  assert.ok(!titres().includes('Collection'), 'dos offert sur la 1ère');
+  assert.ok(!titres().includes('Fond et espacements'), 'dos offert sur la 1ère');
 
   await face(els, 'Dos').declenche('click');
-  const t = titres();
-  assert.ok(t.includes('Dos — auteur'));
-  assert.ok(t.includes('Dos — titre'));
-  assert.ok(t.includes('Dos — éditeur'));
-  assert.ok(t.includes('Dos — fond et espacements'));
-  assert.ok(!t.includes('Cadre'), 'réglages de 1ère laissés sur la face Dos');
+  assert.deepStrictEqual(
+    titres(), ['Fond et espacements', 'Auteur', 'Titre', 'Éditeur', 'Collection']);
+});
+
+/**
+ * La place, le rang et le sens ne se règlent qu'à la souris, sur l'aperçu : trois
+ * contrôles de plus par élément diraient dans le panneau ce que le dos montre déjà, et
+ * « Ordre à cette position » ne se comprend qu'une fois le geste connu.
+ *
+ * Les contrôles existent toujours, hors du panneau : c'est eux que le geste écrit et
+ * que la commande relit. Ce test tient les deux bouts — rien à l'écran, tout au geste.
+ */
+test('la place, le rang et le sens du dos ne sont plus offerts au panneau', async () => {
+  const { els, contexte } = await ouvre(maquette());
+  await face(els, 'Dos').declenche('click');
+
+  const libelles = [...els.get('reglages').children]
+    .filter((g) => !g.hidden)
+    .flatMap((g) => [...g.children].slice(1).map((l) => l.children[0].textContent));
+  for (const absent of ['Position', 'Ordre à cette position', 'Sens']) {
+    assert.ok(!libelles.includes(absent), `« ${absent} » encore offert au panneau`);
+  }
+  assert.ok(libelles.includes('Afficher'), 'la colonne n\'offre plus rien du tout');
+  assert.strictEqual(contexte.valeurSaisie('dos.titre.place'), 'pied');
+  assert.strictEqual(contexte.valeurSaisie('dos.titre.rang'), 2);
+  assert.strictEqual(contexte.valeurSaisie('dos.titre.sens'), 0);
+});
+
+/**
+ * Le sens de lecture se retourne d'un clic sur le texte lui-même.
+ *
+ * Un dos se lit de bas en haut chez les uns, de haut en bas chez les autres, et c'est
+ * une décision de maquette qui se prend en regardant le dos — pas dans une liste
+ * déroulante. Les trois textes du livre n'ont que ces deux sens : couchés en travers,
+ * ils ne tiendraient pas dans l'épaisseur.
+ */
+test('un clic retourne le texte du dos, et un second le remet', async () => {
+  const { els, appels, contexte } = await ouvre(maquette(), {
+    couverture_modifier: (a) => projet(a.couverture),
+  });
+  await face(els, 'Dos').declenche('click');
+  await attendreApercu();
+
+  await els.get('sensDosTitre').declenche('click');
+  assert.strictEqual(contexte.valeurSaisie('dos.titre.sens'), 180);
+  assert.strictEqual(derniereMaquette(appels).dos.titre.sens, 180, 'retournement non commis');
+  assert.strictEqual(derniereMaquette(appels).dos.auteur.sens, 0, 'le voisin a tourné aussi');
+
+  await els.get('sensDosTitre').declenche('click');
+  assert.strictEqual(contexte.valeurSaisie('dos.titre.sens'), 0);
+});
+
+/**
+ * La collection, elle, peut se coucher en travers du dos — c'est le sens d'une mention
+ * qui se lit le livre debout. Ses deux boutons tournent chacun d'un quart de tour, et
+ * le tour complet ramène à zéro : sans le modulo, le sens sortirait des bornes du
+ * schéma et s'y arrêterait, la collection restant coincée en travers.
+ */
+test('la collection tourne d\'un quart de tour dans les deux sens', async () => {
+  const { els, contexte } = await ouvre(maquette(), {
+    couverture_modifier: (a) => projet(a.couverture),
+  });
+  await face(els, 'Dos').declenche('click');
+  await attendreApercu();
+
+  const sens = () => contexte.valeurSaisie('dos.collection.sens');
+  await els.get('sensDosCollectionDroite').declenche('click');
+  assert.strictEqual(sens(), 90);
+  await els.get('sensDosCollectionDroite').declenche('click');
+  await els.get('sensDosCollectionDroite').declenche('click');
+  assert.strictEqual(sens(), 270);
+  await els.get('sensDosCollectionDroite').declenche('click');
+  assert.strictEqual(sens(), 0, 'le tour complet ne revient pas à zéro');
+
+  await els.get('sensDosCollectionGauche').declenche('click');
+  assert.strictEqual(sens(), 270, 'la gauche ne tourne pas à l\'envers de la droite');
 });
 
 /**

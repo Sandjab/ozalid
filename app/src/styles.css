@@ -487,7 +487,7 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
 .couv[data-panneau="non"] { grid-template-columns: minmax(0, 1fr); }
 
 /* Le dos est seize fois plus long que large : couché, il n'a que faire de la hauteur de
-   la scène, et ses trente et un réglages n'ont que faire d'une colonne étroite. L'aperçu
+   la scène, et ses réglages n'ont que faire d'une colonne étroite. L'aperçu
    prend donc la largeur entière en bandeau, et les réglages s'étalent dessous.
    Mesuré : le dos passe de 16 px de large sur la planche d'aujourd'hui à 62 px ici, et
    97 en plein écran. Rangé dans la colonne étroite comme les trois autres faces, il en
@@ -515,15 +515,27 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
    plus long, et les libellés du plus court flotteraient au milieu de leur case. */
 .couv[data-face="dos"] .reglages {
   display: grid;
-  /* 13,5 rem tient les quatre groupes du dos sur une seule rangée dès 1015 px de
-     fenêtre : tout le panneau se lit alors sans défiler, ce qui est le vrai gain de
-     cette face. Au-dessous, la grille retombe à trois colonnes et le panneau défile,
-     comme il le fait sur les trois autres faces. */
+  /* 13,5 rem tenait les quatre groupes du dos sur une seule rangée dès 1015 px de
+     fenêtre. Ils sont cinq depuis que la collection a la sienne, et il en faut alors
+     1160 : au-dessous, la grille retombe à quatre colonnes puis à trois, et le panneau
+     défile comme il le fait sur les trois autres faces. Serrer les colonnes pour en
+     tenir cinq de plus reviendrait à réduire la case du libellé à un mot et demi —
+     « Interlettrage (/100 em) » y passerait sur trois lignes. */
   grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
   gap: 0 1.2rem;
   align-content: start;
   align-items: start;
   padding-right: 0;
+}
+
+/* Le fond et les espacements ne règlent pas un texte du dos mais le dos lui-même : la
+   colonne se détache des quatre autres, sans quoi elle se lisait comme une cinquième
+   sorte de texte. Un filet et un peu d'air, et non une couleur : le panneau n'a qu'une
+   surface, et une teinte de plus y ferait un bloc « spécial » qu'il faudrait expliquer. */
+.couv[data-face="dos"] .groupe-dos-fond {
+  border-right: 1px solid var(--trait);
+  padding-right: 1.2rem;
+  margin-right: .6rem;
 }
 
 /* La face : l'aperçu, et son état dessous. Les onglets sont partis dans la barre —
@@ -730,15 +742,18 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
   cursor: ns-resize;
 }
 
-/* Les trois textes du dos couché. Un rectangle plein et non un filet : ce qu'on saisit
+/* Les quatre textes du dos couché. Un rectangle plein et non un filet : ce qu'on saisit
    ici est un objet qu'on déplace, pas une frontière qu'on tire — et sur une bande de
    soixante pixels, un liseré ne s'attrape pas. Le libellé ne paraît que quand la place
-   le permet, sans quoi « Éditeur » déborderait d'un mot de trois lettres. */
+   le permet, sans quoi « Éditeur » déborderait d'un mot de trois lettres.
+   La coupe est sur le libellé et non sur la prise : une mention couchée en travers du
+   dos n'a plus que sa hauteur d'encre de large, et la prise coupée à ses bords y
+   avalerait les icônes de sens — dont celle qui l'a couchée, donc celle qui la
+   redresse. */
 .prise-dos {
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
   /* Au repos, un cadre et un voile très clair : le texte du dos doit rester jugeable
      dessous — c'est lui qu'on est venu regarder, et c'est lui qui nomme la prise. */
   background: rgba(26, 110, 224, .1);
@@ -751,7 +766,55 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
   white-space: nowrap;
 }
 
-.prise-dos span { display: none; }
+.prise-dos span {
+  display: none;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* Le sens de lecture, réglé dans le coin du texte qu'il tourne.
+   Posées en absolu et non dans le flux : le rectangle d'une prise est celui du texte
+   mesuré, parfois large de six millimètres, et une icône qui pousserait le libellé
+   déplacerait la prise elle-même, donc mentirait sur ce qu'elle désigne. Contre le bord
+   haut, parce que le dos couché est une bande basse et que le bas porte déjà les trois
+   places pendant le geste. */
+.prise-dos .sens {
+  position: absolute;
+  top: 1px;
+  display: grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: var(--surface);
+  color: var(--prise);
+  font: inherit;
+  font-size: .6rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.prise-dos .sens:hover { background: var(--prise); color: var(--surface); }
+
+/* Une icône seule se range contre le bord droit ; deux, et elles prennent chacune leur
+   bord — le quart de tour vers la gauche à gauche, celui vers la droite à droite, comme
+   le geste. La dernière est donc toujours à droite, qu'elle soit seule ou seconde. */
+.prise-dos .sens { left: 1px; }
+.prise-dos .sens:last-of-type { left: auto; right: 1px; }
+
+/* Sur une prise trop étroite pour deux icônes côte à côte, la seconde passe dessous.
+   Le cas n'a rien d'exceptionnel : une mention couchée en travers du dos n'a plus que
+   sa hauteur d'encre de large, et une collection nommée d'un mot court n'en fait guère
+   plus. Côte à côte, les deux se recouvraient et l'une des deux rotations n'était plus
+   cliquable. Une requête de conteneur et non de fenêtre : ce qui manque de place ici,
+   c'est le texte du dos, pas l'écran. */
+.prise-dos { container-type: inline-size; }
+
+@container (max-width: 34px) {
+  .prise-dos .sens:last-of-type { top: 15px; left: 1px; right: auto; }
+}
 
 /* Ce qui est saisi passe devant ses voisins, s'opacifie et prend son nom : il a quitté
    son texte, et plus rien d'autre à l'écran ne dirait ce qu'on tient. */
@@ -762,6 +825,10 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
 }
 
 .prise-dos[data-saisi="oui"] span { display: block; }
+
+/* La prise saisie passe devant, ses icônes avec elle : sans cette ligne, celles des
+   voisines resteraient posées par-dessus le rectangle qu'on traîne. */
+.prise-dos .sens { z-index: 1; }
 
 /* Les trois places, en tiers du dos, montrées le temps du geste seulement. */
 .zones-dos {
