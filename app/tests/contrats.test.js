@@ -20,7 +20,7 @@ const LULU = {
 const PROJET = {
   chemin: '/livres/LHC.ozalid',
   livre: {
-    titre: 'Les Heures creuses', titre_page: null, auteur: 'Ivan Pjig',
+    titre: 'Les Heures creuses', titre_page: '%TITRE%', auteur: 'Ivan Pjig',
     genre: 'roman', copyright: '', chapitres: null,
   },
   manuscrit_source: null,
@@ -276,4 +276,44 @@ test('deux colonnes tiennent dans la fenêtre minimale', () => {
     requis <= minWidth,
     `deux colonnes réclament ${requis} px, minWidth n'en donne que ${minWidth}`
   );
+});
+
+/* ---------- app.js → livre_modifier ---------- */
+
+/**
+ * Les champs libres voyagent en chaînes, jamais en `null`.
+ *
+ * `titre_page` et `dedicace` étaient des `Option<String>` côté Rust, et le front leur
+ * envoyait `null` quand ils étaient vides. Ce sont des `String` depuis que les jetons
+ * existent : un `null` y serait refusé à la désérialisation, et l'erreur tomberait au
+ * premier caractère tapé dans l'onglet Livre. Rien dans les deux langages ne confronte
+ * ce contrat — d'où cette garde.
+ *
+ * La dédicace est absente du JSON quand elle est vide (`skip_serializing_if`) : le
+ * front doit donc la relire avec un repli, et la renvoyer quand même.
+ */
+test('les champs libres voyagent en chaînes, jamais en null', async () => {
+  let envoye = null;
+  const capte = async (cmd, args) => {
+    if (cmd === 'livre_modifier') {
+      envoye = args.livre;
+      return PROJET;
+    }
+    return invoke(cmd, args);
+  };
+  const { els } = await charge({ invoke: capte, open: async () => null });
+
+  // Vides : c'est le cas où l'ancien front envoyait `null`.
+  els.get('inTitrePage').value = '';
+  els.get('inDedicace').value = '';
+  await els.get('inTitrePage').declenche('change');
+  assert.strictEqual(envoye.titre_page, '', 'titre de page vide');
+  assert.strictEqual(envoye.dedicace, '', 'dédicace vide');
+
+  // Renseignés : la dédicace part non rognée, le Rust rognant après avoir substitué.
+  els.get('inTitrePage').value = '%TITRE%';
+  els.get('inDedicace').value = '  Pour %AUTEUR%.  ';
+  await els.get('inDedicace').declenche('change');
+  assert.strictEqual(envoye.titre_page, '%TITRE%');
+  assert.strictEqual(envoye.dedicace, '  Pour %AUTEUR%.  ');
 });
