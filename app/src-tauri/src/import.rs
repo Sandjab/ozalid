@@ -53,6 +53,7 @@ pub struct Designations {
 pub fn lire_livre_toml(contenu: &str) -> Result<(Livre, Designations), String> {
     let f: Fichier = toml::from_str(contenu).map_err(|e| format!("livre.toml illisible : {e}"))?;
     let s = f.livre;
+    let v = Livre::vide();
     let livre = Livre {
         titre: s.titre,
         // Absent du `livre.toml`, il voulait déjà dire « le titre sert » : c'est ce
@@ -62,6 +63,13 @@ pub fn lire_livre_toml(contenu: &str) -> Result<(Livre, Designations), String> {
             .unwrap_or_else(crate::projet::titre_page_defaut),
         auteur: s.auteur,
         genre: s.genre.unwrap_or_else(|| "roman".into()),
+        // Un `livre.toml` de la chaîne Python ne porte aucune de ces cinq désignations :
+        // elles prennent leurs génériques, comme la dédicace juste en dessous.
+        editeur: v.editeur,
+        collection: v.collection,
+        monogramme: v.monogramme,
+        prix: v.prix,
+        mention: v.mention,
         copyright: s.copyright,
         // Un `livre.toml` de la chaîne Python ne porte pas de dédicace : le champ
         // n'existe pas de ce côté-là, et rien ne se perd à l'import.
@@ -588,7 +596,12 @@ couverture = "in/covers/LHC-Photo.png"
                 titre_page: crate::projet::titre_page_defaut(),
                 auteur: "A".into(),
                 genre: "roman".into(),
+                editeur: "Editeur".into(),
+                collection: "Collection".into(),
+                monogramme: "Monogramme".into(),
                 copyright: String::new(),
+                prix: "Prix".into(),
+                mention: "Mention".into(),
                 dedicace: String::new(),
                 chapitres: None,
             },
@@ -757,7 +770,12 @@ couverture = "in/covers/LHC-Photo.png"
                 titre_page: crate::projet::titre_page_defaut(),
                 auteur: "A".into(),
                 genre: "roman".into(),
+                editeur: "Editeur".into(),
+                collection: "Collection".into(),
+                monogramme: "Monogramme".into(),
                 copyright: String::new(),
+                prix: "Prix".into(),
+                mention: "Mention".into(),
                 dedicace: String::new(),
                 chapitres: None,
             },

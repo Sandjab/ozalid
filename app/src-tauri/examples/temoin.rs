@@ -44,7 +44,12 @@ fn main() -> Result<(), String> {
         titre_page: "%TITRE%".into(),
         auteur: "Voltaire".into(),
         genre: "conte philosophique".into(),
+        editeur: "Editeur".into(),
+        collection: "Collection".into(),
+        monogramme: "Monogramme".into(),
         copyright: "Texte du domaine public.".into(),
+        prix: "Prix".into(),
+        mention: "Mention".into(),
         // Sans dédicace, délibérément : c'est ce qui garde le témoin à 98 pages.
         dedicace: String::new(),
         chapitres: Some(30),

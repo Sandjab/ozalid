@@ -503,7 +503,12 @@ mod tests {
             titre_page: "Les Heures\ncreuses".into(),
             auteur: "Ivan Pjig".into(),
             genre: "roman".into(),
+            editeur: "Editeur".into(),
+            collection: "Collection".into(),
+            monogramme: "Monogramme".into(),
             copyright: "© Ivan Pjig, 2026.\nTous droits réservés.".into(),
+            prix: "Prix".into(),
+            mention: "Mention".into(),
             dedicace: String::new(),
             chapitres: None,
         }

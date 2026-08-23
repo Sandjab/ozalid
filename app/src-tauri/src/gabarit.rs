@@ -15,10 +15,13 @@ type Jeton = (&'static str, fn(&Livre) -> &str);
 /// Les clés sont littérales par définition : aucune n'est elle-même substituée, et
 /// c'est ce qui rend toute référence cyclique impossible — il n'y a pas de chaîne à
 /// parcourir, donc rien à borner.
-const JETONS: [Jeton; 3] = [
+const JETONS: [Jeton; 6] = [
     ("%TITRE%", |l| &l.titre),
     ("%AUTEUR%", |l| &l.auteur),
     ("%GENRE%", |l| &l.genre),
+    ("%EDITEUR%", |l| &l.editeur),
+    ("%COLLECTION%", |l| &l.collection),
+    ("%MONOGRAMME%", |l| &l.monogramme),
 ];
 
 /// Remplace les jetons connus par la valeur de leur champ clé.
@@ -124,5 +127,20 @@ mod tests {
         assert_eq!(substituer("100 % coton", &l), "100 % coton");
         assert_eq!(substituer("%%", &l), "%%");
         assert_eq!(substituer("%TITRE", &l), "%TITRE");
+    }
+
+    /// Les trois clés qui montent au lot 2 sont des jetons comme les autres.
+    #[test]
+    fn les_cles_de_la_maison_sont_des_jetons() {
+        let l = Livre {
+            editeur: "Ozalid".into(),
+            collection: "Les Heures".into(),
+            monogramme: "O".into(),
+            ..livre()
+        };
+        assert_eq!(
+            substituer("%EDITEUR%, %COLLECTION%, %MONOGRAMME%", &l),
+            "Ozalid, Les Heures, O"
+        );
     }
 }

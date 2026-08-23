@@ -171,7 +171,12 @@ mod tests {
             titre_page: crate::projet::titre_page_defaut(),
             auteur: "Ivan Pjig".into(),
             genre: "roman".into(),
+            editeur: "Editeur".into(),
+            collection: "Collection".into(),
+            monogramme: "Monogramme".into(),
             copyright: String::new(),
+            prix: "Prix".into(),
+            mention: "Mention".into(),
             dedicace: String::new(),
             chapitres: None,
         }

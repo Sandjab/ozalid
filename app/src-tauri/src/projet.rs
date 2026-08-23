@@ -54,8 +54,26 @@ pub struct Livre {
     pub auteur: String,
     #[serde(default = "genre_defaut")]
     pub genre: String,
+    /// L'éditeur, la collection et le monogramme : des **clés**, littérales, jamais
+    /// substituées. Elles nomment la maison, pas le livre, et elles ne bougent pas d'un
+    /// titre à l'autre chez un auto-éditeur.
+    ///
+    /// Elles vivaient dans la maquette — l'éditeur dans le pied de la 1ère, que le dos
+    /// relisait ; la collection sous le nom de « pastille ». Le livre dit ce qui est
+    /// écrit, la maquette dit où et si ça se voit.
+    #[serde(default = "editeur_defaut")]
+    pub editeur: String,
+    #[serde(default = "collection_defaut")]
+    pub collection: String,
+    #[serde(default = "monogramme_defaut")]
+    pub monogramme: String,
     #[serde(default)]
     pub copyright: String,
+    /// Le prix et la mention légale : des champs **libres**, qui citent les clés.
+    #[serde(default = "prix_defaut")]
+    pub prix: String,
+    #[serde(default = "mention_defaut")]
+    pub mention: String,
     /// Dédicace imprimée, en belle page après le copyright. Vide, aucune page n'est
     /// composée : c'est `dedicace()` qui en juge, pas ses appelants.
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -73,6 +91,26 @@ pub(crate) fn titre_page_defaut() -> String {
     "%TITRE%".into()
 }
 
+fn editeur_defaut() -> String {
+    "Editeur".into()
+}
+
+fn collection_defaut() -> String {
+    "Collection".into()
+}
+
+fn monogramme_defaut() -> String {
+    "Monogramme".into()
+}
+
+fn prix_defaut() -> String {
+    "Prix".into()
+}
+
+fn mention_defaut() -> String {
+    "Mention".into()
+}
+
 impl Livre {
     /// Un livre à remplir : tous les champs vides, sauf le genre, dont le défaut
     /// vaut mieux qu'un blanc — et c'est le même défaut que celui d'un `projet.toml`
@@ -83,7 +121,12 @@ impl Livre {
             titre_page: titre_page_defaut(),
             auteur: String::new(),
             genre: genre_defaut(),
+            editeur: editeur_defaut(),
+            collection: collection_defaut(),
+            monogramme: monogramme_defaut(),
             copyright: String::new(),
+            prix: prix_defaut(),
+            mention: mention_defaut(),
             dedicace: String::new(),
             chapitres: None,
         }
@@ -97,6 +140,16 @@ impl Livre {
     /// Le copyright, jetons résolus.
     pub fn copyright(&self) -> String {
         crate::gabarit::substituer(&self.copyright, self)
+    }
+
+    /// Le prix, jetons résolus.
+    pub fn prix(&self) -> String {
+        crate::gabarit::substituer(&self.prix, self)
+    }
+
+    /// La mention légale, jetons résolus.
+    pub fn mention(&self) -> String {
+        crate::gabarit::substituer(&self.mention, self)
     }
 
     /// La dédicace, jetons résolus, si elle n'est pas que du blanc.
@@ -674,13 +727,52 @@ auteur = "Ivan Pjig"
         );
     }
 
+    /// Le prix et la mention sont des champs libres : ils citent les clés, comme le
+    /// copyright.
+    #[test]
+    fn le_prix_et_la_mention_citent_les_cles() {
+        let mut l = Livre::vide();
+        l.collection = "Les Heures".into();
+        l.prix = "18 € — %COLLECTION%".into();
+        l.mention = "%EDITEUR%".into();
+        l.editeur = "Ozalid".into();
+        assert_eq!(l.prix(), "18 € — Les Heures");
+        assert_eq!(l.mention(), "Ozalid");
+    }
+
+    /// Les cinq champs sont facultatifs dans le TOML : `VERSION` monte pour ce qui
+    /// change de place, pas pour ce qui s'ajoute. Un projet qui ne les porte pas reçoit
+    /// leurs valeurs génériques.
+    #[test]
+    fn un_projet_sans_les_cles_de_la_maison_recoit_les_generiques() {
+        let toml = r#"
+[ozalid]
+version = 2
+
+[livre]
+titre = "Les Heures creuses"
+auteur = "Ivan Pjig"
+"#;
+        let m: Metadonnees = toml::from_str(toml).expect("projet sans les clés refusé");
+        assert_eq!(m.livre.editeur, "Editeur");
+        assert_eq!(m.livre.collection, "Collection");
+        assert_eq!(m.livre.monogramme, "Monogramme");
+        assert_eq!(m.livre.prix, "Prix");
+        assert_eq!(m.livre.mention, "Mention");
+    }
+
     fn livre() -> Livre {
         Livre {
             titre: "Les Heures creuses".into(),
             titre_page: "Les Heures\ncreuses".into(),
             auteur: "Ivan Pjig".into(),
             genre: "roman".into(),
+            editeur: "Editeur".into(),
+            collection: "Collection".into(),
+            monogramme: "Monogramme".into(),
             copyright: "© Ivan Pjig, 2026.\nTous droits réservés.".into(),
+            prix: "Prix".into(),
+            mention: "Mention".into(),
             dedicace: String::new(),
             chapitres: Some(64),
         }
