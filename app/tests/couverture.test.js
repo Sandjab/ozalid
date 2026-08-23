@@ -1045,6 +1045,25 @@ test('reposer un texte du dos au même endroit ne modifie pas le projet', async 
 
 /* ---------- le menu des maquettes et le dialogue ---------- */
 
+/** Ce que le dialogue montre : une ligne par maquette, avec ses boutons. */
+const lignesMaquettes = (els) => [...els.get('listeMaquettes').children].map((l) => {
+  const enfants = [...l.children];
+  return {
+    nom: enfants[0].textContent,
+    gestes: enfants.filter((e) => e.tagName === 'BUTTON').map((b) => b.textContent),
+  };
+});
+
+/** Le bouton `geste` de la ligne de `nom`, dans le dialogue des maquettes. */
+const bouton = (els, nom, geste) => {
+  const ligne = [...els.get('listeMaquettes').children]
+    .find((l) => [...l.children].some((e) => e.textContent === nom || e.value === nom));
+  assert.ok(ligne, `aucune ligne « ${nom} »`);
+  const b = [...ligne.children].find((e) => e.tagName === 'BUTTON' && e.textContent === geste);
+  assert.ok(b, `« ${nom} » n'offre pas « ${geste} »`);
+  return b;
+};
+
 /** Les trois fournies, plus une personnalisée : de quoi exercer le séparateur. */
 const AVEC_PERSONNALISEE = () => [
   { cle: 'folio', libelle: 'Folio', fournie: true },
@@ -1113,4 +1132,95 @@ test('un refus d\'enregistrement se lit dans le dialogue', async () => {
   els.get('inMaquetteNom').value = 'Folio';
   await els.get('btMaquetteEnregistrer').declenche('click');
   assert.match(els.get('etatMaquettes').textContent, /porte déjà ce nom/);
+});
+
+/**
+ * L'interface ne propose pas ce que le Rust refuserait : une fournie se clone, elle ne
+ * se renomme ni ne s'efface. C'est une politesse — la garantie, elle, est dans
+ * `maquettes::personnalisee`, et un test Rust la tient.
+ */
+test('le dialogue n\'offre ni Renommer ni Effacer sur une fournie', async () => {
+  const { els } = await ouvre(maquette(), { maquettes_liste: AVEC_PERSONNALISEE });
+  await els.get('btMaquettes').declenche('click');
+  assert.deepEqual(lignesMaquettes(els), [
+    { nom: 'Folio', gestes: ['Cloner'] },
+    { nom: 'Blanche', gestes: ['Cloner'] },
+    { nom: 'Ma collection', gestes: ['Cloner', 'Renommer', 'Effacer'] },
+  ]);
+});
+
+/**
+ * Cloner ne demande rien : un clic, une commande, et la liste se refait — sans quoi le
+ * clone manquerait à la liste d'où on vient de le tirer.
+ */
+test('cloner une fournie demande le clonage et rafraîchit la liste', async () => {
+  const clones = [];
+  const { els } = await ouvre(maquette(), {
+    maquette_cloner: ({ cle }) => { clones.push(cle); return null; },
+    maquettes_liste: () => [
+      { cle: 'folio', libelle: 'Folio', fournie: true },
+      ...clones.map((c) => ({ cle: `${c}-copie`, libelle: 'Folio (copie)', fournie: false })),
+    ],
+  });
+  await els.get('btMaquettes').declenche('click');
+  await bouton(els, 'Folio', 'Cloner').declenche('click');
+
+  assert.deepEqual(clones, ['folio']);
+  assert.deepEqual(lignesMaquettes(els).map((l) => l.nom), ['Folio', 'Folio (copie)']);
+});
+
+/**
+ * Renommer se fait en place : le nom devient un champ, Entrée valide. Ce qui part au
+ * Rust est la clé de la ligne et le texte saisi — la clé, et non le nom d'avant, parce
+ * que c'est elle qui nomme le fichier.
+ */
+test('renommer en place envoie la clé et le nouveau nom', async () => {
+  const renommees = [];
+  const { els } = await ouvre(maquette(), {
+    maquette_renommer: (a) => { renommees.push(a); return null; },
+    maquettes_liste: AVEC_PERSONNALISEE,
+  });
+  await els.get('btMaquettes').declenche('click');
+  await bouton(els, 'Ma collection', 'Renommer').declenche('click');
+
+  const champ = [...els.get('listeMaquettes').children]
+    .flatMap((l) => [...l.children])
+    .find((e) => e.tagName === 'INPUT');
+  assert.strictEqual(champ.value, 'Ma collection', 'le champ part du nom courant');
+  champ.value = 'Nuit blanche';
+  await champ.declenche('keydown', { key: 'Enter' });
+
+  assert.deepEqual(renommees, [{ cle: 'ma-collection', nom: 'Nuit blanche' }]);
+});
+
+/**
+ * Effacer perd du travail sans reprise, et le bouton est à quelques pixels de
+ * « Renommer » : le premier clic demande confirmation, le second efface.
+ */
+test('effacer demande confirmation avant de perdre la maquette', async () => {
+  const effacees = [];
+  const { els } = await ouvre(maquette(), {
+    maquette_effacer: ({ cle }) => { effacees.push(cle); return null; },
+    maquettes_liste: AVEC_PERSONNALISEE,
+  });
+  await els.get('btMaquettes').declenche('click');
+
+  await bouton(els, 'Ma collection', 'Effacer').declenche('click');
+  assert.deepEqual(effacees, [], 'le premier clic ne doit rien effacer');
+  await bouton(els, 'Ma collection', 'Confirmer').declenche('click');
+  assert.deepEqual(effacees, ['ma-collection']);
+});
+
+/**
+ * Un refus du Rust — une fournie qu'on aurait quand même demandé d'effacer, une liste
+ * périmée — se lit dans le dialogue, comme les refus d'enregistrement.
+ */
+test('un refus de geste se lit dans le dialogue', async () => {
+  const { els } = await ouvre(maquette(), {
+    maquette_cloner: () => { throw new Error('maquette inconnue : folio'); },
+    maquettes_liste: AVEC_PERSONNALISEE,
+  });
+  await els.get('btMaquettes').declenche('click');
+  await bouton(els, 'Folio', 'Cloner').declenche('click');
+  assert.match(els.get('etatMaquettes').textContent, /maquette inconnue/);
 });

@@ -1079,6 +1079,15 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
 .dialogue .ligne.fin { justify-content: flex-end; }
 .dialogue .etat { display: block; margin-top: .6rem; }
 
+/* La liste : une ligne par maquette, le nom qui pousse les gestes à droite. Les filets
+   séparent sans encadrer — la boîte a déjà sa bordure. */
+.maquettes { margin-top: .8rem; border-top: 1px solid var(--trait); }
+.ligne.maquette { margin: 0; padding: .4rem 0; border-bottom: 1px solid var(--trait); }
+.ligne.maquette .nom { flex: 1; }
+.ligne.maquette .note { margin: 0; }
+/* Le second clic d'un effacement : ce qui se perd là ne se retrouve pas. */
+.ligne.maquette button.danger { color: var(--rouge); }
+
 /* ---------- masquage ---------- */
 
 /* `hidden` est le seul moyen par lequel le code fait disparaître quelque chose : un

@@ -107,6 +107,17 @@ class El {
     this.append(...n);
   }
 
+  /**
+   * Échange un enfant contre un autre, à sa place. Le renommage d'une maquette s'en
+   * sert pour poser un champ là où était son nom.
+   */
+  replaceChild(neuf, ancien) {
+    const i = this.enfants.indexOf(ancien);
+    if (i < 0) throw new Error('replaceChild : l\'ancien enfant n\'est pas là');
+    this.enfants[i] = neuf;
+    return ancien;
+  }
+
   /** Un <select> vide qui reçoit des options sélectionne la première, comme le DOM. */
   majSelection() {
     if (this.tagName !== 'SELECT' || this.value !== '') return;

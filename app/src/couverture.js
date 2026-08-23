@@ -273,21 +273,24 @@ function ecrire(obj, chemin, valeur) {
    pour `livraison.js`. */
 
 /**
- * (Re)remplit le menu des maquettes.
+ * (Re)construit le menu de la barre **et** la liste du dialogue, d'un seul appel.
  *
- * Rappelée après chaque geste du dialogue : la liste vit dans le Rust, qui relit le
- * répertoire de configuration à chaque appel. La tenir à jour ici la dédoublerait.
+ * La liste vit dans le Rust, qui relit le répertoire de configuration à chaque appel ;
+ * la tenir à jour ici la dédoublerait. Rappelée après chaque geste, sans quoi ce qu'on
+ * vient de cloner manquerait à la liste d'où on l'a tiré.
  *
  * Les personnalisées suivent les fournies, derrière une option inerte qui fait le
  * séparateur — le Rust les rend déjà dans cet ordre, la fenêtre n'a qu'à repérer où
  * l'origine change.
  */
-async function remplirMaquettes() {
+async function rafraichirMaquettes() {
+  const maquettes = await invoke('maquettes_liste');
+
   const sel = $('inMaquette');
   sel.replaceChildren();
   sel.append(new Option('Repartir d\'une maquette…', ''));
   let separateur = false;
-  for (const m of await invoke('maquettes_liste')) {
+  for (const m of maquettes) {
     if (!m.fournie && !separateur) {
       const trait = new Option('──────────', '');
       trait.disabled = true;
@@ -297,26 +300,134 @@ async function remplirMaquettes() {
     sel.append(new Option(m.libelle, m.cle));
   }
   sel.value = '';
+
+  const liste = $('listeMaquettes');
+  liste.replaceChildren();
+  for (const m of maquettes) liste.append(ligneMaquette(m));
+}
+
+/**
+ * Fait un geste du dialogue, en rend compte, et refait la liste.
+ *
+ * Le compte rendu se lit **dans** le dialogue et non dans l'alerte de la fenêtre :
+ * celle-ci est derrière lui, et un refus y passerait inaperçu — le geste paraîtrait
+ * avoir marché.
+ */
+async function rendCompte(action, dit = '') {
+  try {
+    await action();
+    $('etatMaquettes').textContent = dit;
+    $('etatMaquettes').className = 'etat';
+    await rafraichirMaquettes();
+  } catch (e) {
+    $('etatMaquettes').textContent = String(e);
+    $('etatMaquettes').className = 'etat erreur';
+  }
+}
+
+/**
+ * Une ligne de la liste : le nom, ce qu'elle est, et ses gestes.
+ *
+ * Sans `innerHTML` — le nom d'une maquette vient d'un fichier qu'on n'a pas écrit. Une
+ * fournie n'offre que Cloner : c'est une politesse, la garantie est dans le Rust, qui
+ * refuse de renommer et d'effacer ce qui est livré avec lui.
+ */
+function ligneMaquette(m) {
+  const ligne = document.createElement('div');
+  ligne.className = 'ligne maquette';
+
+  const nom = document.createElement('span');
+  nom.className = 'nom';
+  nom.textContent = m.libelle;
+  ligne.append(nom);
+
+  if (m.fournie) {
+    const dit = document.createElement('span');
+    dit.className = 'note';
+    dit.textContent = 'fournie';
+    ligne.append(dit);
+  }
+
+  ligne.append(boutonGeste('Cloner', () => invoke('maquette_cloner', { cle: m.cle })));
+  if (!m.fournie) {
+    ligne.append(gesteRenommer(m, ligne, nom));
+    ligne.append(gesteEffacer(m));
+  }
+  return ligne;
+}
+
+/**
+ * Un bouton de geste du dialogue : il agit, rend compte, et refait la liste.
+ *
+ * `boutonGeste` et non `geste` : `app.js` tient déjà un `geste` global — celui de la
+ * manipulation directe en cours — et les deux scripts partagent leur portée.
+ */
+function boutonGeste(libelle, action) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.textContent = libelle;
+  b.addEventListener('click', () => rendCompte(action));
+  return b;
+}
+
+/**
+ * Renommer, en place : le nom devient un champ, Entrée valide, perdre le focus annule.
+ *
+ * Échap n'est pas intercepté — dans un `<dialog>` il ferme la boîte, et le détourner
+ * priverait l'utilisateur du geste qu'il connaît.
+ */
+function gesteRenommer(m, ligne, nom) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.textContent = 'Renommer';
+  b.addEventListener('click', () => {
+    const champ = document.createElement('input');
+    champ.type = 'text';
+    champ.className = 'nom';
+    champ.value = m.libelle;
+    champ.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      return rendCompte(() =>
+        invoke('maquette_renommer', { cle: m.cle, nom: champ.value.trim() }));
+    });
+    champ.addEventListener('blur', () => rafraichirMaquettes());
+    ligne.replaceChild(champ, nom);
+    champ.focus();
+  });
+  return b;
+}
+
+/**
+ * Effacer, en deux temps : ce qui se perd ici ne se retrouve pas, et le bouton est à
+ * quelques pixels de « Renommer ». Le premier clic arme, le second efface.
+ */
+function gesteEffacer(m) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.textContent = 'Effacer';
+  b.addEventListener('click', () => {
+    if (b.textContent === 'Effacer') {
+      b.textContent = 'Confirmer';
+      b.className = 'danger';
+      return undefined;
+    }
+    return rendCompte(() => invoke('maquette_effacer', { cle: m.cle }));
+  });
+  return b;
 }
 
 /**
  * Enregistre la couverture réglée comme maquette.
  *
- * Le compte rendu se lit dans le dialogue et non dans l'alerte de la fenêtre : celle-ci
- * est derrière lui, et un refus y passerait inaperçu — le geste paraîtrait avoir marché.
+ * Le champ ne se vide qu'une fois la commande passée : un refus doit laisser au nom sa
+ * chance d'être corrigé.
  */
 async function enregistrerMaquette() {
   const nom = $('inMaquetteNom').value.trim();
-  try {
+  await rendCompte(async () => {
     await invoke('maquette_enregistrer', { nom });
     $('inMaquetteNom').value = '';
-    $('etatMaquettes').textContent = `« ${nom} » enregistrée.`;
-    $('etatMaquettes').className = 'etat';
-    await remplirMaquettes();
-  } catch (e) {
-    $('etatMaquettes').textContent = String(e);
-    $('etatMaquettes').className = 'etat erreur';
-  }
+  }, `« ${nom} » enregistrée.`);
 }
 
 /**

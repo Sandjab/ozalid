@@ -346,7 +346,7 @@ async function chargerProviders() {
   // L'accès au modèle appartient à la machine, pas au projet : il se lit une fois, au
   // démarrage, et il survit à tous les livres qu'on ouvrira ensuite.
   afficherDiffusion(await invoke('diffusion_lire'));
-  await remplirMaquettes();
+  await rafraichirMaquettes();
   $('inMaquette').addEventListener('change', choisirMaquette);
   $('btMaquettes').addEventListener('click', () => {
     $('etatMaquettes').textContent = '';
