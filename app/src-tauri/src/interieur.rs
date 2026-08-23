@@ -416,7 +416,7 @@ fn liminaires(livre: &Livre, envoi: Option<Trace>, pieces: &[Piece]) -> String {
 #pagebreak()
 
 "#,
-            echappe(d).replace('\n', r" \ ")
+            echappe(&d).replace('\n', r" \ ")
         ));
     }
 
@@ -504,7 +504,7 @@ mod tests {
             auteur: "Ivan Pjig".into(),
             genre: "roman".into(),
             copyright: "© Ivan Pjig, 2026.\nTous droits réservés.".into(),
-            dedicace: None,
+            dedicace: String::new(),
             chapitres: None,
         }
     }
@@ -944,7 +944,7 @@ mod tests {
     fn une_dedicace_ajoute_une_belle_page_et_sa_blanche() {
         let sans = liminaires(&livre(), None, &[]);
         let mut l = livre();
-        l.dedicace = Some("À M., qui a tenu la lampe.".into());
+        l.dedicace = "À M., qui a tenu la lampe.".into();
         let avec = liminaires(&l, None, &[]);
 
         assert_eq!(
@@ -966,7 +966,7 @@ mod tests {
         let sans = liminaires(&livre(), None, &[]);
         for creux in ["", "   ", "\n \n"] {
             let mut l = livre();
-            l.dedicace = Some(creux.into());
+            l.dedicace = creux.into();
             assert_eq!(
                 liminaires(&l, None, &[]),
                 sans,
@@ -981,7 +981,7 @@ mod tests {
     #[test]
     fn une_dedicace_est_echappee_et_garde_ses_sauts_de_ligne() {
         let mut l = livre();
-        l.dedicace = Some("À #M.,\nqui a tenu la lampe.".into());
+        l.dedicace = "À #M.,\nqui a tenu la lampe.".into();
         let s = liminaires(&l, None, &[]);
 
         assert!(s.contains(r"À \#M.,"), "dédicace non échappée : {s}");

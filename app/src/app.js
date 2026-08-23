@@ -725,16 +725,15 @@ async function enregistrerSous() {
  */
 function livre() {
   const chap = $('inChapitres').value.trim();
-  const ded = $('inDedicace').value;
   return {
     titre: $('inTitre').value.trim(),
     titre_page: $('inTitrePage').value.trim(),
     auteur: $('inAuteur').value.trim(),
     genre: $('inGenre').value.trim() || 'roman',
     copyright: $('inCopyright').value,
-    // Non rogné : c'est le Rust qui rogne, en un seul endroit. Le `trim` ne sert ici
-    // qu'à distinguer un champ vide d'un champ renseigné.
-    dedicace: ded.trim() === '' ? null : ded,
+    // Non rognée : c'est le Rust qui rogne, en un seul endroit — et il substitue les
+    // jetons avant de rogner, ce que le front ne saurait pas faire.
+    dedicace: $('inDedicace').value,
     chapitres: chap === '' ? null : Number(chap),
   };
 }

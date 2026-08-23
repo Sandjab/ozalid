@@ -56,10 +56,10 @@ pub struct Livre {
     pub genre: String,
     #[serde(default)]
     pub copyright: String,
-    /// Dédicace imprimée, en belle page après le copyright. Absente ou vide, aucune
-    /// page n'est composée : c'est `dedicace()` qui en juge, pas ses appelants.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub dedicace: Option<String>,
+    /// Dédicace imprimée, en belle page après le copyright. Vide, aucune page n'est
+    /// composée : c'est `dedicace()` qui en juge, pas ses appelants.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub dedicace: String,
     /// Contrôle d'intégrité facultatif : il n'a de sens qu'au gel du manuscrit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chapitres: Option<u32>,
@@ -84,7 +84,7 @@ impl Livre {
             auteur: String::new(),
             genre: genre_defaut(),
             copyright: String::new(),
-            dedicace: None,
+            dedicace: String::new(),
             chapitres: None,
         }
     }
@@ -94,16 +94,16 @@ impl Livre {
         crate::gabarit::substituer(&self.titre_page, self)
     }
 
-    /// La dédicace, si le livre en porte une qui ne soit pas que du blanc.
+    /// La dédicace, jetons résolus, si elle n'est pas que du blanc.
     ///
     /// Le rognage est ici et nulle part ailleurs : une dédicace réduite à une espace
     /// ajouterait sinon deux pages au livre, donc du dos, sans que rien ne se voie à
-    /// l'écran.
-    pub fn dedicace(&self) -> Option<&str> {
-        self.dedicace
-            .as_deref()
-            .map(str::trim)
-            .filter(|d| !d.is_empty())
+    /// l'écran. Il vient **après** la substitution, pour qu'un jeton dont la clé est
+    /// vide ne compose pas davantage.
+    pub fn dedicace(&self) -> Option<String> {
+        let d = crate::gabarit::substituer(&self.dedicace, self);
+        let d = d.trim();
+        (!d.is_empty()).then(|| d.to_string())
     }
 }
 
@@ -650,6 +650,25 @@ auteur = "Ivan Pjig"
         assert_eq!(l.titre_page(), "Les Heures\ncreuses");
     }
 
+    /// Une dédicace peut citer le livre. Le rognage et le filtre du blanc restent en
+    /// place, et s'appliquent **après** la substitution : un jeton dont la clé est vide
+    /// ne doit pas composer une page pour rien.
+    #[test]
+    fn une_dedicace_cite_les_cles_puis_est_rognee() {
+        let mut l = Livre::vide();
+        l.auteur = "Ivan Pjig".into();
+        l.dedicace = "  Pour %AUTEUR%.  ".into();
+        assert_eq!(l.dedicace().as_deref(), Some("Pour Ivan Pjig."));
+
+        l.auteur = String::new();
+        l.dedicace = "  %AUTEUR%  ".into();
+        assert_eq!(
+            l.dedicace(),
+            None,
+            "une clé vide ne doit pas coûter deux pages"
+        );
+    }
+
     fn livre() -> Livre {
         Livre {
             titre: "Les Heures creuses".into(),
@@ -657,7 +676,7 @@ auteur = "Ivan Pjig"
             auteur: "Ivan Pjig".into(),
             genre: "roman".into(),
             copyright: "© Ivan Pjig, 2026.\nTous droits réservés.".into(),
-            dedicace: None,
+            dedicace: String::new(),
             chapitres: Some(64),
         }
     }
@@ -719,7 +738,7 @@ auteur = "Ivan Pjig"
         let mut p = Projet::nouveau(livre(), "## 01 - Un\n\nTexte.\n".into());
         p.meta.manuscrit.source = Some("/travail/roman.md".into());
         p.meta.interieur.police = "Cardo".into();
-        p.meta.livre.dedicace = Some("À M., qui a tenu la lampe.".into());
+        p.meta.livre.dedicace = "À M., qui a tenu la lampe.".into();
         let mut maquette = crate::maquettes::blanche();
         maquette.pad_x = 16.5;
         maquette.titre.taille = 9.25;
@@ -737,7 +756,10 @@ auteur = "Ivan Pjig"
             Some("/travail/roman.md")
         );
         assert_eq!(r.meta.interieur.police, "Cardo");
-        assert_eq!(r.meta.livre.dedicace(), Some("À M., qui a tenu la lampe."));
+        assert_eq!(
+            r.meta.livre.dedicace().as_deref(),
+            Some("À M., qui a tenu la lampe.")
+        );
         assert_eq!(r.texte, p.texte);
         assert_eq!(r.images["couverture.jpg"], vec![0xFF, 0xD8, 0xFF]);
 
@@ -1042,7 +1064,12 @@ titre = "Les Heures creuses"
 auteur = "Ivan Pjig"
 "#;
         let m: Metadonnees = toml::from_str(toml).expect("projet sans dédicace refusé");
-        assert_eq!(m.livre.dedicace, None);
+        assert!(m.livre.dedicace.is_empty());
+        assert_eq!(
+            m.livre.dedicace(),
+            None,
+            "aucune page ne doit être composée"
+        );
     }
 
     /// Un `.ozalid` écrit avant les envois s'ouvre sans un mot : troisième section
@@ -1313,9 +1340,13 @@ auteur = "Ivan Pjig"
     fn une_dedicace_de_blanc_equivaut_a_pas_de_dedicace() {
         let mut l = livre();
         assert_eq!(l.dedicace(), None);
-        l.dedicace = Some("   \n  ".into());
+        l.dedicace = "   \n  ".into();
         assert_eq!(l.dedicace(), None, "du blanc a été pris pour une dédicace");
-        l.dedicace = Some("  À M.  ".into());
-        assert_eq!(l.dedicace(), Some("À M."), "les bords doivent être rognés");
+        l.dedicace = "  À M.  ".into();
+        assert_eq!(
+            l.dedicace().as_deref(),
+            Some("À M."),
+            "les bords doivent être rognés"
+        );
     }
 }

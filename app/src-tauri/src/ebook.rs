@@ -69,13 +69,14 @@ pub fn generer(
         .ok_or("aucune maquette de couverture : en choisir une avant de générer les ebooks.")?;
     let chapitres = manuscrit::decoupe(&projet.texte, livre.chapitres)?;
     let titre_page = livre.titre_page();
+    let dedicace = livre.dedicace();
     let livre_epub = epub::Livre {
         titre: &livre.titre,
         titre_page: &titre_page,
         auteur: &livre.auteur,
         genre: &livre.genre,
         copyright: &livre.copyright,
-        dedicace: livre.dedicace(),
+        dedicace: dedicace.as_deref(),
     };
     // Les refus de l'archive ne dépendent que du projet : les poser ici, c'est les
     // rendre avant la composition plutôt qu'après. `epub::archive` les repose de toute

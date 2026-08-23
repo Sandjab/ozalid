@@ -65,7 +65,7 @@ pub fn lire_livre_toml(contenu: &str) -> Result<(Livre, Designations), String> {
         copyright: s.copyright,
         // Un `livre.toml` de la chaîne Python ne porte pas de dédicace : le champ
         // n'existe pas de ce côté-là, et rien ne se perd à l'import.
-        dedicace: None,
+        dedicace: String::new(),
         chapitres: s.chapitres,
     };
     let designations = Designations {
@@ -589,7 +589,7 @@ couverture = "in/covers/LHC-Photo.png"
                 auteur: "A".into(),
                 genre: "roman".into(),
                 copyright: String::new(),
-                dedicace: None,
+                dedicace: String::new(),
                 chapitres: None,
             },
             "## 01\n\nA.\n".into(),
@@ -758,7 +758,7 @@ couverture = "in/covers/LHC-Photo.png"
                 auteur: "A".into(),
                 genre: "roman".into(),
                 copyright: String::new(),
-                dedicace: None,
+                dedicace: String::new(),
                 chapitres: None,
             },
             "## 01\n\nA.\n".into(),

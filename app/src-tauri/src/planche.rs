@@ -531,7 +531,7 @@ mod tests {
             auteur: "Ivan Pjig".into(),
             genre: "roman".into(),
             copyright: String::new(),
-            dedicace: None,
+            dedicace: String::new(),
             chapitres: None,
         }
     }

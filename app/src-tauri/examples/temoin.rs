@@ -46,7 +46,7 @@ fn main() -> Result<(), String> {
         genre: "conte philosophique".into(),
         copyright: "Texte du domaine public.".into(),
         // Sans dédicace, délibérément : c'est ce qui garde le témoin à 98 pages.
-        dedicace: None,
+        dedicace: String::new(),
         chapitres: Some(30),
     };
     let mut projet = Projet::nouveau(livre, include_str!("../temoin/manuscrit.md").to_string());
