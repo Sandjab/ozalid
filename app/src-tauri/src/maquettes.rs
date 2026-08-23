@@ -93,9 +93,7 @@ fn lire<R: Read + Seek>(source: R, cle: &str, fournie: bool) -> Result<Maquette,
 }
 
 /// Écrit une archive de maquette. Ni le nom du fichier ni l'unicité ne la regardent :
-/// c'est `ecrire` qui en décidera — d'ici là, seuls les tests l'appellent, dont celui
-/// qui pose des personnalisées dans un répertoire de configuration jetable.
-#[cfg_attr(not(test), allow(dead_code))]
+/// c'est `ecrire` qui en décide.
 fn ecrire_archive<W: Write + Seek>(sortie: W, m: &Maquette) -> Result<(), String> {
     let mut zip = ZipWriter::new(sortie);
     // La date des entrées est figée : une archive versionnée doit être la même à
@@ -177,6 +175,55 @@ fn personnalisees(config: &Path) -> Vec<Maquette> {
     // plutôt qu'une collation complète.
     v.sort_by(|a, b| a.nom.cmp(&b.nom));
     v
+}
+
+/// Enregistre une couverture comme maquette personnalisée.
+///
+/// **L'écriture échoue fort**, là où la lecture est au mieux : un « Enregistrer » qui
+/// échoue en silence perd du travail. Deux refus, et ils disent tous deux quoi faire —
+/// un nom qui ne donne aucun slug, et un nom déjà pris.
+///
+/// L'unicité porte sur l'ensemble, fournies comprises : deux entrées de même clé
+/// rendraient la seconde inatteignable par `par_cle`.
+///
+/// La couverture et les images sont passées telles quelles — c'est l'instantané fidèle
+/// de la spec : ce que la maquette emporte est ce qui était à l'écran. La discipline
+/// (des images neutres, un résumé de 4ème en jetons) appartient à l'utilisateur ;
+/// filtrer demanderait au code de deviner ce qui est générique, et il devinerait mal.
+pub fn ecrire(
+    config: &Path,
+    nom: &str,
+    couverture: &Couverture,
+    images: &BTreeMap<String, Vec<u8>>,
+) -> Result<(), String> {
+    let cle = slug(nom).ok_or_else(|| {
+        format!(
+            "« {nom} » ne peut pas nommer une maquette : il y faut au moins une lettre ou un chiffre."
+        )
+    })?;
+    if let Some(prise) = toutes(Some(config)).into_iter().find(|m| m.cle == cle) {
+        return Err(format!("« {} » porte déjà ce nom.", prise.nom));
+    }
+    let dir = repertoire(config);
+    std::fs::create_dir_all(&dir).map_err(|e| {
+        format!(
+            "répertoire des maquettes inutilisable ({}) : {e}",
+            dir.display()
+        )
+    })?;
+    let chemin = dir.join(format!("{cle}.{EXT}"));
+    let f = std::fs::File::create(&chemin)
+        .map_err(|e| format!("écriture de {} : {e}", chemin.display()))?;
+    ecrire_archive(
+        f,
+        &Maquette {
+            cle,
+            nom: nom.into(),
+            fournie: false,
+            couverture: couverture.clone(),
+            images: images.clone(),
+        },
+    )
 }
 
 /// Les maquettes, dans l'ordre où l'interface les propose.
@@ -444,6 +491,55 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         assert_eq!(toutes(None).len(), 3, "aucun répertoire");
         assert_eq!(toutes(Some(dir.path())).len(), 3, "répertoire vide");
+    }
+
+    /// L'aller-retour complet d'une personnalisée : ce qu'on enregistre est ce qu'on
+    /// retrouve, images comprises. C'est la promesse du geste — la couverture réglée
+    /// pour un livre resservira au suivant.
+    #[test]
+    fn une_personnalisee_enregistree_se_recharge_entiere() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut images = BTreeMap::new();
+        images.insert("couverture.jpg".to_string(), vec![0xff, 0xd8, 0xff, 0xe0]);
+        let cv = fournie("surimpression");
+
+        ecrire(dir.path(), "Ma collection", &cv, &images).unwrap();
+
+        let m = par_cle(Some(dir.path()), "ma-collection").unwrap();
+        assert_eq!(m.nom, "Ma collection");
+        assert!(!m.fournie);
+        assert_eq!(m.couverture, cv);
+        assert_eq!(m.images, images);
+    }
+
+    /// L'unicité porte sur **tout** l'ensemble, fournies comprises : une personnalisée
+    /// nommée « Folio » ferait deux entrées de même clé dans le menu, et la seconde
+    /// serait inatteignable. Le refus nomme celle qui tient déjà la place.
+    #[test]
+    fn un_nom_deja_pris_est_refuse_fournie_comprise() {
+        let dir = tempfile::tempdir().unwrap();
+        let cv = fournie("folio");
+
+        let e = ecrire(dir.path(), "Folio", &cv, &BTreeMap::new()).unwrap_err();
+        assert!(e.contains("Folio"), "{e}");
+
+        ecrire(dir.path(), "Ma collection", &cv, &BTreeMap::new()).unwrap();
+        // Même slug, autre casse et autre ponctuation : c'est le même nom.
+        let e = ecrire(dir.path(), "ma  collection !", &cv, &BTreeMap::new()).unwrap_err();
+        assert!(e.contains("Ma collection"), "{e}");
+    }
+
+    /// Un « Enregistrer » qui échoue perd du travail : il remonte, il ne s'arrange pas
+    /// en silence avec un nom que personne n'a choisi.
+    #[test]
+    fn un_nom_sans_slug_est_refuse_plutot_qu_arrange() {
+        let dir = tempfile::tempdir().unwrap();
+        let e = ecrire(dir.path(), "  ", &fournie("folio"), &BTreeMap::new()).unwrap_err();
+        assert!(e.contains("lettre"), "{e}");
+        assert!(
+            toutes(Some(dir.path())).iter().all(|m| m.fournie),
+            "rien ne doit avoir été écrit"
+        );
     }
 
     /// Le nom est l'identité, le slug nomme le fichier : accents décapés, casse
