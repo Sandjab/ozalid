@@ -108,6 +108,17 @@ pub struct ProjetVue {
     pub couverture_importee: bool,
     pub images: Vec<String>,
     pub interieur: Interieur,
+    /// Le PDF de l'intérieur composé pour le destinataire visé, s'il est sur le disque.
+    ///
+    /// **Dérivé, jamais retenu.** Un `.ozalid` déplacé — ou ouvert sur une autre machine,
+    /// ce pour quoi il est fait — porterait un chemin absolu qui ne mène nulle part. Il
+    /// se recalcule à chaque vue, et l'existence du fichier est vérifiée : un lien vers
+    /// un PDF effacé à la main est pire que pas de lien.
+    ///
+    /// Absent tant que la mesure l'est. Un PDF qui traîne d'une composition périmée n'est
+    /// pas celui du livre qu'on regarde, et le montrer ferait relire une pagination que
+    /// le pied vient de déclarer fausse.
+    pub interieur_pdf: Option<String>,
     /// Les destinataires du livre et celui qu'on vise. Le front les joint à la table des
     /// gabarits par leur clé : les libellés, les formats et les papiers viennent de là.
     pub livraison: Livraison,
@@ -559,7 +570,7 @@ pub fn composer(atelier: State<Atelier>) -> Result<Composition, String> {
         &src,
         &interieur::source(livre, int, pr, &reglage, &chapitres, None),
     )?;
-    let pdf = dossier.join(format!("interieur-{}.pdf", pr.cle));
+    let pdf = interieur_pdf(&dossier, pr.cle);
     let polices_introuvables = typst.compile(&src, &pdf)?;
 
     // Le compte rendu dit « Chapitres » : une préface ou une page de partie n'en est
@@ -568,7 +579,9 @@ pub fn composer(atelier: State<Atelier>) -> Result<Composition, String> {
     let dos = papier.dos.mm(r.pages);
 
     // La mesure entre dans le projet, chez le destinataire pour qui elle a été faite :
-    // revenir à ce prestataire, ou rouvrir le livre, ne la fera plus recalculer.
+    // revenir à ce prestataire, ou rouvrir le livre, ne la fera plus recalculer. Le
+    // repli de police y entre avec elle : il décrit le PDF qui vient d'être écrit, et
+    // ce PDF ne redevient pas juste en refermant le livre.
     o.projet.meta.livraison.retenir_mesure(
         pr.cle,
         Mesure {
@@ -576,6 +589,7 @@ pub fn composer(atelier: State<Atelier>) -> Result<Composition, String> {
             gouttiere: r.gouttiere,
             blanche: r.blanche,
             dos,
+            polices_introuvables: polices_introuvables.clone(),
         },
     );
 
@@ -1543,6 +1557,15 @@ fn sorties_dossier(o: &Ouvert, provider: &str) -> Result<PathBuf, String> {
     Ok(sorties_racine(o)?.join(provider))
 }
 
+/// Le PDF de l'intérieur d'un prestataire, là où `composer` l'écrit.
+///
+/// Nommé ici plutôt qu'à deux endroits : `composer` l'écrit, `vue` le cherche pour en
+/// faire un lien, et deux `format!` identiques finissent par diverger — c'est la même
+/// raison qui a fait servir la liste des jetons par le Rust plutôt que la recopier.
+fn interieur_pdf(dossier: &Path, provider: &str) -> PathBuf {
+    dossier.join(format!("interieur-{provider}.pdf"))
+}
+
 /// Répertoire de configuration de l'application, s'il est atteignable.
 fn config(app: &tauri::AppHandle) -> Option<PathBuf> {
     app.path().app_config_dir().ok()
@@ -1594,6 +1617,21 @@ fn vue(o: &Ouvert) -> Result<ProjetVue, String> {
     let chapitres_trouves = manuscrit::decoupe(&o.projet.texte, None)
         .map(|p| p.iter().filter(|p| p.est_chapitre()).count() as u32)
         .unwrap_or(0);
+    // Le lien du pied : il n'a de sens qu'avec une mesure — sans elle, le pied ne
+    // montre aucun chiffre, et un PDF sans chiffres se lirait comme une pagination
+    // qu'on aurait le droit de croire. `filter` et non `map` sur l'existence : le
+    // fichier peut avoir été effacé à la main entre deux ouvertures.
+    let interieur_pdf = o
+        .projet
+        .meta
+        .livraison
+        .courant()
+        .filter(|d| d.compose.is_some())
+        .and_then(|d| {
+            let dossier = sorties_dossier(o, &d.provider).ok()?;
+            let pdf = interieur_pdf(&dossier, &d.provider);
+            pdf.is_file().then(|| pdf.to_string_lossy().into_owned())
+        });
     Ok(ProjetVue {
         chemin: o.chemin.as_ref().map(|c| c.to_string_lossy().into_owned()),
         livre: o.projet.meta.livre.clone(),
@@ -1606,6 +1644,7 @@ fn vue(o: &Ouvert) -> Result<ProjetVue, String> {
         couverture_importee: o.projet.meta.couverture.maquette.is_some(),
         images: o.projet.images.keys().cloned().collect(),
         interieur: o.projet.meta.interieur.clone(),
+        interieur_pdf,
         livraison: o.projet.meta.livraison.clone(),
         envois: o.projet.meta.envois.clone(),
     })

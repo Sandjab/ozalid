@@ -807,7 +807,7 @@ test('un dos calculé sur un autre manuscrit ne vaut plus rien', async () => {
 test('réimporter le manuscrit efface ce que l\'ancien texte avait fait afficher', async () => {
   const { els } = await ouvre([LULU], {
     composer: COMPOSITION,
-    packager: [paquet()],
+    packager: [{ provider: 'lulu', libelle: 'Lulu', package: paquet(), vignette: null, erreur: null }],
     epreuve_tirer: '/livres/LHC/epreuve.pdf',
   }, { couverture: {} });
 
@@ -818,12 +818,13 @@ test('réimporter le manuscrit efface ce que l\'ancien texte avait fait afficher
   // liste de dédicataires que ce projet-là n'a pas, et c'est ce qu'il laisse qui compte.
   els.get('resultatEnvois').textContent = 'Rex — envois/rex/ — 262 pages, dos 16,51 mm';
   els.get('resultatEnvois').hidden = false;
-  assert.strictEqual(els.get('resultat').hidden, false, 'rien à effacer, test sans objet');
+  assert.strictEqual(els.get('packages').hidden, false, 'rien à effacer, test sans objet');
 
   await els.get('btReimporter').declenche('click');
 
-  assert.strictEqual(els.get('resultat').hidden, true,
-    'la pagination de l\'ancien texte reste à lire');
+  // La pagination, elle, n'est plus à l'écran mais dans le projet : c'est le Rust qui
+  // l'efface au geste qui l'a rendue fausse, et le pied dit alors « dos périmé ». Ce
+  // test ne garde que les canaux qui appartiennent en propre à l'écran.
   assert.strictEqual(els.get('packages').hidden, true,
     'les packages de l\'ancien texte restent à lire');
   assert.strictEqual(els.get('resultatEnvois').hidden, true,

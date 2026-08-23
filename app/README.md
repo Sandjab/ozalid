@@ -69,7 +69,17 @@ Quatre bandes, et la fenêtre elle-même ne défile plus : une **entête** qui n
 livre ouvert, son chemin et son état d'enregistrement ; une rangée de quatre
 **onglets** — Livre, Couverture, Livraison, Envois — dans l'ordre où le livre se
 fait ; l'**étape** courante, seule ; un **pied** où l'on choisit pour qui l'on
-regarde, et qui dit ce que vaut le dos.
+regarde, et qui porte la **légende** de la dernière composition : les pages, les
+chapitres, la gouttière, le dos, et un lien vers le PDF de l'intérieur — le mot seul,
+le chemin entier au survol, et rien du tout si le fichier n'est plus là. Un `⚠ repli`
+s'y ajoute quand Typst a remplacé une police introuvable.
+
+Cette légende **se lit dans le projet**, jamais dans le retour de la commande qui l'a
+produite. C'est ce qui la fait survivre à la réouverture du livre : rouvrir un projet
+composé la veille retrouve ses chiffres sans recomposer, et retrouve aussi l'alerte de
+repli — un PDF composé dans une écriture de repli ne redevient pas juste en refermant
+le livre. Le détail de l'alerte — quelles familles manquent — se lit sous le sélecteur
+de police, là où l'on va réparer.
 
 L'étape **Intérieur** a existé, entre Livre et Couverture, et elle ne portait que deux
 champs et deux boutons. La police et l'épreuve ont rejoint le Livre — la première parce
@@ -119,11 +129,14 @@ devant les autres.
 
 Ce qui **refuse une saisie** monte à l'entête, la seule bande que toutes les étapes
 partagent : le geste est fini, et le message doit survivre au changement d'étape.
-Ce qui rend compte d'un **travail long** — composer, tirer une épreuve, générer les
-packages — reste à côté du bouton qui l'a lancé : on attend là où l'on a cliqué, et
-un compte rendu qui migre en haut de l'écran se lit comme une panne. L'aperçu de
-couverture n'est ni l'un ni l'autre : **personne ne l'a demandé**, il se recompose à
-chaque réglage, et ce qu'il dit de lui-même se lit sous l'image comme une légende.
+Ce qui rend compte d'un **travail long** — tirer une épreuve, générer les packages —
+reste à côté du bouton qui l'a lancé : on attend là où l'on a cliqué, et un compte
+rendu qui migre en haut de l'écran se lit comme une panne. Ce que **personne n'a
+demandé** est la troisième catégorie, et elle se lit en **légende**, près de ce qu'elle
+commente : l'aperçu de couverture, qui se recompose à chaque réglage et se raconte sous
+l'image ; la composition de l'intérieur, qui se rattrape d'elle-même dès que sa mesure
+est périmée et se raconte au pied. La composition avait un panneau tant qu'elle avait un
+bouton ; elle n'a plus qu'une ligne, à l'endroit où le dos l'attendait déjà.
 
 **Enregistrer n'est plus qu'un geste de menu** (⌘S, ⇧⌘S) : les deux boutons ont
 quitté l'écran, comme dans tout éditeur de document macOS. Une entrée de menu termine

@@ -377,7 +377,6 @@ test('ouvrir un autre projet oublie les sorties du précédent', async () => {
     assert.equal(els.get(id).textContent, '',
       `« ${id} » raconte encore le livre qu'on vient de quitter`);
   }
-  assert.equal(els.get('resultat').hidden, true);
   assert.equal(els.get('packages').hidden, true);
   assert.equal(els.get('cheminEpreuve').textContent, '');
   assert.equal(els.get('apercu').src, undefined,
@@ -401,15 +400,15 @@ test('un projet illisible ne détruit pas les sorties de celui qui est ouvert', 
   });
   await els.get('btNouveau').declenche('click');
 
-  els.get('resultat').textContent = '262 pages, dos 16,5 mm';
-  els.get('resultat').hidden = false;
+  els.get('packages').textContent = 'package Lulu écrit';
+  els.get('packages').hidden = false;
   els.get('cheminEpreuve').textContent = '/livres/A/epreuve.pdf';
 
   await menu('fichier.ouvrir');
 
   assert.equal(els.get('etapeLivre').hidden, false, 'le projet ouvert le reste');
-  assert.equal(els.get('resultat').hidden, false, 'ses sorties aussi');
-  assert.equal(els.get('resultat').textContent, '262 pages, dos 16,5 mm');
+  assert.equal(els.get('packages').hidden, false, 'ses sorties aussi');
+  assert.equal(els.get('packages').textContent, 'package Lulu écrit');
   assert.equal(els.get('cheminEpreuve').textContent, '/livres/A/epreuve.pdf');
   assert.match(els.get('alerte').textContent, /illisible/);
 });

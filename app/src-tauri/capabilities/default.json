@@ -7,6 +7,11 @@
     "core:default",
     "core:window:allow-destroy",
     "dialog:allow-open",
-    "dialog:allow-save"
+    "dialog:allow-save",
+    {
+      "identifier": "opener:allow-open-path",
+      "comment": "Ouvrir un PDF composé dans le lecteur du poste. La portée ne peut pas être un préfixe : les sorties vivent à côté du .ozalid, et l'utilisateur choisit où il le pose. Elle est donc restreinte par l'extension, ce qui couvre les deux seuls usages — l'intérieur et l'épreuve. Le front ne passe jamais que des chemins rendus par le Rust ; aucune saisie n'arrive ici.",
+      "allow": [{ "path": "**/*.pdf" }]
+    }
   ]
 }

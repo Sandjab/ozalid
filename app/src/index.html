@@ -112,6 +112,11 @@
     <div class="bloc">
       <h2>Intérieur</h2>
       <label><span>Police</span><select id="inPoliceInterieur"></select></label>
+      <!-- Le détail du repli est ici, à côté de sa cause : c'est sous ce sélecteur qu'on
+           vient réparer. Le pied n'en porte qu'un signe, qui suit dans toutes les étapes.
+           Typst ne dit rien de lui-même — il substitue une écriture et poursuit —, et son
+           avertissement part sur un stderr qu'aucune fenêtre ne montre. -->
+      <p class="note alerte" id="repliPolices" hidden></p>
       <p class="note">La police fixe la pagination, donc l'épaisseur du dos : en changer
         périme le dos de la dernière composition. La planche reste sans dos tant que
         l'intérieur n'a pas été recomposé.</p>
@@ -119,7 +124,6 @@
         <button id="btComposer" type="button">Composer l'intérieur</button>
         <span id="etat" class="etat"></span>
       </div>
-      <div id="resultat" class="resultat" hidden></div>
     </div>
   </section>
 
@@ -367,9 +371,18 @@
 <!-- Le pointeur : pour qui l'on compose, et sous quel format on regarde. Il est ici
      parce que c'est vrai partout — on change de destinataire sans quitter la Couverture
      qu'on est en train de régler. -->
+<!-- La légende de ce que la dernière composition a mesuré. Elle n'est ni un compte rendu
+     de travail long — personne n'a cliqué —, ni un refus de saisie : c'est la troisième
+     catégorie, celle de la ligne sous l'aperçu de couverture. Ce qui se recalcule tout
+     seul se lit en légende, près de ce qu'il commente.
+     Un élément par mention plutôt qu'un seul texte : le lien réclame un enfant, et un
+     élément qui mêlerait texte et enfants ne se lirait plus par `textContent`. -->
 <footer id="pied">
   <label id="visee"><span>Vu pour</span><select id="inDestinataire"></select></label>
+  <p id="piedMesure"></p>
   <p id="piedDos"></p>
+  <p id="piedInterieur"></p>
+  <p id="piedRepli"></p>
 </footer>
 
 <script src="couverture.js"></script>

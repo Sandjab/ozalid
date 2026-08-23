@@ -279,6 +279,7 @@ async function charge({
   save = async () => null,
   listen,
   destroy = () => {},
+  openPath = async () => {},
 }) {
   const html = fs.readFileSync(
     path.join(__dirname, '..', 'src', 'index.html'),
@@ -318,6 +319,9 @@ async function charge({
       __TAURI__: {
         core: { invoke },
         dialog: { open, save },
+        // Le lecteur de PDF du poste. Muet par défaut : ce qui compte dans un test,
+        // c'est le chemin que le lien porte, jamais ce que le système en fait.
+        opener: { openPath },
         event: { listen: listenUtilise },
         window: { getCurrentWindow: () => ({ destroy }) },
       },

@@ -163,14 +163,32 @@ body {
   font-size: .85rem;
 }
 
-#pied p { margin: 0; }
+/* La légende tient sur **une ligne**, comme la barre de la Couverture, et pour la même
+   raison : lui laisser le droit de se replier ferait revenir en douce une deuxième
+   rangée que la Couverture paierait en aperçu. Ce qui cède sous la pression, c'est le
+   libellé du prestataire — le seul dont la longueur ne se prévoit pas. Ajouter une
+   mention ici, c'est d'abord vérifier qu'il reste de la place à 900 px.
+   Les éléments vides ne prennent pas leur `gap` : un `p` sans contenu n'a pas de boîte
+   à espacer, et le pied d'un livre jamais composé ne montre donc pas quatre trous. */
+#pied p { margin: 0; white-space: nowrap; }
 
-/* Le dos périmé, seul état du pied qui réclame quelque chose. Le rouge suffit : le pied
-   est sur fond clair, contrairement aux boutons du dialogue des maquettes où un
-   `color: var(--rouge)` sur fond noir s'était révélé illisible. Pas de pastille `●`
-   comme sur les onglets — la bande porte déjà ses `·` séparateurs, et un second point
-   de ponctuation à côté d'eux se lirait comme un troisième. */
-#piedDos.alerte { color: var(--rouge); }
+/* Le dos périmé et le repli de police, les deux seuls états du pied qui réclament
+   quelque chose. Le rouge suffit : le pied est sur fond clair, contrairement aux boutons
+   du dialogue des maquettes où un `color: var(--rouge)` sur fond noir s'était révélé
+   illisible. Pas de pastille `●` comme sur les onglets — la bande porte déjà ses `·`
+   séparateurs, et un second point de ponctuation à côté d'eux se lirait comme un
+   troisième. */
+#piedDos.alerte, #piedRepli.alerte { color: var(--rouge); }
+
+/* Le lien vers un fichier composé. Il porte la couleur des prises, celle qui ne dit pas
+   « important » mais « ceci se saisit » — c'est exactement ce qu'il est, et le seul
+   endroit du pied où quelque chose se clique en dehors du sélecteur. */
+#pied a, .chemin a {
+  color: var(--prise);
+  text-decoration: none;
+}
+
+#pied a:hover, .chemin a:hover { text-decoration: underline; }
 
 /* Le pointeur du pied : un libellé et son choix côte à côte, et non la grille à deux
    colonnes que `label` impose partout ailleurs — le pied est une bande, pas un
@@ -231,13 +249,12 @@ main {
    `tauri.conf.json` — il reste 52 px, et qui touche à l'un de ces trois-là dépense
    dessus. Retomber à une colonne à la taille minimale, c'est l'ascenseur qui revient.
    Le rembourrage est compté aussi serré, et pour la même raison : c'est l'étape Livre
-   qui porte désormais le bloc de résultat, avec quatre autres blocs, et c'est en
-   resserrant ici qu'elle tient. Une ligne de plus au résultat, ou un chemin de PDF qui
-   se replie une fois de plus, rouvre l'ascenseur.
-   Ce qu'elle ne rattrape pas, et qui est assumé : à 900 × 640, l'étape Livre composée
-   déborde, et c'est le filet de `main` qui la reprend. Le bloc de résultat descend au
-   pied au lot 2 du chantier « intérieur sans onglet » ; cet ascenseur-là s'en ira avec
-   lui. */
+   qui porte désormais quatre blocs, et c'est en resserrant ici qu'elle tient.
+   Ce qu'elle ne rattrape pas, et qui est assumé : à 900 × 640, l'étape Livre déborde,
+   et c'est le filet de `main` qui la reprend. Le bloc de résultat en est parti — il est
+   descendu au pied — et **cela n'a rien résorbé** : le débordement vient du volume de
+   l'étape, pas d'un panneau. Mesuré avant et après, à l'identique. Ce qui le fermerait
+   est une étape de moins ou des blocs plus courts, pas un compte rendu de moins. */
 #etapeLivre, #etapeEnvois {
   columns: 23rem;
   column-gap: 3rem;

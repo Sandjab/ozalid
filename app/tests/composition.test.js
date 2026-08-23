@@ -75,11 +75,41 @@ function faux(providers, sur = {}) {
   };
 }
 
-const COMPOSITION = {
-  pages: 262, chapitres: 64, gouttiere: 25, blanche: true,
-  dos: 16.513, pdf: '/livres/LHC/lulu/interieur-lulu.pdf',
-  polices_introuvables: [],
+const PDF = '/livres/LHC/lulu/interieur-lulu.pdf';
+const MESURE = { pages: 262, gouttiere: 25, blanche: true, dos: 16.513 };
+
+/**
+ * Ce que `composer` rend.
+ *
+ * Les chiffres du dessus sont une **copie de lecture** ; ce qui compte est le `projet`,
+ * où la mesure est rangée chez son destinataire. C'est de là que le pied la lit — et
+ * c'est ce qui la fait survivre à la réouverture du livre, là où un panneau rempli
+ * depuis le retour de commande se serait tu.
+ *
+ * `m` surcharge la mesure, `polices_introuvables` compris : c'est elle qui les porte
+ * désormais, et non le seul retour de commande.
+ */
+const composition = (p = LULU, m = {}, pdf = PDF) => {
+  const mesure = { ...MESURE, ...m };
+  const l = livraison(p);
+  return {
+    ...mesure,
+    chapitres: 64,
+    pdf,
+    polices_introuvables: mesure.polices_introuvables ?? [],
+    projet: {
+      ...PROJET,
+      interieur_pdf: pdf,
+      livraison: {
+        ...l,
+        deja_compose: true,
+        destinataires: [{ ...l.destinataires[0], compose: mesure }],
+      },
+    },
+  };
 };
+
+const COMPOSITION = composition();
 
 /* ---------- destinataires ---------- */
 
@@ -224,7 +254,15 @@ test('un projet non enregistré le dit dans l\'entête', async () => {
 
 /* ---------- composition ---------- */
 
-test('le dos calculé est affiché avec le compte de pages qui le produit', async () => {
+/**
+ * Le pied porte la légende de la dernière composition : les pages, les chapitres, la
+ * gouttière et le dos. Le chiffre que l'application existe pour ne pas faire ressaisir
+ * doit se lire depuis n'importe quelle étape, sans qu'on ait à revenir le chercher.
+ *
+ * Il ne dit plus la page blanche de parité : on la regarde une fois, et une légende qui
+ * suit partout n'a pas de place pour ce qui ne se relit jamais.
+ */
+test('le pied porte les chiffres de la composition', async () => {
   const { els } = await charge({
     invoke: faux([LULU], { projet_ouvrir: PROJET, composer: COMPOSITION }),
     open: async () => '/livres/LHC.ozalid',
@@ -232,43 +270,133 @@ test('le dos calculé est affiché avec le compte de pages qui le produit', asyn
   await els.get('btOuvrir').declenche('click');
   await els.get('btComposer').declenche('click');
 
-  const res = els.get('resultat');
-  assert.strictEqual(res.hidden, false);
-  assert.deepStrictEqual(res.textes('dd'), [
-    '262', '64', '25,00 mm', 'ajoutée (parité)', '16,51 mm',
-  ]);
+  assert.strictEqual(
+    els.get('piedMesure').textContent,
+    '· 262 pages · 64 chapitres · gouttière 25,00 mm',
+  );
+  assert.strictEqual(els.get('piedDos').textContent, '· dos 16,5 mm');
+  assert.strictEqual(els.get('piedInterieur').textContent, '· intérieur');
 });
 
 /**
- * Typst peut réussir en remplaçant une police introuvable par une écriture de repli :
- * le PDF existe, les chiffres sont justes, mais le rendu n'est pas celui de la
- * maquette. Le warning part sur un stderr qu'aucune fenêtre ne montre — ce compte
- * rendu est le seul endroit où la substitution peut se lire.
+ * Un dos périmé fait taire les chiffres, et ce n'est pas un raffinement : laisser lire
+ * « 262 pages » sous un « dos périmé » donnerait à croire une pagination que la ligne
+ * d'à côté vient de déclarer fausse.
  */
-test('une police composée par repli est signalée dans le compte rendu', async () => {
+test('un dos périmé fait taire la légende', async () => {
+  const c = composition();
+  const perime = {
+    ...c.projet,
+    livraison: {
+      ...c.projet.livraison,
+      destinataires: c.projet.livraison.destinataires.map(({ compose, ...d }) => d),
+    },
+  };
+  const { els } = await charge({
+    invoke: faux([LULU], { projet_ouvrir: perime }),
+    open: async () => '/livres/LHC.ozalid',
+  });
+
+  await els.get('btOuvrir').declenche('click');
+
+  assert.strictEqual(els.get('piedDos').textContent, '· dos périmé');
+  assert.strictEqual(els.get('piedMesure').textContent, '');
+  assert.strictEqual(els.get('piedInterieur').textContent, '');
+});
+
+/**
+ * Le lien du pied ne vaut que si le Rust a trouvé le fichier. `interieur_pdf` est déjà
+ * filtré par son existence là-bas : un PDF effacé à la main entre deux ouvertures rend
+ * un lien qui ne mène nulle part, et un lien mort est pire que pas de lien.
+ */
+test('sans PDF sur le disque, le pied ne propose pas de lien', async () => {
+  const c = composition();
   const { els } = await charge({
     invoke: faux([LULU], {
       projet_ouvrir: PROJET,
-      composer: { ...COMPOSITION, polices_introuvables: ['bodoni moda'] },
+      composer: { ...c, projet: { ...c.projet, interieur_pdf: null } },
     }),
     open: async () => '/livres/LHC.ozalid',
   });
   await els.get('btOuvrir').declenche('click');
   await els.get('btComposer').declenche('click');
 
-  const res = els.get('resultat').textContent;
-  assert.match(res, /bodoni moda/);
-  assert.match(res, /repli/);
+  assert.strictEqual(els.get('piedInterieur').textContent, '');
+  assert.match(els.get('piedMesure').textContent, /262 pages/,
+    'les chiffres partent avec le lien');
 });
 
-test('une composition sans substitution n\'affiche aucune alerte de police', async () => {
+/**
+ * **Le test qui compte de ce lot.** La légende se lit dans le projet, pas dans le retour
+ * de `composer` : rouvrir un livre composé la veille doit la retrouver entière, sans
+ * recomposer. C'est tout ce qui distingue une mesure retenue d'un compte rendu d'écran.
+ */
+test('la légende du pied survit à une réouverture, sans composer', async () => {
+  const { els } = await charge({
+    invoke: faux([LULU], { projet_ouvrir: composition().projet }),
+    open: async () => '/livres/LHC.ozalid',
+  });
+
+  await els.get('btOuvrir').declenche('click');
+
+  assert.match(els.get('piedMesure').textContent, /262 pages · 64 chapitres/);
+  assert.strictEqual(els.get('piedDos').textContent, '· dos 16,5 mm');
+});
+
+/**
+ * Typst peut réussir en remplaçant une police introuvable par une écriture de repli :
+ * le PDF existe, les chiffres sont justes, mais le rendu n'est pas celui de la
+ * maquette. Le warning part sur un stderr qu'aucune fenêtre ne montre.
+ *
+ * Deux endroits, et il les faut tous les deux : un signe au pied, qui suit dans toutes
+ * les étapes et se voit depuis la Couverture où l'on regarde le résultat ; le détail —
+ * quelles familles — sous le sélecteur de police, là où l'on va réparer.
+ */
+test('une police composée par repli se signale au pied et sous la police', async () => {
+  const { els } = await charge({
+    invoke: faux([LULU], {
+      projet_ouvrir: PROJET,
+      composer: composition(LULU, { polices_introuvables: ['bodoni moda'] }),
+    }),
+    open: async () => '/livres/LHC.ozalid',
+  });
+  await els.get('btOuvrir').declenche('click');
+  await els.get('btComposer').declenche('click');
+
+  assert.match(els.get('piedRepli').textContent, /repli/);
+  assert.strictEqual(els.get('piedRepli').className, 'alerte');
+  assert.strictEqual(els.get('repliPolices').hidden, false);
+  assert.match(els.get('repliPolices').textContent, /bodoni moda/);
+});
+
+/**
+ * Et il doit être là **après une réouverture** : un PDF composé dans une écriture de
+ * repli ne redevient pas juste en refermant le livre. C'est pour cela que la mesure le
+ * retient, et non l'écran.
+ */
+test('le repli de police survit à une réouverture', async () => {
+  const c = composition(LULU, { polices_introuvables: ['bodoni moda'] });
+  const { els } = await charge({
+    invoke: faux([LULU], { projet_ouvrir: c.projet }),
+    open: async () => '/livres/LHC.ozalid',
+  });
+
+  await els.get('btOuvrir').declenche('click');
+
+  assert.match(els.get('piedRepli').textContent, /repli/);
+  assert.match(els.get('repliPolices').textContent, /bodoni moda/);
+});
+
+test('une composition sans substitution n\'alerte nulle part', async () => {
   const { els } = await charge({
     invoke: faux([LULU], { projet_ouvrir: PROJET, composer: COMPOSITION }),
     open: async () => '/livres/LHC.ozalid',
   });
   await els.get('btOuvrir').declenche('click');
   await els.get('btComposer').declenche('click');
-  assert.doesNotMatch(els.get('resultat').textContent, /repli/);
+
+  assert.strictEqual(els.get('piedRepli').textContent, '');
+  assert.strictEqual(els.get('repliPolices').hidden, true);
 });
 
 /**
@@ -277,26 +405,35 @@ test('une composition sans substitution n\'affiche aucune alerte de police', asy
  * planche fausse à l'impression sans que rien ne l'ait signalé.
  */
 test('un prestataire sans formule n\'affiche jamais de dos chiffré', async () => {
+  const c = composition(COOLLIBRI, { pages: 190, dos: null });
   const { els } = await charge({
     invoke: faux([COOLLIBRI], {
-      projet_ouvrir: PROJET,
-      composer: { ...COMPOSITION, pages: 190, dos: null },
+      projet_ouvrir: { ...PROJET, livraison: livraison(COOLLIBRI) },
+      composer: c,
     }),
     open: async () => '/livres/LHC.ozalid',
   });
   await els.get('btOuvrir').declenche('click');
   await els.get('btComposer').declenche('click');
 
-  const dos = els.get('resultat').textes('dd').at(-1);
-  assert.match(dos, /relever sur le gabarit/);
+  const dos = els.get('piedDos').textContent;
+  assert.match(dos, /relevé sur le gabarit/);
   assert.doesNotMatch(dos, /\d/, `dos chiffré affiché : « ${dos} »`);
+  // Les pages, elles, sont mesurées : composé ne veut pas dire chiffré, mais le
+  // manuscrit fait bien 190 pages chez ce prestataire-là.
+  assert.match(els.get('piedMesure').textContent, /190 pages/);
 });
 
 /**
- * Une erreur de la chaîne doit rester lisible, et surtout ne pas laisser croire à une
- * composition réussie en gardant un résultat précédent affiché.
+ * Une erreur de la chaîne doit rester lisible, et le bouton rendu.
+ *
+ * Ce que ce test **ne demande plus** : que la légende du pied s'efface. Elle ne vient
+ * plus du geste qui vient d'échouer mais du projet, et le projet, lui, porte toujours
+ * la mesure de la dernière composition réussie — qui n'a pas cessé d'être vraie parce
+ * qu'une autre a échoué. Ce qui la périmerait, c'est le Rust qui l'efface à la source,
+ * et le pied dirait alors « dos périmé ».
  */
-test('une erreur de composition efface le résultat précédent', async () => {
+test('une erreur de composition se lit, et rend le bouton', async () => {
   let echoue = false;
   const base = faux([LULU], { projet_ouvrir: PROJET });
   const invoke = async (cmd, args) => {
@@ -309,11 +446,10 @@ test('une erreur de composition efface le résultat précédent', async () => {
   const { els } = await charge({ invoke, open: async () => '/livres/LHC.ozalid' });
   await els.get('btOuvrir').declenche('click');
   await els.get('btComposer').declenche('click');
-  assert.strictEqual(els.get('resultat').hidden, false);
+  assert.match(els.get('piedMesure').textContent, /262 pages/);
 
   echoue = true;
   await els.get('btComposer').declenche('click');
-  assert.strictEqual(els.get('resultat').hidden, true, 'résultat périmé laissé à l\'écran');
   assert.match(els.get('etat').textContent, /64 chapitres attendus/);
   assert.strictEqual(els.get('etat').className, 'etat erreur');
   assert.strictEqual(els.get('btComposer').disabled, false, 'bouton laissé bloqué');

@@ -2,6 +2,7 @@
 
 const { invoke } = window.__TAURI__.core;
 const { open, save } = window.__TAURI__.dialog;
+const { openPath } = window.__TAURI__.opener;
 const { listen } = window.__TAURI__.event;
 const { getCurrentWindow } = window.__TAURI__.window;
 
@@ -342,8 +343,7 @@ function majPied() {
   $('visee').hidden = !p;
   if (!p) {
     sel.replaceChildren();
-    $('piedDos').textContent = '';
-    $('piedDos').className = '';
+    viderPied();
     return;
   }
   sel.replaceChildren();
@@ -352,6 +352,7 @@ function majPied() {
   }
   sel.value = projet.livraison.courant;
 
+  viderPied();
   const perime = dosPerime(projet);
   const dos = dosCourant();
   const etat = perime ? 'dos périmé'
@@ -360,6 +361,64 @@ function majPied() {
         : `dos ${nb(dos, 1)} mm`;
   $('piedDos').textContent = `· ${etat}`;
   $('piedDos').className = perime ? 'alerte' : '';
+
+  // Les chiffres ne paraissent qu'avec une mesure, et un dos périmé n'en a pas : c'est
+  // sa définition même — `dosPerime` est vrai quand le livre a été composé et que la
+  // mesure du destinataire visé a disparu. Il n'y a donc pas de second garde à écrire
+  // ici, et le pied ne peut pas donner à lire 264 pages sous un « dos périmé ».
+  const mesure = destinataireCourant()?.compose;
+  if (!mesure) return;
+
+  $('piedMesure').textContent =
+    `· ${mesure.pages} pages · ${projet.chapitres_trouves} chapitres`
+    + ` · gouttière ${nb(mesure.gouttiere)} mm`;
+
+  // Le lien ne paraît que si le Rust a trouvé le fichier : `interieur_pdf` est déjà
+  // filtré par son existence, et l'écran n'a rien à revérifier.
+  if (projet.interieur_pdf) {
+    $('piedInterieur').append(h('span', '· '), lienFichier(projet.interieur_pdf, 'intérieur'));
+  }
+
+  // Absent du JSON quand il est vide — `skip_serializing_if`, comme la dédicace du
+  // livre. C'est le cas normal, pas un cas dégradé : la plupart des compositions ne
+  // substituent rien.
+  if ((mesure.polices_introuvables ?? []).length) {
+    $('piedRepli').textContent = '· ⚠ repli';
+    $('piedRepli').className = 'alerte';
+  }
+}
+
+/**
+ * Le pied remis à zéro avant d'être rempli.
+ *
+ * Quatre éléments dont trois sont conditionnels : les effacer d'un bloc évite qu'un
+ * lien d'une composition précédente survive au projet suivant, ou qu'un `⚠ repli`
+ * reste allumé sur une mesure qui n'en porte plus.
+ */
+function viderPied() {
+  for (const id of ['piedMesure', 'piedDos', 'piedInterieur', 'piedRepli']) {
+    $(id).replaceChildren();
+    $(id).className = '';
+  }
+}
+
+/**
+ * Un chemin de fichier rendu cliquable : le nom court se lit, le chemin entier se
+ * survole, et le clic ouvre le fichier dans le lecteur du poste.
+ *
+ * Le `preventDefault` n'est pas une précaution de style : sans lui, l'ancre remplacerait
+ * la fenêtre de l'application par le PDF, et il n'y a pas de bouton « Retour » dans une
+ * fenêtre Tauri.
+ */
+function lienFichier(chemin, libelle) {
+  const a = h('a', libelle);
+  a.href = '#';
+  a.title = chemin;
+  a.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    tente(() => openPath(chemin));
+  });
+  return a;
 }
 
 /* ---------- prestataires ---------- */
@@ -435,6 +494,15 @@ function afficherProjet(p) {
   $('inDedicace').value = p.livre.dedicace ?? '';
   $('inChapitres').value = p.livre.chapitres ?? '';
   $('inPoliceInterieur').value = p.interieur.police;
+  // Lu dans la mesure du projet, jamais dans le retour de `composer` : un PDF composé
+  // dans une écriture de repli ne redevient pas juste en refermant le livre, et cette
+  // phrase doit être là à la réouverture. Le pied n'en porte que le signe.
+  const repli = destinataireCourant()?.compose?.polices_introuvables ?? [];
+  $('repliPolices').textContent = repli.length
+    ? `Police introuvable, composé dans une écriture de repli : ${repli.join(', ')}.`
+      + ' Le PDF ne suit pas la maquette.'
+    : '';
+  $('repliPolices').hidden = !repli.length;
 
   const attendu = p.livre.chapitres;
   const ecart = attendu !== null && attendu !== undefined && attendu !== p.chapitres_trouves;
@@ -608,7 +676,7 @@ function oublierLaComposition() {
   // Le dos n'est plus effacé ici : il vit dans le projet, et c'est le Rust qui le périme
   // au moment du geste qui l'a rendu faux. Ce qui reste ici est ce qui n'appartient
   // qu'à l'écran — des chiffres affichés, des chemins de fichiers, des messages.
-  for (const id of ['resultat', 'packages', 'ebooks', 'resultatEnvois']) {
+  for (const id of ['packages', 'ebooks', 'resultatEnvois']) {
     $(id).replaceChildren();
     $(id).hidden = true;
   }
@@ -882,46 +950,30 @@ async function majInterieur() {
 
 /* ---------- composition ---------- */
 
-function afficher(c) {
-  const box = $('resultat');
-  box.replaceChildren();
-
-  const lignes = [
-    ['Pages', String(c.pages)],
-    ['Chapitres', String(c.chapitres)],
-    ['Gouttière', `${nb(c.gouttiere)} mm`],
-    ['Page blanche de fin', c.blanche ? 'ajoutée (parité)' : 'aucune'],
-    ['Dos', c.dos === null
-      ? 'à relever sur le gabarit du prestataire'
-      : `${nb(c.dos)} mm`],
-  ];
-  const dl = h('dl');
-  for (const [k, v] of lignes) dl.append(h('dt', k), h('dd', v));
-  box.append(dl);
-  // Typst peut réussir en remplaçant une police introuvable par une écriture de
-  // repli : les chiffres ci-dessus sont justes, mais le rendu n'est pas celui de la
-  // maquette — et son warning part sur un stderr qu'aucune fenêtre ne montre.
-  if (c.polices_introuvables.length) {
-    box.append(h('p', 'Police introuvable, composé dans une écriture de repli : '
-      + `${c.polices_introuvables.join(', ')}. Le PDF ne suit pas la maquette.`,
-    'note alerte'));
-  }
-  box.append(h('p', c.pdf, 'chemin'));
-  box.hidden = false;
-}
+/*
+ * Aucun panneau de compte rendu ici, et c'est le fait de ce lot.
+ *
+ * Ce que la composition mesure entre dans le projet, chez le destinataire visé, et le
+ * pied le relit de là — comme le dos le faisait déjà seul. `Composition` porte les mêmes
+ * chiffres en copie de lecture ; l'écran ne s'en sert plus, et `afficherProjet` suffit.
+ * C'est ce qui fait tenir la légende après une réouverture, là où un panneau rempli
+ * depuis le retour de commande se serait tu.
+ *
+ * Ce qui se perd et qui ne manque pas : « Page blanche de fin ». Une parité qu'on
+ * regarde une fois ne mérite pas une place dans une légende qui suit partout.
+ */
 
 async function composer() {
   const bt = $('btComposer');
   bt.disabled = true;
   $('etat').textContent = 'composition…';
   $('etat').className = 'etat';
-  $('resultat').hidden = true;
   try {
     const c = await invoke('composer');
-    afficher(c);
     // Le dos sort de la pagination qu'on vient de mesurer, et c'est le projet qui le
     // retient désormais, chez le destinataire pour qui il vaut. L'interface n'en garde
-    // aucune copie : elle le relit là où il est enregistré, comme tout le reste.
+    // aucune copie : elle le relit là où il est enregistré, comme tout le reste — et
+    // depuis ce lot, les pages, les chapitres, la gouttière et le repli avec.
     afficherProjet(c.projet);
     if (face === 'planche') demanderApercu();
     $('etat').textContent = '';
@@ -940,13 +992,17 @@ async function composer() {
 async function epreuve() {
   const bt = $('btEpreuve');
   bt.disabled = true;
-  $('cheminEpreuve').textContent = '';
+  $('cheminEpreuve').replaceChildren();
   $('etatEpreuve').className = 'etat';
   $('etatEpreuve').textContent = 'composition…';
   try {
-    $('cheminEpreuve').textContent = await invoke('epreuve_tirer', {
+    const chemin = await invoke('epreuve_tirer', {
       corpsPt: Number($('inEpreuveCorps').value),
     });
+    // Le même geste que le lien du pied : le laisser en texte mort à côté d'un lien
+    // vivant serait une incohérence gratuite. `textContent` traverse l'ancre, donc ce
+    // qui lisait le chemin ici le lit toujours.
+    $('cheminEpreuve').append(lienFichier(chemin, chemin));
     $('etatEpreuve').textContent = '';
   } catch (e) {
     $('etatEpreuve').textContent = String(e);

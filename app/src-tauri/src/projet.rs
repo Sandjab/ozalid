@@ -239,7 +239,10 @@ pub struct Destinataire {
 /// l'interface : le même livre a autant de paginations que de gabarits, et les
 /// redemander une à une à chaque changement de lunette faisait payer une composition
 /// entière pour un chiffre déjà connu — puis une deuxième fois à la réouverture.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+/// Plus `Copy` depuis qu'elle porte les polices de repli : un `Vec` ne se copie pas.
+/// C'est le seul prix du champ, et il se paie en `.clone()` aux rares endroits qui
+/// lisaient une mesure derrière une référence.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Mesure {
     pub pages: u32,
     pub gouttiere: f64,
@@ -248,6 +251,17 @@ pub struct Mesure {
     /// relevé manque : composé ne veut pas dire chiffré.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dos: Option<f64>,
+    /// Familles que Typst n'a pas trouvées et a remplacées par une écriture de repli.
+    ///
+    /// Retenues **avec la mesure** et non dans une variable de l'écran : un PDF composé
+    /// dans une écriture de repli ne redevient pas juste en rouvrant le livre. Un pied
+    /// qui se tairait à la réouverture dirait que tout va bien devant un fichier qui ne
+    /// suit pas la maquette — et Typst, lui, n'échoue pas : il substitue et poursuit.
+    ///
+    /// Vide, tout va bien. Une archive écrite avant ce champ se relit vide, ce qui est
+    /// exactement ce qu'elle voulait dire : `VERSION` n'a donc pas à bouger.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub polices_introuvables: Vec<String>,
 }
 
 impl Destinataire {
@@ -1184,6 +1198,7 @@ auteur = "Ivan Pjig"
         gouttiere: 25.0,
         blanche: true,
         dos: Some(16.513),
+        polices_introuvables: Vec::new(),
     };
 
     /// Le chiffre que l'application existe pour ne pas faire ressaisir doit survivre à
@@ -1204,6 +1219,54 @@ auteur = "Ivan Pjig"
         assert!(
             r.meta.livraison.deja_compose,
             "l'histoire du livre est perdue"
+        );
+    }
+
+    /// **Le test du repli de police.** Un PDF composé dans une écriture de repli ne
+    /// redevient pas juste en refermant le livre : le pied doit le redire à la
+    /// réouverture. Retenu à l'écran seulement, il se serait tu, et la fenêtre aurait
+    /// annoncé que tout allait bien devant un fichier qui ne suit pas la maquette.
+    #[test]
+    fn le_repli_de_police_survit_a_l_aller_retour() {
+        let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
+        let mesure = Mesure {
+            polices_introuvables: vec!["bodoni moda".into()],
+            ..MESURE
+        };
+        p.meta
+            .livraison
+            .retenir_mesure(&p.meta.livraison.courant.clone(), mesure);
+
+        let r = aller_retour(&p);
+        assert_eq!(
+            r.meta.livraison.courant().expect("courant perdu").compose,
+            Some(Mesure {
+                polices_introuvables: vec!["bodoni moda".into()],
+                ..MESURE
+            })
+        );
+    }
+
+    /// Une archive écrite avant ce champ se relit, et se relit **vide** — ce qui est
+    /// exactement ce qu'elle voulait dire : rien n'avait été substitué, ou personne ne
+    /// le savait. C'est ce qui dispense `VERSION` de bouger.
+    #[test]
+    fn une_mesure_sans_le_champ_se_relit_vide() {
+        let ancien = "pages = 262\ngouttiere = 25.0\nblanche = true\ndos = 16.513\n";
+        let m: Mesure = toml::from_str(ancien).expect("une mesure d'avant ne se relit plus");
+        assert!(m.polices_introuvables.is_empty());
+        assert_eq!(m.pages, 262);
+    }
+
+    /// Et vide, il ne s'écrit pas : `skip_serializing_if`. Le front le reçoit donc
+    /// absent dans le cas ordinaire, et c'est ce qui l'oblige à tolérer l'absence
+    /// plutôt qu'un tableau vide — la même règle que la dédicace du livre.
+    #[test]
+    fn un_repli_vide_ne_s_ecrit_pas() {
+        let ecrit = toml::to_string(&MESURE).expect("mesure inécrivable");
+        assert!(
+            !ecrit.contains("polices_introuvables"),
+            "le champ vide encombre l'archive : {ecrit}"
         );
     }
 
@@ -1239,7 +1302,9 @@ auteur = "Ivan Pjig"
             p.meta.livraison.retenir_mesure(&cle, MESURE);
             p
         };
-        let mesure = |p: &Projet| p.meta.livraison.courant().unwrap().compose;
+        // `.clone()` depuis que `Mesure` porte les polices de repli et n'est plus
+        // `Copy` : seule la présence est lue ici, mais il faut bien la sortir.
+        let mesure = |p: &Projet| p.meta.livraison.courant().unwrap().compose.clone();
 
         let mut p = neuf();
         p.modifier_livre(livre());

@@ -24,6 +24,10 @@ pub mod typst;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // Ouvrir un PDF dans le lecteur du poste. La fenêtre n'affiche aucun document :
+        // ce qu'elle compose se relit ailleurs, et jusqu'ici un chemin s'y recopiait à la
+        // main. Multiplateforme, ce qui compte — la CI livre aussi Windows.
+        .plugin(tauri_plugin_opener::init())
         .manage(commands::Atelier::default())
         .manage(commands::Interface::default())
         .setup(|app| {
