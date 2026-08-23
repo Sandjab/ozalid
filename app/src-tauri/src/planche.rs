@@ -627,7 +627,7 @@ mod tests {
         assert!(ecart > 8.0, "dos passé de {} à {}", court.dos, long.dos);
         assert!((long.largeur() - court.largeur() - ecart).abs() < 1e-9);
 
-        let cv = maquettes::folio();
+        let cv = maquettes::fournie("folio");
         let dx = |g: &Gabarit| {
             let s = source(&livre(), &cv, g, Some(&photo()), None).unwrap();
             // Les trois zones de la planche sont les seules posées à `dy: 0mm` ; la
@@ -755,7 +755,7 @@ mod tests {
     /// titre y vient du livre, comme partout ailleurs.
     #[test]
     fn le_dos_porte_l_identite_du_livre_tournee() {
-        let cv = maquettes::blanche();
+        let cv = maquettes::fournie("blanche");
         let s = source(&livre(), &cv, &gabarit("lulu", 244), None, None).unwrap();
         assert!(s.contains("rotate(-90deg"), "dos non tourné");
         assert!(s.contains("Les Heures creuses"));
@@ -768,7 +768,7 @@ mod tests {
     /// titre en tête et l'auteur au pied doit produire exactement cela.
     #[test]
     fn la_place_et_le_rang_ordonnent_les_elements_du_dos() {
-        let mut cv = maquettes::blanche();
+        let mut cv = maquettes::fournie("blanche");
         let g = gabarit("lulu", 244);
 
         // Par défaut : éditeur au pied, puis auteur et titre en tête. La source liste
@@ -801,7 +801,7 @@ mod tests {
     /// capitales et un éditeur discret sur le même dos.
     #[test]
     fn chaque_element_du_dos_a_son_style() {
-        let mut cv = maquettes::folio();
+        let mut cv = maquettes::fournie("folio");
         cv.dos.auteur.style.couleur = "#c00000".into();
         cv.dos.titre.style.casse = crate::couverture::Casse::Capitales;
         cv.dos.editeur.style.taille = 1.8;
@@ -822,7 +822,7 @@ mod tests {
     /// d'éditeur est un cas courant, pas une anomalie.
     #[test]
     fn un_element_eteint_ne_parait_pas_sur_le_dos() {
-        let mut cv = maquettes::folio();
+        let mut cv = maquettes::fournie("folio");
         cv.dos.editeur.actif = false;
         let s = bloc_dos(&livre(), &cv, &gabarit("lulu", 244), None, 0.0);
         assert!(!s.contains("Ozalid"), "éditeur éteint pourtant composé");
@@ -836,7 +836,7 @@ mod tests {
     /// le livre n'a ni auteur ni éditeur à y porter.
     #[test]
     fn un_dos_sans_texte_garde_son_fond() {
-        let cv = maquettes::folio();
+        let cv = maquettes::fournie("folio");
         let mut l = livre();
         l.titre = String::new();
         l.auteur = String::new();
@@ -852,7 +852,7 @@ mod tests {
     fn la_planche_ne_porte_aucun_trait_de_coupe() {
         let s = source(
             &livre(),
-            &maquettes::surimpression(),
+            &maquettes::fournie("surimpression"),
             &gabarit("kdp-6x9", 300),
             Some(&photo()),
             None,
@@ -869,7 +869,7 @@ mod tests {
         let g = gabarit("lulu", 244);
         let s = source(
             &livre(),
-            &maquettes::surimpression(),
+            &maquettes::fournie("surimpression"),
             &g,
             Some(&photo()),
             None,
@@ -890,7 +890,7 @@ mod tests {
     #[test]
     fn le_panorama_pose_la_meme_image_au_meme_endroit_dans_les_trois_zones() {
         let g = gabarit("lulu", 244);
-        let mut cv = maquettes::folio();
+        let mut cv = maquettes::fournie("folio");
         cv.quatrieme.fond = FondQuatre::Panorama;
         let s = source(&livre(), &cv, &g, Some(&photo()), None).unwrap();
 
@@ -914,7 +914,13 @@ mod tests {
     #[test]
     fn le_dos_seul_est_compose_a_la_largeur_du_dos() {
         let g = gabarit("lulu", 244);
-        let s = source_dos(&livre(), &maquettes::folio(), g.format, g.dos, None);
+        let s = source_dos(
+            &livre(),
+            &maquettes::fournie("folio"),
+            g.format,
+            g.dos,
+            None,
+        );
         let boite = format!("box(width: {}, height: {}", mm(g.dos), mm(g.format.1));
         assert!(s.contains(&boite), "boîte attendue {boite} dans :\n{s}");
         // La page, elle, est cette boîte couchée : le dos y court en largeur.
@@ -936,7 +942,7 @@ mod tests {
     /// la connaît, et `source_mesures` la lui demande.
     #[test]
     fn les_boites_du_dos_suivent_les_cinq_colonnes() {
-        let mut cv = maquettes::folio();
+        let mut cv = maquettes::fournie("folio");
         cv.dos.marge = 3.0;
         cv.dos.ecart = 2.0;
         cv.dos.auteur = ElementDos {
@@ -1022,7 +1028,7 @@ mod tests {
     /// pour ça que la mesure suit la largeur au lieu d'être un seuil fixe.
     #[test]
     fn le_dos_requis_suit_la_largeur_de_couverture() {
-        let cv = maquettes::folio();
+        let cv = maquettes::fournie("folio");
         let r = |largeur| dos_requis(&livre(), &cv, largeur) - 2.0 * JEU_PLI;
         // Le jeu de pli mis à part, ce qui reste est du corps : il double quand la
         // couverture double.
@@ -1041,7 +1047,7 @@ mod tests {
     /// et non un fichier différent.
     #[test]
     fn un_dos_trop_mince_pour_son_texte_est_signale() {
-        let cv = maquettes::folio();
+        let cv = maquettes::fournie("folio");
         let mince = gabarit("kdp-6x9", 80);
         let epais = gabarit("kdp-6x9", 400);
         let insuffisant = |g: &Gabarit| dos_insuffisant(&livre(), &cv, g.format.0, g.dos);
@@ -1065,7 +1071,7 @@ mod tests {
     /// sur le corps d'un éditeur qu'elle ne porte pas.
     #[test]
     fn un_element_qui_ne_compose_pas_ne_reclame_pas_depaisseur() {
-        let mut cv = maquettes::folio();
+        let mut cv = maquettes::fournie("folio");
         let mut l = livre();
         l.editeur = "Folio".into();
         cv.dos.editeur.actif = true;
@@ -1095,7 +1101,13 @@ mod tests {
     #[test]
     fn le_dos_couche_est_ramene_dans_sa_page() {
         let g = gabarit("lulu", 244);
-        let s = source_dos(&livre(), &maquettes::folio(), g.format, g.dos, None);
+        let s = source_dos(
+            &livre(),
+            &maquettes::fournie("folio"),
+            g.format,
+            g.dos,
+            None,
+        );
         let attendu = format!(
             "dx: {}, dy: 0mm, rotate(90deg, origin: top + left",
             mm(g.format.1)
@@ -1111,7 +1123,13 @@ mod tests {
     fn le_dos_seul_ignore_le_fond_perdu() {
         let g = gabarit("lulu", 244);
         assert!(g.fond_perdu > 0.0, "le gabarit de test doit en avoir un");
-        let s = source_dos(&livre(), &maquettes::folio(), g.format, g.dos, None);
+        let s = source_dos(
+            &livre(),
+            &maquettes::fournie("folio"),
+            g.format,
+            g.dos,
+            None,
+        );
         assert!(
             !s.contains(&mm(g.hauteur())),
             "la hauteur de planche n'a rien à faire ici :\n{s}"
@@ -1127,7 +1145,13 @@ mod tests {
         let long = gabarit("lulu", 400);
         // La page est couchée : c'est sa hauteur qui porte le dos.
         let page = |g: &Gabarit| {
-            let s = source_dos(&livre(), &maquettes::folio(), g.format, g.dos, None);
+            let s = source_dos(
+                &livre(),
+                &maquettes::fournie("folio"),
+                g.format,
+                g.dos,
+                None,
+            );
             let i = s.find(", height: ").unwrap() + ", height: ".len();
             s[i..].split("mm").next().unwrap().parse::<f64>().unwrap()
         };
@@ -1145,7 +1169,7 @@ mod tests {
     #[test]
     fn le_dos_seul_et_celui_de_la_planche_portent_la_meme_grille() {
         let g = gabarit("lulu", 244);
-        let cv = maquettes::folio();
+        let cv = maquettes::fournie("folio");
         // La zone du dos est écrite en premier dans la planche : sa grille est donc la
         // première des trois.
         let grille = |s: &str| {
@@ -1180,7 +1204,7 @@ mod tests {
     fn le_dos_prend_l_editeur_du_livre() {
         let mut l = livre();
         l.editeur = "Ozalid".into();
-        let mut cv = maquettes::par_cle("folio").unwrap();
+        let mut cv = maquettes::fournie("folio");
         cv.dos.editeur.actif = true;
 
         let elements = composes(&l, &cv);
@@ -1196,7 +1220,7 @@ mod tests {
     fn la_collection_se_compose_comme_les_trois_autres() {
         let mut l = livre();
         l.collection = "Domaine français".into();
-        let mut cv = maquettes::folio();
+        let mut cv = maquettes::fournie("folio");
         assert!(!cv.dos.collection.actif, "allumée d'office");
 
         cv.dos.collection.actif = true;
@@ -1216,7 +1240,7 @@ mod tests {
     #[test]
     fn le_sens_ne_retourne_que_son_element() {
         let l = livre();
-        let mut cv = maquettes::folio();
+        let mut cv = maquettes::fournie("folio");
         cv.dos.auteur.sens = 180;
         let g = gabarit("lulu", 244);
         let s = source_dos(&l, &cv, g.format, g.dos, None);
@@ -1246,7 +1270,7 @@ mod tests {
     fn un_element_tourne_est_mis_en_boite_pour_rester_dans_sa_ligne() {
         let mut l = livre();
         l.collection = "Domaine français".into();
-        let mut cv = maquettes::folio();
+        let mut cv = maquettes::fournie("folio");
         cv.dos.collection.actif = true;
         cv.dos.collection.sens = 270;
         cv.dos.titre.sens = 180;
@@ -1274,7 +1298,7 @@ mod tests {
     #[test]
     fn la_mesure_dun_quart_de_tour_porte_sur_le_texte_couche() {
         let l = livre();
-        let mut cv = maquettes::folio();
+        let mut cv = maquettes::fournie("folio");
         cv.dos.collection.actif = true;
         cv.dos.collection.sens = 90;
         let s = source_mesures(&l, &cv, (108.0, 175.0));

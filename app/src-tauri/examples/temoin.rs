@@ -57,7 +57,11 @@ fn main() -> Result<(), String> {
     let mut projet = Projet::nouveau(livre, include_str!("../temoin/manuscrit.md").to_string());
     // La Blanche est purement typographique : le témoin traverse la planche entière sans
     // qu'une seule image ait à être versionnée.
-    projet.meta.couverture.maquette = Some(maquettes::blanche());
+    projet.meta.couverture.maquette = Some(
+        maquettes::par_cle(None, "blanche")
+            .expect("maquette fournie « blanche »")
+            .couverture,
+    );
 
     let pr = providers::provider(PROVIDER).ok_or("prestataire inconnu : bod")?;
     let typst =

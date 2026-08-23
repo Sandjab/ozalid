@@ -743,11 +743,17 @@ impl Projet {
 ///
 /// La contre-oblique est refusée avec la barre : elle sépare sous Windows, et une
 /// archive écrite là-bas y arriverait par le même chemin.
-fn nom_simple(court: &str) -> bool {
+///
+/// `maquettes` s'en sert pour les mêmes raisons : une `.maquette` est une archive du
+/// même genre, qu'on s'échange aussi. Le contrôle ne doit exister qu'une fois — deux
+/// exemplaires divergeraient, et c'est le plus vieux qui laisserait passer.
+pub(crate) fn nom_simple(court: &str) -> bool {
     court != "." && court != ".." && !court.contains(['/', '\\'])
 }
 
-fn ajoute<W: Write + Seek>(
+/// Ajoute une entrée à une archive. Partagé avec `maquettes`, qui écrit le même genre
+/// d'archive.
+pub(crate) fn ajoute<W: Write + Seek>(
     zip: &mut ZipWriter<W>,
     nom: &str,
     contenu: &[u8],
@@ -758,7 +764,12 @@ fn ajoute<W: Write + Seek>(
     zip.write_all(contenu).map_err(|e| format!("{nom} : {e}"))
 }
 
-fn fichier<R: Read + Seek>(zip: &mut ZipArchive<R>, nom: &str) -> Result<Option<Vec<u8>>, String> {
+/// Lit une entrée d'archive, ou rend `None` si elle n'y est pas. Partagé avec
+/// `maquettes`.
+pub(crate) fn fichier<R: Read + Seek>(
+    zip: &mut ZipArchive<R>,
+    nom: &str,
+) -> Result<Option<Vec<u8>>, String> {
     match zip.by_name(nom) {
         Ok(mut f) => {
             let mut buf = Vec::with_capacity(f.size() as usize);
@@ -921,7 +932,7 @@ auteur = "Ivan Pjig"
     /// rangeait — sous `couverture.maquette`.
     fn v2_avec(textes: &[(&[&str], &str)]) -> toml::Value {
         let mut p = Projet::nouveau(livre(), String::new());
-        p.meta.couverture.maquette = crate::maquettes::par_cle("folio");
+        p.meta.couverture.maquette = Some(crate::maquettes::fournie("folio"));
         let brut = toml::to_string_pretty(&p.meta)
             .unwrap()
             .replace(&format!("version = {VERSION}"), "version = 2");
@@ -1067,7 +1078,7 @@ auteur = "Ivan Pjig"
         p.meta.interieur.police = "Cardo".into();
         p.meta.livre.dedicace = "À M., qui a tenu la lampe.".into();
         p.meta.livre.collection = "collection « Ozalid »".into();
-        let mut maquette = crate::maquettes::blanche();
+        let mut maquette = crate::maquettes::fournie("blanche");
         maquette.pad_x = 16.5;
         maquette.titre.taille = 9.25;
         p.meta.couverture.maquette = Some(maquette);

@@ -312,11 +312,17 @@ impl TextesAtelier {
 /// plutôt que nul.
 pub fn traduit(r: &ReglagesAtelier) -> Result<(Couverture, TextesAtelier), String> {
     let ch = Champs(&r.fields);
+    let fournie = |cle: &str| -> Result<Couverture, String> {
+        maquettes::par_cle(None, cle)
+            .map(|m| m.couverture)
+            .ok_or_else(|| format!("maquette fournie « {cle} » illisible."))
+    };
     let mut cv = match r.mode.as_str() {
-        "band" => maquettes::folio(),
-        "overlay" => maquettes::surimpression(),
-        "typo" => maquettes::blanche(),
-        "" => maquettes::folio(), // bloc sans mode : le bandeau est le défaut de l'atelier
+        "band" => fournie("folio")?,
+        "overlay" => fournie("surimpression")?,
+        "typo" => fournie("blanche")?,
+        // Bloc sans mode : le bandeau est le défaut de l'atelier.
+        "" => fournie("folio")?,
         autre => return Err(format!("mode de couverture inconnu : « {autre} ».")),
     };
 

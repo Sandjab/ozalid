@@ -630,11 +630,11 @@ pub struct MaquetteVue {
 
 #[tauri::command]
 pub fn maquettes_liste() -> Vec<MaquetteVue> {
-    maquettes::toutes()
+    maquettes::toutes(None)
         .into_iter()
-        .map(|(cle, libelle, _)| MaquetteVue {
-            cle: cle.into(),
-            libelle: libelle.into(),
+        .map(|m| MaquetteVue {
+            cle: m.cle,
+            libelle: m.nom,
         })
         .collect()
 }
@@ -648,10 +648,10 @@ pub fn polices_liste() -> Vec<&'static str> {
 /// livre : le titre et l'auteur imprimés restent ceux du projet.
 #[tauri::command]
 pub fn maquette_choisir(cle: String, atelier: State<Atelier>) -> Result<ProjetVue, String> {
-    let m = maquettes::par_cle(&cle).ok_or_else(|| format!("maquette inconnue : {cle}"))?;
+    let m = maquettes::par_cle(None, &cle).ok_or_else(|| format!("maquette inconnue : {cle}"))?;
     let mut garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_mut().ok_or_else(aucun_projet)?;
-    o.projet.meta.couverture.maquette = Some(m);
+    o.projet.meta.couverture.maquette = Some(m.couverture);
     vue_modifiee(o)
 }
 

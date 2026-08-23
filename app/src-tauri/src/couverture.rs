@@ -1359,7 +1359,7 @@ mod tests {
     /// durant.
     #[test]
     fn la_couverture_inseree_ne_pose_aucun_reglage_de_document() {
-        let p = page_une(&livre(), &maquettes::folio(), FORMAT, None, None);
+        let p = page_une(&livre(), &maquettes::fournie("folio"), FORMAT, None, None);
         // Tout est enveloppé dans un seul bloc de page : un `#set` posé dedans ne vaut
         // que pour elle, quelle que soit la colonne où il tombe. Ce qui vaudrait pour
         // le document, c'est ce que `preambule` écrit *avant* la page — `#set page`, et
@@ -1384,7 +1384,7 @@ mod tests {
     /// qu'aucune erreur ne soit levée.
     #[test]
     fn seule_la_forme_autonome_de_la_1ere_regle_le_document() {
-        let (l, cv) = (livre(), maquettes::folio());
+        let (l, cv) = (livre(), maquettes::fournie("folio"));
         assert!(source_une(&l, &cv, FORMAT, None, None).contains("#set page("));
         assert!(!page_une(&l, &cv, FORMAT, None, None).contains("#set page("));
     }
@@ -1394,7 +1394,7 @@ mod tests {
     /// jamais laisser une valeur figée derrière.
     #[test]
     fn une_maquette_suit_le_format_sans_valeur_figee() {
-        let cv = maquettes::folio();
+        let cv = maquettes::fournie("folio");
         let petit = source_une(&livre(), &cv, (100.0, 160.0), None, None);
         let grand = source_une(&livre(), &cv, (200.0, 320.0), None, None);
         let corps = |s: &str| {
@@ -1409,7 +1409,7 @@ mod tests {
     /// poserait un rectangle noir sur une couverture qui n'a pas d'image dessous.
     #[test]
     fn la_composition_typographique_n_emet_ni_image_ni_voile() {
-        let mut cv = maquettes::blanche();
+        let mut cv = maquettes::fournie("blanche");
         cv.voile = Voile::Uni;
         cv.voile_opacite = 0.5;
         let s = source_une(&livre(), &cv, FORMAT, Some(&photo()), None);
@@ -1421,7 +1421,7 @@ mod tests {
     /// l'ordre, avec les bonnes couleurs.
     #[test]
     fn le_cadre_emet_trois_filets_dans_l_ordre() {
-        let cv = maquettes::blanche();
+        let cv = maquettes::fournie("blanche");
         assert!(cv.cadre.actif);
         let s = source_une(&livre(), &cv, FORMAT, None, None);
         // Le fond de la face est un rectangle lui aussi : seuls les filets portent un
@@ -1436,7 +1436,7 @@ mod tests {
 
     #[test]
     fn un_cadre_inactif_n_emet_rien() {
-        let cv = maquettes::folio();
+        let cv = maquettes::fournie("folio");
         assert!(!cv.cadre.actif);
         assert!(!source_une(&livre(), &cv, FORMAT, None, None).contains("stroke:"));
     }
@@ -1446,9 +1446,9 @@ mod tests {
     #[test]
     fn le_titre_et_l_auteur_viennent_du_projet() {
         for cv in [
-            maquettes::folio(),
-            maquettes::blanche(),
-            maquettes::surimpression(),
+            maquettes::fournie("folio"),
+            maquettes::fournie("blanche"),
+            maquettes::fournie("surimpression"),
         ] {
             let s = source_une(&livre(), &cv, FORMAT, None, None);
             assert!(s.contains("Les Heures creuses"), "{:?}", cv.mode);
@@ -1459,7 +1459,7 @@ mod tests {
     /// Le bandeau réserve le haut de la couverture : l'image commence dessous.
     #[test]
     fn le_bandeau_pousse_l_image_sous_la_bande() {
-        let cv = maquettes::folio();
+        let cv = maquettes::fournie("folio");
         let s = source_une(&livre(), &cv, FORMAT, Some(&photo()), None);
         let dy = s
             .split("dy: ")
@@ -1476,7 +1476,7 @@ mod tests {
 
     #[test]
     fn la_surimpression_couvre_toute_la_couverture() {
-        let cv = maquettes::surimpression();
+        let cv = maquettes::fournie("surimpression");
         let s = source_une(&livre(), &cv, FORMAT, Some(&photo()), None);
         assert!(s.contains(&format!("width: {}", mm(FORMAT.0))));
         assert!(s.contains("gradient.linear"), "voile attendu");
@@ -1486,7 +1486,7 @@ mod tests {
     /// sans elle produirait une 4ème décalée — et personne ne le verrait avant tirage.
     #[test]
     fn le_prolongement_refuse_de_composer_sans_le_dos() {
-        let mut cv = maquettes::folio();
+        let mut cv = maquettes::fournie("folio");
         cv.quatrieme.fond = FondQuatre::Panorama;
         let err = source_quatre(&livre(), &cv, FORMAT, None, Some(&photo()), None).unwrap_err();
         assert!(err.contains("dos"), "{err}");
@@ -1500,7 +1500,7 @@ mod tests {
     /// 4ème en papier nu : la divergence est ici, et elle est voulue.
     #[test]
     fn le_prolongement_cadre_l_image_sur_la_planche_entiere() {
-        let mut cv = maquettes::folio();
+        let mut cv = maquettes::fournie("folio");
         cv.quatrieme.fond = FondQuatre::Panorama;
         let largeur_zone = |dos: f64| {
             let s = source_quatre(&livre(), &cv, FORMAT, None, Some(&photo()), Some(dos)).unwrap();
@@ -1523,7 +1523,7 @@ mod tests {
     /// prestataire. En imprimer un serait le pire des services.
     #[test]
     fn la_zone_isbn_est_un_rectangle_blanc_vide() {
-        let mut cv = maquettes::folio();
+        let mut cv = maquettes::fournie("folio");
         cv.quatrieme.isbn_actif = true;
         let s = source_quatre(&livre(), &cv, FORMAT, None, None, None).unwrap();
         assert!(s.contains("fill: rgb(\"#ffffff\")"));
@@ -1535,9 +1535,9 @@ mod tests {
     #[test]
     fn les_trois_maquettes_composent_les_deux_faces() {
         for cv in [
-            maquettes::folio(),
-            maquettes::blanche(),
-            maquettes::surimpression(),
+            maquettes::fournie("folio"),
+            maquettes::fournie("blanche"),
+            maquettes::fournie("surimpression"),
         ] {
             assert!(!source_une(&livre(), &cv, FORMAT, Some(&photo()), None).is_empty());
             source_quatre(&livre(), &cv, FORMAT, None, Some(&photo()), Some(15.0)).unwrap();
@@ -1549,9 +1549,9 @@ mod tests {
     #[test]
     fn les_maquettes_n_utilisent_que_des_polices_embarquees() {
         for cv in [
-            maquettes::folio(),
-            maquettes::blanche(),
-            maquettes::surimpression(),
+            maquettes::fournie("folio"),
+            maquettes::fournie("blanche"),
+            maquettes::fournie("surimpression"),
         ] {
             for st in [
                 &cv.auteur,
@@ -1575,7 +1575,7 @@ mod tests {
         let mut l = livre();
         l.titre = "Le #Titre".into();
         l.collection = "col#lection".into();
-        let cv = maquettes::folio();
+        let cv = maquettes::fournie("folio");
         let s = source_une(&l, &cv, FORMAT, None, None);
         assert!(s.contains(r"Le \#Titre"));
         assert!(s.contains(r"col\#lection"));
@@ -1593,7 +1593,7 @@ mod tests {
         l.prix = "18 € — %COLLECTION%".into();
         l.mention = "%EDITEUR%".into();
 
-        let mut cv = maquettes::par_cle("blanche").unwrap();
+        let mut cv = maquettes::fournie("blanche");
         cv.pied.actif = true;
         cv.pastille.actif = true;
         cv.quatrieme.pied_actif = true;
@@ -1627,7 +1627,7 @@ mod tests {
     fn le_resume_de_quatrieme_cite_les_cles() {
         let mut l = livre();
         l.genre = "roman".into();
-        let mut cv = maquettes::par_cle("blanche").unwrap();
+        let mut cv = maquettes::fournie("blanche");
         cv.quatrieme.texte = "%TITRE%, un %GENRE% de %AUTEUR%.".into();
 
         let quatre = source_quatre(&l, &cv, FORMAT, None, None, None).unwrap();

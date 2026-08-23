@@ -251,7 +251,7 @@ mod tests {
             },
             "## 1 - Le seuil\n\nPremier.\n".into(),
         );
-        p.meta.couverture.maquette = crate::maquettes::par_cle("folio");
+        p.meta.couverture.maquette = Some(crate::maquettes::fournie("folio"));
         p
     }
 

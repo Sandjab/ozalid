@@ -48,28 +48,32 @@ fn main() -> Result<(), String> {
 
     // La maquette du projet d'abord, quand il en porte une : c'est elle qu'on compare
     // au livre déjà publié.
-    let mut a_rendre = maquettes::toutes();
-    if let Some(m) = projet.meta.couverture.maquette.clone() {
-        a_rendre.insert(0, ("projet", "Maquette du projet", m));
+    let mut a_rendre = maquettes::toutes(None);
+    if let Some(cv) = projet.meta.couverture.maquette.clone() {
+        a_rendre.insert(
+            0,
+            maquettes::Maquette {
+                cle: "projet".into(),
+                nom: "Maquette du projet".into(),
+                fournie: false,
+                couverture: cv,
+                images: Default::default(),
+            },
+        );
     }
 
-    for (k, libelle, cv) in a_rendre {
+    for m in a_rendre {
+        let (k, libelle, cv) = (m.cle.as_str(), m.nom.as_str(), &m.couverture);
         for (face, src) in [
             (
                 "une",
-                couverture::source_une(
-                    &projet.meta.livre,
-                    &cv,
-                    pr.format,
-                    une.as_ref(),
-                    Some(15.0),
-                ),
+                couverture::source_une(&projet.meta.livre, cv, pr.format, une.as_ref(), Some(15.0)),
             ),
             (
                 "quatre",
                 couverture::source_quatre(
                     &projet.meta.livre,
-                    &cv,
+                    cv,
                     pr.format,
                     quatre.as_ref(),
                     une.as_ref(),
