@@ -403,9 +403,11 @@ tout ce qui se voit se vérifie dans l'application.
   livres qui en portent une. Seule la **largeur** du dos échappe au réglage : elle
   vient de la pagination, et c'est tout l'objet de l'application.
 - **La place, le rang et le sens ne se règlent qu'à la souris.** On traîne le texte au
-  tiers du dos qu'on veut ; l'icône posée dans son coin le retourne — et, pour la
-  collection seule, le couche en travers du dos, d'un quart de tour à gauche ou à
-  droite. Le panneau ne les offre pas : il redirait ce que l'aperçu montre déjà.
+  tiers du dos qu'on veut ; l'icône posée dans son coin le retourne — et, pour
+  l'éditeur et la collection, le couche en travers du dos, d'un quart de tour à gauche
+  ou à droite. Ces deux mentions-là sont assez courtes pour se lire le livre debout
+  sans déborder de l'épaisseur ; l'auteur et le titre gardent le montant et le
+  descendant. Le panneau ne les offre pas : il redirait ce que l'aperçu montre déjà.
   Une réserve à connaître : l'épaisseur qu'un élément couché en travers réclame est la
   longueur de sa ligne, que seul Typst connaît — `dos_requis` ne la mesure pas, et un
   tel élément trop long se voit rogné sur la face Dos sans autre signal.

@@ -204,10 +204,10 @@
                 <div class="zone-dos" data-place="tete">Tête</div>
               </div>
               <!-- L'icône posée dans le coin de chaque texte en règle le sens de
-                   lecture. Une seule pour les trois textes du livre — ils n'ont que le
+                   lecture. Une seule pour l'auteur et le titre — ils n'ont que le
                    montant et le descendant, et la flèche dit lequel court —, deux pour
-                   la collection, qui peut aussi se coucher en travers du dos et qu'un
-                   quart de tour à gauche ou à droite y amène. -->
+                   l'éditeur et la collection, qui peuvent aussi se coucher en travers
+                   du dos et qu'un quart de tour à gauche ou à droite y amène. -->
               <div class="prise prise-dos" id="priseDosAuteur"><span>Auteur</span>
                 <button type="button" class="sens" id="sensDosAuteur">↑</button>
               </div>
@@ -215,7 +215,10 @@
                 <button type="button" class="sens" id="sensDosTitre">↑</button>
               </div>
               <div class="prise prise-dos" id="priseDosEditeur"><span>Éditeur</span>
-                <button type="button" class="sens" id="sensDosEditeur">↑</button>
+                <button type="button" class="sens" id="sensDosEditeurGauche"
+                        title="Tourner d'un quart de tour vers la gauche">↺</button>
+                <button type="button" class="sens" id="sensDosEditeurDroite"
+                        title="Tourner d'un quart de tour vers la droite">↻</button>
               </div>
               <div class="prise prise-dos" id="priseDosCollection"><span>Collection</span>
                 <button type="button" class="sens" id="sensDosCollectionGauche"

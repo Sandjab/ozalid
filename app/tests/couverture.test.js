@@ -357,8 +357,8 @@ test('la place, le rang et le sens du dos ne sont plus offerts au panneau', asyn
  *
  * Un dos se lit de bas en haut chez les uns, de haut en bas chez les autres, et c'est
  * une décision de maquette qui se prend en regardant le dos — pas dans une liste
- * déroulante. Les trois textes du livre n'ont que ces deux sens : couchés en travers,
- * ils ne tiendraient pas dans l'épaisseur.
+ * déroulante. L'auteur et le titre n'ont que ces deux sens : couchés en travers, ils ne
+ * tiendraient pas dans l'épaisseur.
  */
 test('un clic retourne le texte du dos, et un second le remet', async () => {
   const { els, appels, contexte } = await ouvre(maquette(), {
@@ -377,30 +377,34 @@ test('un clic retourne le texte du dos, et un second le remet', async () => {
 });
 
 /**
- * La collection, elle, peut se coucher en travers du dos — c'est le sens d'une mention
- * qui se lit le livre debout. Ses deux boutons tournent chacun d'un quart de tour, et
- * le tour complet ramène à zéro : sans le modulo, le sens sortirait des bornes du
- * schéma et s'y arrêterait, la collection restant coincée en travers.
+ * L'éditeur et la collection, eux, peuvent se coucher en travers du dos — c'est le sens
+ * d'une mention qui se lit le livre debout, et ces deux textes-là sont assez courts pour
+ * tenir dans l'épaisseur. Leurs deux boutons tournent chacun d'un quart de tour, et le
+ * tour complet ramène à zéro : sans le modulo, le sens sortirait des bornes du schéma et
+ * s'y arrêterait, le texte restant coincé en travers.
  */
-test('la collection tourne d\'un quart de tour dans les deux sens', async () => {
-  const { els, contexte } = await ouvre(maquette(), {
-    couverture_modifier: (a) => projet(a.couverture),
+for (const [cle, b] of [['editeur', 'Editeur'], ['collection', 'Collection']]) {
+  test(`${cle} : le quart de tour va dans les deux sens`, async () => {
+    const { els, contexte } = await ouvre(maquette(), {
+      couverture_modifier: (a) => projet(a.couverture),
+    });
+    await face(els, 'Dos').declenche('click');
+    await attendreApercu();
+
+    const sens = () => contexte.valeurSaisie(`dos.${cle}.sens`);
+    const droite = () => els.get(`sensDos${b}Droite`).declenche('click');
+    await droite();
+    assert.strictEqual(sens(), 90);
+    await droite();
+    await droite();
+    assert.strictEqual(sens(), 270);
+    await droite();
+    assert.strictEqual(sens(), 0, 'le tour complet ne revient pas à zéro');
+
+    await els.get(`sensDos${b}Gauche`).declenche('click');
+    assert.strictEqual(sens(), 270, 'la gauche ne tourne pas à l\'envers de la droite');
   });
-  await face(els, 'Dos').declenche('click');
-  await attendreApercu();
-
-  const sens = () => contexte.valeurSaisie('dos.collection.sens');
-  await els.get('sensDosCollectionDroite').declenche('click');
-  assert.strictEqual(sens(), 90);
-  await els.get('sensDosCollectionDroite').declenche('click');
-  await els.get('sensDosCollectionDroite').declenche('click');
-  assert.strictEqual(sens(), 270);
-  await els.get('sensDosCollectionDroite').declenche('click');
-  assert.strictEqual(sens(), 0, 'le tour complet ne revient pas à zéro');
-
-  await els.get('sensDosCollectionGauche').declenche('click');
-  assert.strictEqual(sens(), 270, 'la gauche ne tourne pas à l\'envers de la droite');
-});
+}
 
 /**
  * La planche ne se règle pas, elle se vérifie : c'est ce qui lui vaut la fenêtre

@@ -800,6 +800,16 @@ const ELEMENTS_DOS = [
   ['editeur', 'Editeur'], ['collection', 'Collection'],
 ];
 
+/**
+ * Les éléments qui se couchent **en travers** du dos, et non seulement dans son sens.
+ *
+ * Une mention d'éditeur ou de collection est courte : couchée en travers, elle se lit le
+ * livre debout et tient dans l'épaisseur. Un titre ou un nom d'auteur, non — la longueur
+ * de leur ligne y passerait, et l'épaisseur d'un dos vient de la pagination, pas d'un
+ * réglage. Ils gardent donc les deux seuls sens qu'un dos leur offre.
+ */
+const QUARTS_DOS = ['editeur', 'collection'];
+
 /** Toutes les prises du balisage, pour les éteindre d'un bloc avant de choisir. */
 const PRISES = ['priseImage', 'priseBloc', 'priseBandeau',
   ...ELEMENTS_DOS.map(([, b]) => `priseDos${b}`)];
@@ -877,7 +887,7 @@ function poserPrisesDos() {
 }
 
 /**
- * Le sens de lecture des trois textes du livre, tel que la flèche le montre.
+ * Le sens de lecture de l'auteur et du titre, tel que la flèche le montre.
  *
  * La flèche dit le sens **courant**, et non ce que le clic ferait : c'est le seul
  * endroit de la fenêtre où se lise qu'un dos est montant ou descendant, et un aperçu
@@ -1088,7 +1098,7 @@ function cablerPrises() {
     });
     // Les icônes de sens vivent dans la prise : sans cet arrêt, presser l'une d'elles
     // commencerait aussi à traîner le texte qui la porte.
-    for (const [id, quart] of cle === 'collection'
+    for (const [id, quart] of QUARTS_DOS.includes(cle)
       ? [[`sensDos${b}Gauche`, -90], [`sensDos${b}Droite`, 90]]
       : [[`sensDos${b}`, 180]]) {
       $(id).addEventListener('pointerdown', (e) => e.stopPropagation());
