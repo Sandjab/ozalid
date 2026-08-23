@@ -1057,6 +1057,28 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
   border-color: transparent;
 }
 
+/* ---------- le dialogue des maquettes ---------- */
+
+/* Le premier `<dialog>` de cette feuille. Le navigateur lui donne déjà le centrage, le
+   piège à focus et Échap : il ne reste qu'à l'habiller comme le reste de la fenêtre.
+   `::backdrop` est l'autre cadeau de la primitive — le fond assombri qui dit que la
+   fenêtre attend. */
+.dialogue {
+  border: 1px solid var(--trait);
+  border-radius: 6px;
+  padding: 1rem 1.2rem;
+  min-width: 30rem;
+  max-width: 42rem;
+  background: var(--surface);
+  color: var(--encre);
+}
+
+.dialogue::backdrop { background: rgb(0 0 0 / 35%); }
+.dialogue h2 { margin: 0 0 .4rem; font-size: 1.05rem; }
+.dialogue .ligne { margin-top: .8rem; }
+.dialogue .ligne.fin { justify-content: flex-end; }
+.dialogue .etat { display: block; margin-top: .6rem; }
+
 /* ---------- masquage ---------- */
 
 /* `hidden` est le seul moyen par lequel le code fait disparaître quelque chose : un

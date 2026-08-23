@@ -152,6 +152,7 @@
            ne la voit pas. Ici la raison est aussi la place — les deux mots qu'il aurait
            fallu, la barre les prend sur la mention des photos, à 900 px. -->
       <select id="inMaquette" aria-label="Repartir d'une maquette"></select>
+      <button id="btMaquettes" type="button">Maquettes…</button>
       <button id="btImageUne" type="button">Photo de 1ère…</button>
       <button id="btImageQuatre" type="button">Photo de 4ème…</button>
       <p class="note source" id="etatImages"></p>
@@ -240,6 +241,31 @@
       </div>
       <div id="reglages" class="reglages"></div>
     </div>
+
+    <!-- Gérer ses maquettes suppose un projet ouvert : le bouton ne vit que dans
+         l'étape Couverture, conséquence assumée du choix « on dessine une couverture
+         sur un vrai livre et un vrai format ».
+         Premier `<dialog>` de ce front, et c'est la primitive standard : elle gère
+         seule le focus et Échap, ce qu'aucune boîte faite à la main ne fait bien. Il ne
+         porte qu'un geste — le lot suivant y ajoutera la liste, Cloner, Renommer et
+         Effacer. -->
+    <dialog id="dlgMaquettes" class="dialogue">
+      <h2>Maquettes</h2>
+      <p class="note">
+        Une maquette emporte la couverture entière — le cadrage, les photos et le résumé
+        de 4ème. Préférer des images neutres et un résumé en jetons : ils se résoudront
+        pour chaque livre où la maquette servira.
+      </p>
+      <div class="ligne">
+        <label for="inMaquetteNom">Enregistrer la couverture actuelle</label>
+        <input id="inMaquetteNom" type="text" placeholder="Nom de la maquette">
+        <button id="btMaquetteEnregistrer" type="button">Enregistrer</button>
+      </div>
+      <p class="etat" id="etatMaquettes"></p>
+      <div class="ligne fin">
+        <button id="btMaquettesFermer" type="button">Fermer</button>
+      </div>
+    </dialog>
   </section>
 
   <section id="etapeLivraison" class="etape" role="tabpanel" hidden>

@@ -121,9 +121,9 @@ async function ouvre(couverture, sur = {}, dialogues = []) {
     if (cmd === 'mains_liste') return ['Caveat', 'Dancing Script'];
     if (cmd === 'maquettes_liste') {
       return [
-        { cle: 'folio', libelle: 'Folio' },
-        { cle: 'blanche', libelle: 'Blanche' },
-        { cle: 'surimpression', libelle: 'Surimpression' },
+        { cle: 'folio', libelle: 'Folio', fournie: true },
+        { cle: 'blanche', libelle: 'Blanche', fournie: true },
+        { cle: 'surimpression', libelle: 'Surimpression', fournie: true },
       ];
     }
     if (cmd === 'projet_ouvrir') return projet(couverture);
@@ -1041,4 +1041,76 @@ test('reposer un texte du dos au même endroit ne modifie pas le projet', async 
   await prise.declenche('pointerup', souris(198, 40));
   assert.strictEqual(
     appels.some(([c]) => c === 'couverture_modifier'), false, 'dépôt sans effet commis');
+});
+
+/* ---------- le menu des maquettes et le dialogue ---------- */
+
+/** Les trois fournies, plus une personnalisée : de quoi exercer le séparateur. */
+const AVEC_PERSONNALISEE = () => [
+  { cle: 'folio', libelle: 'Folio', fournie: true },
+  { cle: 'blanche', libelle: 'Blanche', fournie: true },
+  { cle: 'ma-collection', libelle: 'Ma collection', fournie: false },
+];
+
+/**
+ * Le menu est un geste, pas un état : les personnalisées s'y rangent après les
+ * fournies, derrière un séparateur qu'on ne peut pas choisir. Une option désactivée
+ * plutôt qu'un `optgroup` — le faux DOM sélectionne la première option *enfant* d'un
+ * select, et des options rangées dans un groupe ne le seraient plus.
+ */
+test('le menu des maquettes range les personnalisées sous un séparateur', async () => {
+  const { els } = await ouvre(maquette(), { maquettes_liste: AVEC_PERSONNALISEE });
+  const options = [...els.get('inMaquette').children].map((o) => ({
+    texte: o.textContent, valeur: o.value, inerte: !!o.disabled,
+  }));
+  assert.deepEqual(options, [
+    { texte: 'Repartir d\'une maquette…', valeur: '', inerte: false },
+    { texte: 'Folio', valeur: 'folio', inerte: false },
+    { texte: 'Blanche', valeur: 'blanche', inerte: false },
+    { texte: '──────────', valeur: '', inerte: true },
+    { texte: 'Ma collection', valeur: 'ma-collection', inerte: false },
+  ]);
+});
+
+/**
+ * Le geste du lot : le nom saisi part au Rust, et la liste se refait derrière — sans
+ * quoi la maquette qu'on vient d'enregistrer manquerait au menu jusqu'au prochain
+ * démarrage.
+ */
+test('enregistrer une maquette la fait paraître au menu', async () => {
+  const enregistrees = [];
+  const { els } = await ouvre(maquette(), {
+    maquette_enregistrer: ({ nom }) => { enregistrees.push(nom); return null; },
+    maquettes_liste: () => [
+      { cle: 'folio', libelle: 'Folio', fournie: true },
+      ...enregistrees.map((n) => ({ cle: 'x', libelle: n, fournie: false })),
+    ],
+  });
+
+  await els.get('btMaquettes').declenche('click');
+  els.get('inMaquetteNom').value = 'Ma collection';
+  await els.get('btMaquetteEnregistrer').declenche('click');
+
+  assert.deepEqual(enregistrees, ['Ma collection']);
+  assert.ok(
+    [...els.get('inMaquette').children].some((o) => o.textContent === 'Ma collection'),
+    'la maquette enregistrée doit paraître au menu'
+  );
+  assert.strictEqual(els.get('inMaquetteNom').value, '', 'le champ se vide après le geste');
+  assert.ok(els.get('dlgMaquettes').open, 'le dialogue reste ouvert : on en enregistre souvent deux');
+});
+
+/**
+ * Un refus du Rust — nom déjà pris, nom sans slug — doit se lire *dans* le dialogue :
+ * l'alerte de la fenêtre est derrière lui, et le geste paraîtrait avoir marché.
+ */
+test('un refus d\'enregistrement se lit dans le dialogue', async () => {
+  const { els } = await ouvre(maquette(), {
+    maquette_enregistrer: () => { throw new Error('« Folio » porte déjà ce nom.'); },
+    maquettes_liste: AVEC_PERSONNALISEE,
+  });
+  await els.get('btMaquettes').declenche('click');
+  els.get('inMaquetteNom').value = 'Folio';
+  await els.get('btMaquetteEnregistrer').declenche('click');
+  assert.match(els.get('etatMaquettes').textContent, /porte déjà ce nom/);
 });

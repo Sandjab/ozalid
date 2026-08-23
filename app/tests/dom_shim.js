@@ -170,6 +170,19 @@ class El {
    * clic sur un bouton est tout entier dans le fait qu'il a eu lieu. Une touche, elle,
    * n'est que son événement — les tests en passent un pour dire laquelle.
    */
+  /**
+   * Le `<dialog>` du dialogue des maquettes. `open` est l'attribut que le vrai DOM
+   * pose : les tests s'en servent pour dire si la boîte est ouverte, sans singer la
+   * pile de modales ni le piège à focus, dont l'application ne dépend pas.
+   */
+  showModal() {
+    this.open = true;
+  }
+
+  close() {
+    this.open = false;
+  }
+
   async declenche(type, evenement) {
     for (const fn of this.ecouteurs[type] || []) await fn(evenement);
   }

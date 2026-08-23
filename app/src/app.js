@@ -346,10 +346,14 @@ async function chargerProviders() {
   // L'accès au modèle appartient à la machine, pas au projet : il se lit une fois, au
   // démarrage, et il survit à tous les livres qu'on ouvrira ensuite.
   afficherDiffusion(await invoke('diffusion_lire'));
-  const sel = $('inMaquette');
-  sel.append(new Option('Repartir d\'une maquette…', ''));
-  for (const m of await invoke('maquettes_liste')) sel.append(new Option(m.libelle, m.cle));
-  sel.addEventListener('change', choisirMaquette);
+  await remplirMaquettes();
+  $('inMaquette').addEventListener('change', choisirMaquette);
+  $('btMaquettes').addEventListener('click', () => {
+    $('etatMaquettes').textContent = '';
+    $('dlgMaquettes').showModal();
+  });
+  $('btMaquettesFermer').addEventListener('click', () => $('dlgMaquettes').close());
+  $('btMaquetteEnregistrer').addEventListener('click', enregistrerMaquette);
   construireReglages();
 }
 
@@ -582,7 +586,8 @@ function oublierLaComposition() {
   // un message rouge appartient au texte qui l'a provoqué autant que le chiffre qu'il
   // commente. Effacer le chemin de l'épreuve en laissant l'erreur qui disait pourquoi
   // elle avait échoué donnerait à lire l'échec de l'ancien texte sous le nouveau.
-  for (const id of ['etat', 'etatEpreuve', 'etatPackages', 'etatEbooks', 'etatEnvois']) {
+  for (const id of ['etat', 'etatEpreuve', 'etatPackages', 'etatEbooks', 'etatEnvois',
+    'etatMaquettes']) {
     $(id).textContent = '';
     $(id).className = 'etat';
   }

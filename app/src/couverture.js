@@ -273,6 +273,53 @@ function ecrire(obj, chemin, valeur) {
    pour `livraison.js`. */
 
 /**
+ * (Re)remplit le menu des maquettes.
+ *
+ * Rappelée après chaque geste du dialogue : la liste vit dans le Rust, qui relit le
+ * répertoire de configuration à chaque appel. La tenir à jour ici la dédoublerait.
+ *
+ * Les personnalisées suivent les fournies, derrière une option inerte qui fait le
+ * séparateur — le Rust les rend déjà dans cet ordre, la fenêtre n'a qu'à repérer où
+ * l'origine change.
+ */
+async function remplirMaquettes() {
+  const sel = $('inMaquette');
+  sel.replaceChildren();
+  sel.append(new Option('Repartir d\'une maquette…', ''));
+  let separateur = false;
+  for (const m of await invoke('maquettes_liste')) {
+    if (!m.fournie && !separateur) {
+      const trait = new Option('──────────', '');
+      trait.disabled = true;
+      sel.append(trait);
+      separateur = true;
+    }
+    sel.append(new Option(m.libelle, m.cle));
+  }
+  sel.value = '';
+}
+
+/**
+ * Enregistre la couverture réglée comme maquette.
+ *
+ * Le compte rendu se lit dans le dialogue et non dans l'alerte de la fenêtre : celle-ci
+ * est derrière lui, et un refus y passerait inaperçu — le geste paraîtrait avoir marché.
+ */
+async function enregistrerMaquette() {
+  const nom = $('inMaquetteNom').value.trim();
+  try {
+    await invoke('maquette_enregistrer', { nom });
+    $('inMaquetteNom').value = '';
+    $('etatMaquettes').textContent = `« ${nom} » enregistrée.`;
+    $('etatMaquettes').className = 'etat';
+    await remplirMaquettes();
+  } catch (e) {
+    $('etatMaquettes').textContent = String(e);
+    $('etatMaquettes').className = 'etat erreur';
+  }
+}
+
+/**
  * Repart d'une maquette, et rend l'invite à son menu.
  *
  * Le menu ne montre pas un état : le projet ne garde pas de quelle maquette il est
