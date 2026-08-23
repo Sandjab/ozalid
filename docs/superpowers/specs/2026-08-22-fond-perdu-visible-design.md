@@ -184,7 +184,12 @@ Sur un manuscrit réel, chez un prestataire à fond perdu publié :
 - **Mesurer le débord d'un élément.** Dire de combien la pastille passe sous la coupe
   demanderait au Rust de connaître la boîte de chaque élément composé ; la couverture
   est aujourd'hui décrite en pourcentages et composée par Typst, qui seul sait où les
-  choses tombent. Autre chantier.
+  choses tombent. Autre chantier. *Le 23/08, la manipulation directe entrouvre la
+  porte : `typst eval` mesure un texte en quinze millisecondes, et les trois textes du
+  dos ont désormais leur boîte. La marche restante est entière — connaître la boîte
+  d'un élément **quelconque** sur une page composée n'est pas la même chose que mesurer
+  trois textes dont on connaît d'avance la mise en page. Voir
+  `2026-08-23-manipulation-directe-design.md`.*
 - ~~**Le pli du dos.**~~ Écarté le 22/08 au motif que la planche montre ses trois zones
   par leurs fonds — faux dès qu'elles portent le même papier, et c'est le cas courant.
   **Fait le 23/08** : deux filets accolés, l'un clair et l'autre sombre, sur toute la
