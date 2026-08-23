@@ -20,7 +20,7 @@
 
 use std::collections::BTreeMap;
 use std::io::{Read, Seek, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use zip::write::SimpleFileOptions;
@@ -92,11 +92,11 @@ fn lire<R: Read + Seek>(source: R, cle: &str, fournie: bool) -> Result<Maquette,
     })
 }
 
-/// Écrire une archive n'a pas encore d'appelant en production : c'est le lot 2 qui lui
-/// en donne un, quand « Enregistrer la couverture actuelle » écrira une personnalisée.
-/// D'ici là seuls les tests l'appellent — dont celui qui grave les trois fournies.
+/// Écrit une archive de maquette. Ni le nom du fichier ni l'unicité ne la regardent :
+/// c'est `ecrire` qui en décidera — d'ici là, seuls les tests l'appellent, dont celui
+/// qui pose des personnalisées dans un répertoire de configuration jetable.
 #[cfg_attr(not(test), allow(dead_code))]
-fn ecrire<W: Write + Seek>(sortie: W, m: &Maquette) -> Result<(), String> {
+fn ecrire_archive<W: Write + Seek>(sortie: W, m: &Maquette) -> Result<(), String> {
     let mut zip = ZipWriter::new(sortie);
     // La date des entrées est figée : une archive versionnée doit être la même à
     // l'octet près d'une écriture à l'autre, sinon le test qui grave les fournies
@@ -136,24 +136,70 @@ const FOURNIES: [(&str, &[u8]); 3] = [
     ),
 ];
 
+/// L'extension d'une archive de maquette, sans le point.
+const EXT: &str = "maquette";
+
+/// Là où vivent les personnalisées : à côté de `preferences.toml`, parce qu'elles
+/// appartiennent à la machine et non au livre. Un `.ozalid` reste auto-portant — sa
+/// couverture est dans l'archive ; une maquette n'est qu'un point de départ.
+fn repertoire(config: &Path) -> PathBuf {
+    config.join("maquettes")
+}
+
+/// Les personnalisées, dans l'ordre de leur nom.
+///
+/// Un répertoire absent n'est pas une avarie : c'est l'état d'un poste où l'on n'a
+/// encore rien enregistré.
+fn personnalisees(config: &Path) -> Vec<Maquette> {
+    let Ok(entrees) = std::fs::read_dir(repertoire(config)) else {
+        return Vec::new();
+    };
+    let mut v = Vec::new();
+    for e in entrees.flatten() {
+        let chemin = e.path();
+        if chemin.extension().and_then(|x| x.to_str()) != Some(EXT) {
+            continue;
+        }
+        let Some(cle) = chemin.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        match std::fs::File::open(&chemin)
+            .map_err(|err| err.to_string())
+            .and_then(|f| lire(f, cle, false))
+        {
+            Ok(m) => v.push(m),
+            Err(err) => eprintln!("maquette « {} » ignorée : {err}", chemin.display()),
+        }
+    }
+    // Par le nom affiché, qui est l'identité — et non par la clé, que l'utilisateur ne
+    // voit nulle part, ni par ce que rend `read_dir`, que rien ne spécifie. L'ordre suit
+    // les codes de caractères : « Étoile » passe donc après « Zeste », pis-aller assumé
+    // plutôt qu'une collation complète.
+    v.sort_by(|a, b| a.nom.cmp(&b.nom));
+    v
+}
+
 /// Les maquettes, dans l'ordre où l'interface les propose.
 ///
 /// **La lecture est au mieux** : une archive illisible est ignorée avec un mot sur la
 /// sortie d'erreur — ce qui se perd est un point de départ, et refuser la liste entière
 /// coûterait les autres. L'écriture, elle, échoue fort : elle perdrait du travail.
 ///
-/// `config` porte le répertoire de configuration, ou `None` quand il est inatteignable.
-/// Il est ignoré tant que les personnalisées n'existent pas (lot 2) : seules les
-/// fournies sont servies.
-pub fn toutes(_config: Option<&Path>) -> Vec<Maquette> {
-    FOURNIES
+/// `config` porte le répertoire de configuration, ou `None` quand il est inatteignable —
+/// les fournies restent alors servies, comme les projets récents restent listés.
+pub fn toutes(config: Option<&Path>) -> Vec<Maquette> {
+    let mut v: Vec<Maquette> = FOURNIES
         .iter()
         .filter_map(|(cle, octets)| {
             lire(std::io::Cursor::new(*octets), cle, true)
                 .map_err(|e| eprintln!("maquette fournie « {cle} » illisible : {e}"))
                 .ok()
         })
-        .collect()
+        .collect();
+    if let Some(c) = config {
+        v.extend(personnalisees(c));
+    }
+    v
 }
 
 pub fn par_cle(config: Option<&Path>, cle: &str) -> Option<Maquette> {
@@ -263,7 +309,7 @@ mod tests {
         };
 
         let mut octets = Vec::new();
-        ecrire(Cursor::new(&mut octets), &avant).unwrap();
+        ecrire_archive(Cursor::new(&mut octets), &avant).unwrap();
         let apres = lire(Cursor::new(&octets), "ma-collection", false).unwrap();
 
         assert_eq!(apres, avant);
@@ -282,7 +328,7 @@ mod tests {
             images: BTreeMap::new(),
         };
         let mut octets = Vec::new();
-        ecrire(Cursor::new(&mut octets), &m).unwrap();
+        ecrire_archive(Cursor::new(&mut octets), &m).unwrap();
 
         let relue = lire(Cursor::new(&octets), "autre-slug", true).unwrap();
         assert_eq!(relue.cle, "autre-slug");
@@ -311,6 +357,93 @@ mod tests {
                 ),
             ]
         );
+    }
+
+    /// Écrit une archive à la main dans `<config>/maquettes/`, comme le ferait une
+    /// version antérieure ou un utilisateur qui déplace ses fichiers.
+    fn pose(config: &Path, fichier: &str, nom: &str) {
+        let dir = config.join("maquettes");
+        std::fs::create_dir_all(&dir).unwrap();
+        let m = Maquette {
+            cle: String::new(),
+            nom: nom.into(),
+            fournie: false,
+            couverture: fournie("folio"),
+            images: BTreeMap::new(),
+        };
+        ecrire_archive(std::fs::File::create(dir.join(fichier)).unwrap(), &m).unwrap();
+    }
+
+    /// Les personnalisées viennent après les fournies, dans l'ordre de leur **nom** —
+    /// le seul que l'utilisateur voit. Le menu propose d'abord ce qui est livré, puis ce
+    /// qu'on a fait soi-même.
+    ///
+    /// Les deux fichiers sont nommés à contre-sens, sans quoi le test passerait aussi
+    /// bien sans tri : `read_dir` rend ses entrées dans un ordre que rien ne spécifie —
+    /// APFS les rend par empreinte, et rend précisément `zzz` avant `zeste`. C'est donc
+    /// bien le tri, et non le système de fichiers, qui met « Ma collection » en tête.
+    #[test]
+    fn les_personnalisees_suivent_les_fournies_dans_l_ordre_de_leur_nom() {
+        let dir = tempfile::tempdir().unwrap();
+        pose(dir.path(), "zzz.maquette", "Zeste");
+        pose(dir.path(), "zeste.maquette", "Ma collection");
+
+        let vues: Vec<(String, String, bool)> = toutes(Some(dir.path()))
+            .into_iter()
+            .map(|m| (m.cle, m.nom, m.fournie))
+            .collect();
+        assert_eq!(
+            vues,
+            [
+                ("folio".to_string(), "Folio".to_string(), true),
+                ("blanche".to_string(), "Blanche".to_string(), true),
+                (
+                    "surimpression".to_string(),
+                    "Surimpression".to_string(),
+                    true
+                ),
+                ("zeste".to_string(), "Ma collection".to_string(), false),
+                ("zzz".to_string(), "Zeste".to_string(), false),
+            ]
+        );
+    }
+
+    /// La clé d'une personnalisée est le nom de son fichier : c'est lui qu'on retrouve
+    /// sur le disque, et c'est par lui que le lot 3 la renommera et l'effacera.
+    #[test]
+    fn une_personnalisee_se_retrouve_par_sa_cle() {
+        let dir = tempfile::tempdir().unwrap();
+        pose(dir.path(), "ma-collection.maquette", "Ma collection");
+        let m = par_cle(Some(dir.path()), "ma-collection").unwrap();
+        assert_eq!(m.nom, "Ma collection");
+        assert!(!m.fournie);
+    }
+
+    /// La lecture est au mieux : ce qui se perd est un point de départ, et refuser la
+    /// liste entière pour un fichier de travers coûterait tous les autres.
+    #[test]
+    fn une_maquette_illisible_n_empeche_pas_les_autres_de_se_lister() {
+        let dir = tempfile::tempdir().unwrap();
+        pose(dir.path(), "bonne.maquette", "Bonne");
+        let d = dir.path().join("maquettes");
+        std::fs::write(d.join("cassee.maquette"), b"ceci n'est pas une archive").unwrap();
+        // Ce qui ne porte pas l'extension n'est pas même regardé.
+        std::fs::write(d.join("notes.txt"), b"rien a voir").unwrap();
+
+        let cles: Vec<String> = toutes(Some(dir.path()))
+            .into_iter()
+            .map(|m| m.cle)
+            .collect();
+        assert_eq!(cles, ["folio", "blanche", "surimpression", "bonne"]);
+    }
+
+    /// Répertoire de configuration inatteignable, ou aucune personnalisée encore
+    /// écrite : les fournies restent servies. Même arbitrage que les projets récents.
+    #[test]
+    fn sans_configuration_les_fournies_restent() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(toutes(None).len(), 3, "aucun répertoire");
+        assert_eq!(toutes(Some(dir.path())).len(), 3, "répertoire vide");
     }
 
     /// Le nom est l'identité, le slug nomme le fichier : accents décapés, casse
