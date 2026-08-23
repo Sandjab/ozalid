@@ -37,14 +37,14 @@ let candidat = null;
 let face = 'une';
 
 /**
- * La coupe du dernier aperçu posé, s'il en avait une, et si la lunette est allumée.
+ * Les repères du dernier aperçu posé — coupe et plis —, et si la lunette est allumée.
  *
  * Les deux vivent ici et non dans le projet : ce qu'on regarde n'est pas ce qu'on
  * imprime. Rien n'en va dans le `.ozalid`, et le PDF remis ne porte aucun repère —
  * c'est ce que `planche.rs` promet en tête de fichier.
  */
-let coupeCourante = null;
-let fondPerduVisible = true;
+let reperesCourants = null;
+let reperesVisibles = true;
 let attenteApercu = null;
 
 /**
@@ -940,7 +940,7 @@ $('btReimporter').addEventListener('click', reimporter);
 $('btChoisirManuscrit').addEventListener('click', choisirManuscrit);
 $('btImageUne').addEventListener('click', () => choisirImage('une'));
 $('btImageQuatre').addEventListener('click', () => choisirImage('quatre'));
-$('btFondPerdu').addEventListener('click', basculerFondPerdu);
+$('btReperes').addEventListener('click', basculerReperes);
 // Le seul écouteur de l'application qui ne réponde pas à un geste : c'est l'image
 // décodée qui donne au cadre sa taille, et elle ne l'est qu'après avoir été posée.
 $('apercu').addEventListener('load', poserRatio);

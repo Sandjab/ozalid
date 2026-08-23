@@ -378,7 +378,7 @@ function poserDisposition(panneau) {
   $('reglages').hidden = !panneau;
   // La lunette n'a d'objet que là où il y a du fond perdu à voir. Masquée plutôt que
   // grisée, comme les réglages sans objet.
-  $('btFondPerdu').hidden = face !== 'planche';
+  $('btReperes').hidden = face !== 'planche';
 }
 
 /**
@@ -449,7 +449,7 @@ function poserApercu(a) {
   // Le rapport d'aspect s'en va avec l'image : il dimensionne le cadre, qui garderait
   // sinon sa place, vide, entre la scène et le message qui dit qu'il n'y a rien à voir.
   if (!a) $('cadreApercu').style.removeProperty('--ratio');
-  poserCoupe(a?.coupe ?? null);
+  poserReperes(a?.reperes ?? null);
 }
 
 /**
@@ -467,26 +467,29 @@ function poserRatio() {
 }
 
 /**
- * La bande que le massicot emporte, mesurée par le Rust et posée sur l'image.
+ * Les repères de la planche, mesurés par le Rust et posés sur l'image : la bande que le
+ * massicot emporte, et les deux plis qui encadrent le dos.
  *
- * Deux fractions, pas des millimètres : l'aperçu s'affiche à la taille que la fenêtre
- * lui laisse, et seules des proportions y survivent. Elles ne se recalculent pas ici —
- * ce serait redire la règle qui choisit entre le fond perdu publié par le prestataire
- * et celui relevé sur son gabarit.
+ * Des fractions, pas des millimètres : l'aperçu s'affiche à la taille que la fenêtre lui
+ * laisse, et seules des proportions y survivent. Elles ne se recalculent pas ici — ce
+ * serait redire la règle qui choisit entre le fond perdu publié par le prestataire et
+ * celui relevé sur son gabarit, et refaire le calcul de dos que la pagination commande.
  */
-function poserCoupe(coupe) {
-  coupeCourante = coupe;
-  if (coupe) {
+function poserReperes(reperes) {
+  reperesCourants = reperes;
+  if (reperes) {
     const cadre = $('cadreApercu');
-    cadre.style.setProperty('--coupe-x', String(coupe.x));
-    cadre.style.setProperty('--coupe-y', String(coupe.y));
+    cadre.style.setProperty('--coupe-x', String(reperes.x));
+    cadre.style.setProperty('--coupe-y', String(reperes.y));
+    cadre.style.setProperty('--pli-quatre', String(reperes.pli_quatre));
+    cadre.style.setProperty('--pli-une', String(reperes.pli_une));
   }
-  rendreCoupe();
+  rendreReperes();
 }
 
 /** L'habillage suit deux choses : l'aperçu posé et la lunette. Les deux passent ici. */
-function rendreCoupe() {
-  $('coupe').hidden = !coupeCourante || !fondPerduVisible;
+function rendreReperes() {
+  $('reperes').hidden = !reperesCourants || !reperesVisibles;
 }
 
 /**
@@ -496,10 +499,10 @@ function rendreCoupe() {
  * rend la bascule instantanée — et ce qui garantit qu'aucun repère ne peut se glisser
  * dans le PDF remis au prestataire.
  */
-function basculerFondPerdu() {
-  fondPerduVisible = !fondPerduVisible;
-  $('btFondPerdu').setAttribute('aria-pressed', String(fondPerduVisible));
-  rendreCoupe();
+function basculerReperes() {
+  reperesVisibles = !reperesVisibles;
+  $('btReperes').setAttribute('aria-pressed', String(reperesVisibles));
+  rendreReperes();
 }
 
 async function rendreApercu() {

@@ -130,7 +130,9 @@ async function ouvre(couverture, sur = {}, dialogues = []) {
     if (cmd === 'couverture_apercu') {
       return {
         image: 'data:image/png;base64,QUJD',
-        coupe: args.face === 'planche' ? { x: 0.0129, y: 0.0175 } : null,
+        reperes: args.face === 'planche'
+          ? { x: 0.0129, y: 0.0175, pli_quatre: 0.4724, pli_une: 0.5276 }
+          : null,
       };
     }
     // Viser un autre destinataire est un des gestes qui redemandent un aperçu : le
@@ -413,7 +415,7 @@ test('un aperçu qui échoue efface l\'image et affiche la cause', async () => {
   const { els } = await ouvre(maquette(), {
     couverture_apercu: () => {
       if (casse) throw 'prolongement panoramique : la largeur du dos est inconnue';
-      return { image: 'data:image/png;base64,QUJD', coupe: null };
+      return { image: 'data:image/png;base64,QUJD', reperes: null };
     },
   });
   await attendreApercu();
@@ -461,25 +463,29 @@ test('l\'invitation à choisir une maquette n\'hérite pas du rouge de l\'échec
 
 /**
  * La face Planche est la vue de contrôle : c'est là, et là seulement, qu'une image à
- * fond perdu voulue et une pastille tombée sous la coupe cessent de se ressembler.
- * Les fractions viennent du Rust — les recalculer ici redirait la règle qui choisit
- * entre le fond perdu publié et le relevé.
+ * fond perdu voulue et une pastille tombée sous la coupe cessent de se ressembler, et
+ * qu'un dos se distingue des faces quand il en porte le papier.
+ * Les quatre fractions viennent du Rust — les recalculer ici redirait la règle qui
+ * choisit entre le fond perdu publié et le relevé, et referait le calcul de dos que la
+ * pagination commande.
  */
-test('la planche marque la coupe avec les fractions que le Rust donne', async () => {
+test('la planche marque la coupe et les deux plis que le Rust donne', async () => {
   const { els } = await ouvre(maquette());
   await face(els, 'Planche').declenche('click');
   await attendreApercu();
   const cadre = els.get('cadreApercu');
   assert.strictEqual(cadre.style.getPropertyValue('--coupe-x'), '0.0129');
   assert.strictEqual(cadre.style.getPropertyValue('--coupe-y'), '0.0175');
-  assert.strictEqual(els.get('coupe').hidden, false, 'coupe non marquée sur la planche');
+  assert.strictEqual(cadre.style.getPropertyValue('--pli-quatre'), '0.4724');
+  assert.strictEqual(cadre.style.getPropertyValue('--pli-une'), '0.5276');
+  assert.strictEqual(els.get('reperes').hidden, false, 'repères non marqués sur la planche');
 });
 
 /**
  * La 1ère se compose au format rogné : il n'y a pas de bande à couper, et un trait sur
  * le bord même de l'image se lirait comme une coupe à zéro millimètre du texte.
  *
- * Le détour par la planche n'est pas une précaution de style : `#coupe` naît masqué
+ * Le détour par la planche n'est pas une précaution de style : `#reperes` naît masqué
  * dans le HTML, et sans lui ce test serait vrai d'avance — vrai même si tout le
  * mécanisme avait disparu. Ce qu'il vérifie, c'est qu'une face rognée *éteint* un
  * habillage allumé, pas qu'elle le laisse éteint.
@@ -487,15 +493,15 @@ test('la planche marque la coupe avec les fractions que le Rust donne', async ()
 test('une face sans fond perdu ne montre aucune coupe', async () => {
   const { els } = await ouvre(maquette());
   await attendreApercu();
-  assert.strictEqual(els.get('coupe').hidden, true, 'coupe marquée sur la 1ère');
+  assert.strictEqual(els.get('reperes').hidden, true, 'coupe marquée sur la 1ère');
 
   await face(els, 'Planche').declenche('click');
   await attendreApercu();
-  assert.strictEqual(els.get('coupe').hidden, false, 'coupe non marquée sur la planche');
+  assert.strictEqual(els.get('reperes').hidden, false, 'coupe non marquée sur la planche');
 
   await face(els, '1ère').declenche('click');
   await attendreApercu();
-  assert.strictEqual(els.get('coupe').hidden, true, 'habillage resté d\'une face à l\'autre');
+  assert.strictEqual(els.get('reperes').hidden, true, 'habillage resté d\'une face à l\'autre');
 });
 
 /**
@@ -509,18 +515,20 @@ test('un aperçu qui échoue emporte l\'habillage avec l\'image', async () => {
       if (casse) throw 'prolongement panoramique : la largeur du dos est inconnue';
       return {
         image: 'data:image/png;base64,QUJD',
-        coupe: args.face === 'planche' ? { x: 0.0129, y: 0.0175 } : null,
+        reperes: args.face === 'planche'
+          ? { x: 0.0129, y: 0.0175, pli_quatre: 0.4724, pli_une: 0.5276 }
+          : null,
       };
     },
   });
   await face(els, 'Planche').declenche('click');
   await attendreApercu();
-  assert.strictEqual(els.get('coupe').hidden, false);
+  assert.strictEqual(els.get('reperes').hidden, false);
 
   casse = true;
   await els.get('inDestinataire').declenche('change');
   await attendreApercu();
-  assert.strictEqual(els.get('coupe').hidden, true, 'habillage laissé seul à l\'écran');
+  assert.strictEqual(els.get('reperes').hidden, true, 'habillage laissé seul à l\'écran');
 });
 
 /**
@@ -569,16 +577,16 @@ test('éteindre le fond perdu retire l\'habillage sans recomposer', async () => 
   await attendreApercu();
   const avant = appels.filter(([c]) => c === 'couverture_apercu').length;
 
-  await els.get('btFondPerdu').declenche('click');
-  assert.strictEqual(els.get('coupe').hidden, true, 'habillage resté allumé');
-  assert.strictEqual(els.get('btFondPerdu').getAttribute('aria-pressed'), 'false');
+  await els.get('btReperes').declenche('click');
+  assert.strictEqual(els.get('reperes').hidden, true, 'habillage resté allumé');
+  assert.strictEqual(els.get('btReperes').getAttribute('aria-pressed'), 'false');
   assert.strictEqual(
     appels.filter(([c]) => c === 'couverture_apercu').length, avant,
     'la bascule a relancé une composition'
   );
 
-  await els.get('btFondPerdu').declenche('click');
-  assert.strictEqual(els.get('coupe').hidden, false, 'habillage non rallumé');
+  await els.get('btReperes').declenche('click');
+  assert.strictEqual(els.get('reperes').hidden, false, 'habillage non rallumé');
 });
 
 /**
@@ -589,9 +597,9 @@ test('éteindre le fond perdu retire l\'habillage sans recomposer', async () => 
 test('la bascule ne s\'offre que sur la planche', async () => {
   const { els } = await ouvre(maquette());
   await attendreApercu();
-  assert.strictEqual(els.get('btFondPerdu').hidden, true, 'bascule offerte sur la 1ère');
+  assert.strictEqual(els.get('btReperes').hidden, true, 'bascule offerte sur la 1ère');
 
   await face(els, 'Planche').declenche('click');
   await attendreApercu();
-  assert.strictEqual(els.get('btFondPerdu').hidden, false, 'bascule absente de la planche');
+  assert.strictEqual(els.get('btReperes').hidden, false, 'bascule absente de la planche');
 });

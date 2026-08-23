@@ -92,6 +92,18 @@ impl Gabarit {
         self.fond_perdu + self.format.0
     }
 
+    /// Les deux plis, en fraction de la largeur de la planche : celui de la 4ème, puis
+    /// celui de la 1ère.
+    ///
+    /// L'aperçu en a besoin pour la même raison que du fond perdu : un dos dont le fond
+    /// est celui du papier ne se distingue d'aucune des deux faces, et la planche paraît
+    /// alors d'un seul tenant. C'est précisément la maquette où le dos est le plus facile
+    /// à rater — celle où rien ne montre où le livre se plie.
+    pub fn plis(&self) -> (f64, f64) {
+        let l = self.largeur();
+        (self.pli() / l, (self.pli() + self.dos) / l)
+    }
+
     /// Le prolongement panoramique vu depuis une zone dont le bord gauche est à `x` de
     /// celui de la planche. L'image est cadrée une seule fois, sur la planche entière ;
     /// chaque zone n'en montre que sa part.
@@ -505,6 +517,28 @@ mod tests {
             fond_perdu: 0.0,
         };
         assert_eq!(g.part_fond_perdu(), (0.0, 0.0));
+    }
+
+    /// Les deux plis encadrent le dos, et l'écart entre eux **est** le dos : c'est ce
+    /// qui fait de ces deux traits la seule chose qui montre, sur un fond uni, où le
+    /// livre se plie. Un pli mesuré depuis le mauvais bord placerait le dos ailleurs
+    /// qu'où il est composé, et l'aperçu mentirait plus qu'il n'aiderait.
+    #[test]
+    fn les_deux_plis_encadrent_le_dos() {
+        let g = gabarit("tbe-110x170", 280);
+        let (a, b) = g.plis();
+        assert!(
+            (a - (5.0 + 110.0) / 246.8).abs() < 1e-6,
+            "pli de la 4ème : {a}"
+        );
+        assert!(
+            ((b - a) * g.largeur() - g.dos).abs() < 1e-6,
+            "l'écart doit valoir le dos"
+        );
+        assert!(
+            a < 0.5 && b > 0.5,
+            "le dos passe par le milieu : {a} et {b}"
+        );
     }
 
     /// Chez un prestataire à gabarit, rien ne peut être calculé : l'application doit le

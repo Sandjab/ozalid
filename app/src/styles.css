@@ -601,8 +601,8 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
    couverture paraîtrait posée à plat. Les bandes latérales s'arrêtent au-dessus et
    au-dessous des horizontales — deux voiles superposés assombriraient les quatre coins,
    et ces coins-là sont justement ce qu'on regarde.
-   Les deux fractions viennent du Rust, posées par `poserCoupe`. */
-.coupe {
+   Les deux fractions viennent du Rust, posées par `poserReperes`. */
+.reperes {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -619,11 +619,38 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
 
 /* La ligne de coupe elle-même, sur le rectangle rogné. En pseudo-élément : elle n'a
    rien à dire au balisage, et l'habillage reste un seul nœud. */
-.coupe::after {
+.reperes::after {
   content: '';
   position: absolute;
   inset: calc(var(--coupe-y) * 100%) calc(var(--coupe-x) * 100%);
   border: 1px dashed rgba(0, 0, 0, .6);
+}
+
+/* Les deux plis qui encadrent le dos, sur toute la hauteur de la planche.
+   Une maquette dont le dos porte le papier des deux faces paraît d'un seul tenant : rien
+   n'y montre où le livre se plie, et c'est justement celle où le dos se rate. Le fond
+   perdu, lui, ne dit rien de l'intérieur de la planche.
+   Deux filets accolés, l'un clair et l'autre sombre, plutôt qu'un seul : le pli traverse
+   la zone imprimée, qu'aucun voile n'éclaircit — un trait sombre se perdrait sur un dos
+   noir, un trait clair sur un papier blanc. L'un des deux se voit toujours.
+   Les positions sont redites en entier à chaque arrêt plutôt qu'écrites `0` : un arrêt
+   qui recule est ramené au précédent, et deux `0` de suite donneraient une bande de
+   largeur nulle — le pli serait absent sans que rien ne le signale. */
+.reperes::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to right,
+      transparent calc(var(--pli-quatre) * 100%),
+      rgba(255, 255, 255, .55) 0 calc(var(--pli-quatre) * 100% + 1px),
+      rgba(0, 0, 0, .55) 0 calc(var(--pli-quatre) * 100% + 2px),
+      transparent 0),
+    linear-gradient(to right,
+      transparent calc(var(--pli-une) * 100%),
+      rgba(255, 255, 255, .55) 0 calc(var(--pli-une) * 100% + 1px),
+      rgba(0, 0, 0, .55) 0 calc(var(--pli-une) * 100% + 2px),
+      transparent 0);
 }
 
 /* La seule zone défilante de l'application, et elle défile sur la hauteur de la

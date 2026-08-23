@@ -44,7 +44,7 @@ function faux(providers, sur = {}) {
     if (cmd === 'polices_texte_liste') return ['EB Garamond', 'Alegreya', 'Cardo'];
     if (cmd === 'mains_liste') return ['Caveat', 'Dancing Script'];
     if (cmd === 'maquettes_liste') return [{ cle: 'folio', libelle: 'Folio' }];
-    if (cmd === 'couverture_apercu') return { image: 'data:image/png;base64,AAAA', coupe: null };
+    if (cmd === 'couverture_apercu') return { image: 'data:image/png;base64,AAAA', reperes: null };
     if (cmd in sur) {
       const v = sur[cmd];
       return typeof v === 'function' ? v(args) : v;

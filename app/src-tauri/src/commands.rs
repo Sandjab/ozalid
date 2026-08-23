@@ -711,22 +711,31 @@ fn poser_image(images: &mut BTreeMap<String, Vec<u8>>, nom: String, octets: Vec<
     images.insert(nom, octets);
 }
 
-/// Ce qu'un aperçu de face donne à voir : l'image, et où la couper s'il y a lieu.
+/// Ce qu'un aperçu de face donne à voir : l'image, et où la planche se coupe et se plie
+/// s'il y a lieu.
 #[derive(Serialize)]
 pub struct Apercu {
     pub image: String,
-    /// Absente sur les faces qui se composent au format rogné, sans fond perdu — la
+    /// Absents sur les faces qui se composent au format rogné, sans fond perdu — la
     /// 1ère, la 4ème et le dos. C'est le Rust qui l'affirme plutôt que la fenêtre qui
     /// le déduise d'un nom de face : le jour où une face gagne du fond perdu, elle
-    /// gagne sa coupe sans qu'on y pense.
-    pub coupe: Option<Coupe>,
+    /// gagne ses repères sans qu'on y pense.
+    pub reperes: Option<Reperes>,
 }
 
-/// La part du fond perdu sur chaque dimension de la planche, en fraction de celle-ci.
+/// Où la planche se coupe et où elle se plie, en fraction de ses propres dimensions.
+///
+/// `x` et `y` sont la part du fond perdu sur la largeur puis sur la hauteur ; `pli_quatre`
+/// et `pli_une` sont les deux plis qui encadrent le dos, comptés depuis le bord gauche.
+/// Les quatre voyagent ensemble parce qu'ils s'affichent ensemble, et qu'aucun n'existe
+/// sans les autres : ce sont les repères d'une planche, ceux-là mêmes que le PDF remis
+/// au prestataire ne porte pas.
 #[derive(Serialize)]
-pub struct Coupe {
+pub struct Reperes {
     pub x: f64,
     pub y: f64,
+    pub pli_quatre: f64,
+    pub pli_une: f64,
 }
 
 /// Aperçu d'une face de couverture ou de la planche entière, en PNG encodé dans une
@@ -766,7 +775,7 @@ pub fn couverture_apercu(
     let (une, quatre) = ecrire_images(&o.projet, &dossier)?;
     // Seule la planche se compose avec du fond perdu : les trois autres faces n'ont
     // rien à faire marquer.
-    let mut coupe = None;
+    let mut reperes = None;
     let src = match face.as_str() {
         "une" => couverture::source_une(&o.projet.meta.livre, cv, pr.format, une.as_ref(), dos_mm),
         "quatre" => {
@@ -796,7 +805,13 @@ pub fn couverture_apercu(
                 fond_perdu: fp,
             };
             let (x, y) = g.part_fond_perdu();
-            coupe = Some(Coupe { x, y });
+            let (pli_quatre, pli_une) = g.plis();
+            reperes = Some(Reperes {
+                x,
+                y,
+                pli_quatre,
+                pli_une,
+            });
             planche::source(&o.projet.meta.livre, cv, &g, une.as_ref(), quatre.as_ref())?
         }
         autre => return Err(format!("face inconnue : {autre}")),
@@ -809,7 +824,7 @@ pub fn couverture_apercu(
 
     Ok(Apercu {
         image: donnee_png(&png)?,
-        coupe,
+        reperes,
     })
 }
 

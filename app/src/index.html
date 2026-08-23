@@ -114,12 +114,16 @@
          l'aperçu vide disait déjà, mot pour mot, deux centimètres plus bas. -->
     <div class="outils">
       <div class="ligne onglets" id="faces"></div>
-      <!-- La lunette de la planche. Hors de `#faces` : cette boîte est reconstruite par
-           `construireFaces`, et `choisirFace` y compte les enfants par rang — un bouton
-           étranger dedans ferait viser la face voisine. Elle naît allumée et masquée :
-           la planche n'est pas la face de départ. -->
-      <button id="btFondPerdu" class="lunette" type="button" aria-pressed="true" hidden>
-        Fond perdu
+      <!-- La lunette de la planche : la coupe et les deux plis, que le PDF remis au
+           prestataire ne porte pas. « Repères » et non « Fond perdu » depuis que les
+           plis s'y sont ajoutés — un dos qui prend le papier des faces ne se voit
+           autrement nulle part.
+           Hors de `#faces` : cette boîte est reconstruite par `construireFaces`, et
+           `choisirFace` y compte les enfants par rang — un bouton étranger dedans ferait
+           viser la face voisine. Elle naît allumée et masquée : la planche n'est pas la
+           face de départ. -->
+      <button id="btReperes" class="lunette" type="button" aria-pressed="true" hidden>
+        Repères
       </button>
       <span class="creux"></span>
       <!-- Un menu d'action, pas un état : rien dans le projet ne dit de quelle maquette
@@ -147,7 +151,7 @@
         <div class="scene">
           <div class="cadre" id="cadreApercu">
             <img id="apercu" class="apercu" alt="Aperçu de la couverture">
-            <div class="coupe" id="coupe" hidden></div>
+            <div class="reperes" id="reperes" hidden></div>
           </div>
         </div>
         <p class="note" id="etatApercu"></p>
