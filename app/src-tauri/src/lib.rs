@@ -5,6 +5,7 @@ pub mod ebook;
 pub mod envoi;
 pub mod epreuve;
 pub mod epub;
+pub mod gabarit;
 pub mod image;
 pub mod import;
 pub mod interieur;
