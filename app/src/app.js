@@ -387,7 +387,12 @@ function afficherProjet(p) {
   $('inTitrePage').value = p.livre.titre_page;
   $('inAuteur').value = p.livre.auteur;
   $('inGenre').value = p.livre.genre;
+  $('inEditeur').value = p.livre.editeur;
+  $('inCollection').value = p.livre.collection;
+  $('inMonogramme').value = p.livre.monogramme;
   $('inCopyright').value = p.livre.copyright;
+  $('inPrix').value = p.livre.prix;
+  $('inMention').value = p.livre.mention;
   // Le champ est absent du JSON quand le livre n'a pas de dédicace : `skip_serializing_if`.
   $('inDedicace').value = p.livre.dedicace ?? '';
   $('inChapitres').value = p.livre.chapitres ?? '';
@@ -730,7 +735,12 @@ function livre() {
     titre_page: $('inTitrePage').value.trim(),
     auteur: $('inAuteur').value.trim(),
     genre: $('inGenre').value.trim() || 'roman',
+    editeur: $('inEditeur').value.trim(),
+    collection: $('inCollection').value.trim(),
+    monogramme: $('inMonogramme').value.trim(),
     copyright: $('inCopyright').value,
+    prix: $('inPrix').value.trim(),
+    mention: $('inMention').value.trim(),
     // Non rognée : c'est le Rust qui rogne, en un seul endroit — et il substitue les
     // jetons avant de rogner, ce que le front ne saurait pas faire.
     dedicace: $('inDedicace').value,
@@ -1023,7 +1033,8 @@ $('inMain').addEventListener('change', () => tente(async () => {
 construireEtapes();
 construireFaces();
 cablerPrises();
-for (const id of ['inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inCopyright',
+for (const id of ['inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inEditeur',
+  'inCollection', 'inMonogramme', 'inCopyright', 'inPrix', 'inMention',
   'inDedicace', 'inChapitres']) {
   $(id).addEventListener('change', majLivre);
 }

@@ -96,7 +96,9 @@ pub fn assemble(
     p.meta.manuscrit.source = source_manuscrit;
 
     if let Some(r) = reglages {
-        p.meta.couverture.maquette = Some(traduit(&r)?);
+        let (maquette, textes) = traduit(&r)?;
+        p.meta.couverture.maquette = Some(maquette);
+        textes.applique(&mut p.meta.livre);
         for (url, nom) in [(&r.image, "couverture"), (&r.image4, "quatrieme")] {
             if let Some(url) = url {
                 let (ext, octets) = png::data_url(url)?;
@@ -261,12 +263,51 @@ fn align(ch: &Champs, cle: &str, base: Align) -> Result<Align, String> {
     })
 }
 
-/// Réglages de l'atelier HTML → maquette du moteur Typst.
+/// Ce qu'un bloc de réglages de l'atelier portait et qui appartient au livre, non à la
+/// maquette : l'atelier ne connaissait pas cette frontière, et rangeait l'éditeur dans
+/// le pied de la 1ère, la collection sous le nom de « pastille ».
+///
+/// Chacun est facultatif : un bloc qui ne le porte pas ne doit pas écraser par du vide
+/// la valeur générique du livre.
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct TextesAtelier {
+    pub monogramme: Option<String>,
+    pub editeur: Option<String>,
+    /// La collection vient de deux champs de l'atelier : celui de la 4ème, explicite, et
+    /// la pastille, qui la portait sous un autre nom. L'explicite gagne — c'est
+    /// l'arbitrage de la migration des `.ozalid`, tenu ici aussi.
+    pub collection: Option<String>,
+    pub prix: Option<String>,
+    pub mention: Option<String>,
+}
+
+impl TextesAtelier {
+    /// Pose sur le livre ce que le bloc portait, et lui seul.
+    pub fn applique(self, livre: &mut Livre) {
+        if let Some(v) = self.monogramme {
+            livre.monogramme = v;
+        }
+        if let Some(v) = self.editeur {
+            livre.editeur = v;
+        }
+        if let Some(v) = self.collection {
+            livre.collection = v;
+        }
+        if let Some(v) = self.prix {
+            livre.prix = v;
+        }
+        if let Some(v) = self.mention {
+            livre.mention = v;
+        }
+    }
+}
+
+/// Réglages de l'atelier HTML → maquette du moteur Typst, et les textes du livre.
 ///
 /// La traduction part de la maquette du même mode : ce qui manque au bloc importé —
 /// et il en manque, les versions de l'atelier ayant grossi — reste donc cohérent
 /// plutôt que nul.
-pub fn traduit(r: &ReglagesAtelier) -> Result<Couverture, String> {
+pub fn traduit(r: &ReglagesAtelier) -> Result<(Couverture, TextesAtelier), String> {
     let ch = Champs(&r.fields);
     let mut cv = match r.mode.as_str() {
         "band" => maquettes::folio(),
@@ -337,12 +378,6 @@ pub fn traduit(r: &ReglagesAtelier) -> Result<Couverture, String> {
     if let Some(v) = ch.oui("inImprintOn") {
         cv.pied.actif = v;
     }
-    if let Some(v) = ch.texte("inMono") {
-        cv.pied.monogramme = v.to_string();
-    }
-    if let Some(v) = ch.texte("inEditor") {
-        cv.pied.editeur = v.to_string();
-    }
     if let Some(v) = ch.nombre("inImprintY") {
         cv.pied.y = v;
     }
@@ -355,9 +390,15 @@ pub fn traduit(r: &ReglagesAtelier) -> Result<Couverture, String> {
     if let Some(v) = ch.oui("inPastilleOn") {
         cv.pastille.actif = v;
     }
-    if let Some(v) = ch.texte("inPastille") {
-        cv.pastille.texte = v.to_string();
-    }
+    let mut textes = TextesAtelier {
+        monogramme: ch.texte("inMono").map(str::to_string),
+        editeur: ch.texte("inEditor").map(str::to_string),
+        // La pastille de l'atelier était un nom de collection sous un autre nom. Elle ne
+        // vaut que si la 4ème n'en donne pas d'explicite — voir plus bas.
+        collection: ch.texte("inPastille").map(str::to_string),
+        prix: None,
+        mention: None,
+    };
     cv.pastille.style = style(&ch, "inPastille", &cv.pastille.style)?;
     if let Some(c) = ch.couleur("inPastilleBg")? {
         cv.pastille.fond = c;
@@ -420,14 +461,11 @@ pub fn traduit(r: &ReglagesAtelier) -> Result<Couverture, String> {
     if let Some(v) = ch.oui("inQ4PiedOn") {
         q.pied_actif = v;
     }
-    for (cle, cible) in [
-        ("inQ4Mention", &mut q.mention),
-        ("inQ4Coll", &mut q.collection),
-        ("inQ4Prix", &mut q.prix),
-    ] {
-        if let Some(v) = ch.texte(cle) {
-            *cible = v.to_string();
-        }
+    textes.mention = ch.texte("inQ4Mention").map(str::to_string);
+    textes.prix = ch.texte("inQ4Prix").map(str::to_string);
+    // La collection explicite bat la pastille, jamais l'inverse.
+    if let Some(v) = ch.texte("inQ4Coll").filter(|v| !v.is_empty()) {
+        textes.collection = Some(v.to_string());
     }
     q.style_pied = style(&ch, "inQ4Pied", &q.style_pied)?;
     if let Some(v) = ch.nombre("inQ4PiedY") {
@@ -451,7 +489,7 @@ pub fn traduit(r: &ReglagesAtelier) -> Result<Couverture, String> {
     if let Some(v) = ch.nombre("inQ4ScrimOp") {
         q.voile_opacite = v / 100.0;
     }
-    Ok(cv)
+    Ok((cv, textes))
 }
 
 /// Importe le répertoire de travail qui contient ce `livre.toml`.
@@ -644,8 +682,12 @@ couverture = "in/covers/LHC-Photo.png"
     /// même PNG s'importerait différemment d'une version à l'autre.
     #[test]
     fn une_valeur_ecrite_en_chaine_vaut_la_meme_ecrite_en_nombre() {
-        let a = traduit(&reglages("band", &[("inPadX", serde_json::json!("7.5"))])).unwrap();
-        let b = traduit(&reglages("band", &[("inPadX", serde_json::json!(7.5))])).unwrap();
+        let a = traduit(&reglages("band", &[("inPadX", serde_json::json!("7.5"))]))
+            .unwrap()
+            .0;
+        let b = traduit(&reglages("band", &[("inPadX", serde_json::json!(7.5))]))
+            .unwrap()
+            .0;
         assert_eq!(a.pad_x, 7.5);
         assert_eq!(a.pad_x, b.pad_x);
     }
@@ -654,7 +696,7 @@ couverture = "in/covers/LHC-Photo.png"
     /// reste cohérent avec l'archétype, au lieu d'être nul ou emprunté à un autre.
     #[test]
     fn un_bloc_incomplet_part_de_la_maquette_de_son_mode() {
-        let m = traduit(&reglages("typo", &[])).unwrap();
+        let m = traduit(&reglages("typo", &[])).unwrap().0;
         assert_eq!(m.mode, Mode::Typo);
         assert!(m.cadre.actif, "le triple filet de la Blanche est perdu");
         assert_eq!(m.titre.police, "Bodoni Moda");
@@ -703,7 +745,8 @@ couverture = "in/covers/LHC-Photo.png"
                 ("inArtY", serde_json::json!(62)),
             ],
         ))
-        .unwrap();
+        .unwrap()
+        .0;
         assert_eq!(m.voile_opacite, 0.62);
         assert_eq!(m.cadrage.y, 0.62);
     }

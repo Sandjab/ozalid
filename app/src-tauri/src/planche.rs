@@ -152,7 +152,7 @@ fn composes<'a>(
     [
         ("auteur", &cv.dos.auteur, livre.auteur.trim()),
         ("titre", &cv.dos.titre, livre.titre.trim()),
-        ("editeur", &cv.dos.editeur, cv.pied.editeur.trim()),
+        ("editeur", &cv.dos.editeur, livre.editeur.trim()),
     ]
     .into_iter()
     .filter(|(_, el, texte)| el.actif && !texte.is_empty())
@@ -421,6 +421,7 @@ pub fn source(
     // Chaque zone reçoit le panorama vu de son propre bord gauche : la 4ème depuis 0,
     // la 1ère depuis l'autre côté du dos.
     let quatre = couverture::corps_quatre(
+        livre,
         cv,
         g.format,
         image_quatre,
@@ -530,7 +531,7 @@ mod tests {
             titre_page: crate::projet::titre_page_defaut(),
             auteur: "Ivan Pjig".into(),
             genre: "roman".into(),
-            editeur: "Editeur".into(),
+            editeur: "Ozalid".into(),
             collection: "Collection".into(),
             monogramme: "Monogramme".into(),
             copyright: String::new(),
@@ -717,7 +718,7 @@ mod tests {
         assert!(s.contains("rotate(-90deg"), "dos non tourné");
         assert!(s.contains("Les Heures creuses"));
         assert!(s.contains("Ivan Pjig"));
-        assert!(s.contains("ÉDITEUR"), "éditeur du pied absent du dos");
+        assert!(s.contains("Ozalid"), "éditeur du livre absent du dos");
     }
 
     /// Les trois éléments du dos se règlent séparément : le rang les ordonne au sein
@@ -732,7 +733,7 @@ mod tests {
         // les places dans l'ordre pied, centre, tête.
         let s = bloc_dos(&livre(), &cv, &g, None, 0.0);
         let ordre = |s: &str| {
-            ["Ivan Pjig", "Les Heures creuses", "ÉDITEUR"].map(|t| s.find(t).unwrap_or(usize::MAX))
+            ["Ivan Pjig", "Les Heures creuses", "Ozalid"].map(|t| s.find(t).unwrap_or(usize::MAX))
         };
         let [auteur, titre, editeur] = ordre(&s);
         assert!(editeur < auteur, "l'éditeur n'est pas au pied");
@@ -782,7 +783,7 @@ mod tests {
         let mut cv = maquettes::folio();
         cv.dos.editeur.actif = false;
         let s = bloc_dos(&livre(), &cv, &gabarit("lulu", 244), None, 0.0);
-        assert!(!s.contains("ÉDITEUR"), "éditeur éteint pourtant composé");
+        assert!(!s.contains("Ozalid"), "éditeur éteint pourtant composé");
         assert!(
             s.contains("Les Heures creuses"),
             "le reste du dos a disparu"
@@ -793,11 +794,11 @@ mod tests {
     /// le livre n'a ni auteur ni éditeur à y porter.
     #[test]
     fn un_dos_sans_texte_garde_son_fond() {
-        let mut cv = maquettes::folio();
-        cv.pied.editeur = String::new();
+        let cv = maquettes::folio();
         let mut l = livre();
         l.titre = String::new();
         l.auteur = String::new();
+        l.editeur = String::new();
         let s = bloc_dos(&l, &cv, &gabarit("lulu", 244), None, 0.0);
         assert!(s.contains("rect("), "{s}");
         assert!(!s.contains("rotate"), "texte émis sans rien à écrire");
@@ -894,7 +895,6 @@ mod tests {
     #[test]
     fn les_boites_du_dos_suivent_les_cinq_colonnes() {
         let mut cv = maquettes::folio();
-        cv.pied.editeur = "OZALID".into();
         cv.dos.marge = 3.0;
         cv.dos.ecart = 2.0;
         cv.dos.auteur = ElementDos {
@@ -1024,22 +1024,23 @@ mod tests {
     #[test]
     fn un_element_qui_ne_compose_pas_ne_reclame_pas_depaisseur() {
         let mut cv = maquettes::folio();
-        cv.pied.editeur = "Folio".into();
+        let mut l = livre();
+        l.editeur = "Folio".into();
         cv.dos.editeur.actif = true;
         cv.dos.editeur.style.taille = 20.0;
-        let avec = dos_requis(&livre(), &cv, 108.0);
+        let avec = dos_requis(&l, &cv, 108.0);
 
         cv.dos.editeur.actif = false;
-        let sans = dos_requis(&livre(), &cv, 108.0);
+        let sans = dos_requis(&l, &cv, 108.0);
         assert!(sans < avec, "éteint {sans} mm, allumé {avec} mm");
 
         // Le texte vide compte comme éteint : c'est la règle de `source_dos`.
         cv.dos.editeur.actif = true;
-        cv.pied.editeur = String::new();
+        l.editeur = String::new();
         assert!(
-            (dos_requis(&livre(), &cv, 108.0) - sans).abs() < 1e-9,
+            (dos_requis(&l, &cv, 108.0) - sans).abs() < 1e-9,
             "éditeur sans texte : {} mm au lieu de {sans} mm",
-            dos_requis(&livre(), &cv, 108.0)
+            dos_requis(&l, &cv, 108.0)
         );
     }
 
@@ -1129,5 +1130,19 @@ mod tests {
                 avant.iter().rev().take(3).sum()
             })
             .collect()
+    }
+
+    /// **Point de sortie : le dos.** L'éditeur y venait du pied de la 1ère, ce que le
+    /// commentaire de `Dos` avouait. Il vient du livre.
+    #[test]
+    fn le_dos_prend_l_editeur_du_livre() {
+        let mut l = livre();
+        l.editeur = "Ozalid".into();
+        let mut cv = maquettes::par_cle("folio").unwrap();
+        cv.dos.editeur.actif = true;
+
+        let elements = composes(&l, &cv);
+        let editeur = elements.iter().find(|(cle, _, _)| *cle == "editeur");
+        assert_eq!(editeur.map(|(_, _, t)| *t), Some("Ozalid"));
     }
 }

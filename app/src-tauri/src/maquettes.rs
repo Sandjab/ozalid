@@ -31,9 +31,6 @@ fn quatrieme_commune() -> Quatrieme {
         pad_x: 10.0,
         top: 12.0,
         pied_actif: true,
-        mention: String::new(),
-        collection: String::new(),
-        prix: String::new(),
         style_pied: style("Archivo", 400, 2.4, "#191917"),
         pied_y: 4.0,
         isbn_actif: false,
@@ -67,7 +64,6 @@ fn dos(couleur: &str) -> Dos {
 fn pastille_eteinte() -> Pastille {
     Pastille {
         actif: false,
-        texte: String::new(),
         style: style("Archivo", 400, 3.2, "#ffffff"),
         fond: "#111111".into(),
         coin: Coin::BasDroite,
@@ -109,14 +105,11 @@ pub fn folio() -> Couverture {
         genre_visible: false,
         genre: style("Spectral", 400, 2.2, "#191917"),
         genre_ecart: 6.0,
-        // Le pied s'inspire de chartes réelles (bandeau monogramme + nom d'éditeur en
-        // capitales espacées), mais le nom et le monogramme doivent être ceux de
-        // l'utilisateur, pas une marque déposée reprise par défaut (NOTES.md § 5). Le
-        // monogramme est un logotype : il n'a pas de générique honnête, donc il est vide.
+        // Le pied s'inspire de chartes réelles : bandeau monogramme + nom d'éditeur en
+        // capitales espacées. Le nom et le monogramme, eux, viennent du livre — la
+        // maquette ne dit que la façon dont ils paraissent.
         pied: Pied {
             actif: false,
-            monogramme: "".into(),
-            editeur: "ÉDITEUR".into(),
             y: 11.0,
             style_mono: Style {
                 italique: true,
@@ -129,7 +122,6 @@ pub fn folio() -> Couverture {
         },
         pastille: Pastille {
             actif: true,
-            texte: "folio".into(),
             ..pastille_eteinte()
         },
         cadrage: Cadrage::default(),
@@ -180,8 +172,6 @@ pub fn blanche() -> Couverture {
         genre_ecart: 6.0,
         pied: Pied {
             actif: true,
-            monogramme: "".into(),
-            editeur: "ÉDITEUR".into(),
             // 13,5 % et non les 11 % du CSS d'origine : à 11 %, le pied éditeur passe
             // sous le filet interne du cadre et le traverse. C'est le seul écart assumé
             // vis-à-vis d'`index.html` dans les maquettes — l'atelier a le même défaut,
@@ -242,8 +232,6 @@ pub fn surimpression() -> Couverture {
         genre_ecart: 6.0,
         pied: Pied {
             actif: false,
-            monogramme: "".into(),
-            editeur: "ÉDITEUR".into(),
             y: 11.0,
             style_mono: Style {
                 italique: true,

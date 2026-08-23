@@ -121,8 +121,6 @@ const SCHEMA = [
     titre: 'Pied éditeur',
     champs: [
       { chemin: 'pied.actif', libelle: 'Afficher le pied', type: 'case' },
-      { chemin: 'pied.monogramme', libelle: 'Monogramme', type: 'texte' },
-      { chemin: 'pied.editeur', libelle: 'Éditeur', type: 'texte' },
       { chemin: 'pied.y', libelle: 'Hauteur depuis le bas', type: 'nombre', min: 0, max: 50, pas: 0.5, unite: '% haut.' },
     ],
   },
@@ -132,7 +130,6 @@ const SCHEMA = [
     titre: 'Pastille',
     champs: [
       { chemin: 'pastille.actif', libelle: 'Afficher la pastille', type: 'case' },
-      { chemin: 'pastille.texte', libelle: 'Texte', type: 'texte' },
       { chemin: 'pastille.fond', libelle: 'Fond', type: 'couleur' },
       {
         chemin: 'pastille.coin', libelle: 'Coin', type: 'liste', options: [
@@ -213,9 +210,6 @@ const SCHEMA = [
     face: 'quatre',
     champs: [
       { chemin: 'quatrieme.pied_actif', libelle: 'Afficher le pied', type: 'case' },
-      { chemin: 'quatrieme.mention', libelle: 'Mention', type: 'texte' },
-      { chemin: 'quatrieme.collection', libelle: 'Collection', type: 'texte' },
-      { chemin: 'quatrieme.prix', libelle: 'Prix', type: 'texte' },
       { chemin: 'quatrieme.pied_y', libelle: 'Hauteur du pied', type: 'nombre', min: 0, max: 30, pas: 0.5, unite: '% larg.' },
       { chemin: 'quatrieme.isbn_actif', libelle: 'Réserver la zone ISBN', type: 'case' },
       { chemin: 'quatrieme.isbn_l', libelle: 'Largeur ISBN', type: 'nombre', min: 5, max: 60, pas: 0.5, unite: '% larg.' },

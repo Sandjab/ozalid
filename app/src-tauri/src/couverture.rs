@@ -189,8 +189,6 @@ pub struct Cadre {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Pied {
     pub actif: bool,
-    pub monogramme: String,
-    pub editeur: String,
     /// % de la hauteur, depuis le bas.
     pub y: f64,
     pub style_mono: Style,
@@ -226,8 +224,7 @@ pub struct ElementDos {
 
 /// Le dos, tel qu'il paraît sur la planche.
 ///
-/// Il ne porte aucun texte propre — l'auteur et le titre viennent du livre, l'éditeur
-/// du pied de la 1ère. Sa **largeur** n'est pas réglable : elle vient de la pagination,
+/// Il ne porte aucun texte propre : l'auteur, le titre et l'éditeur viennent du livre. Sa **largeur** n'est pas réglable : elle vient de la pagination,
 /// et c'est tout l'objet de l'application.
 ///
 /// Les champs sont tous facultatifs à la lecture : un projet écrit avant que le dos
@@ -326,7 +323,6 @@ impl Dos {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Pastille {
     pub actif: bool,
-    pub texte: String,
     pub style: Style,
     pub fond: String,
     pub coin: Coin,
@@ -349,9 +345,6 @@ pub struct Quatrieme {
     /// % de largeur (le contrôle d'origine l'exprime ainsi, malgré la verticalité).
     pub top: f64,
     pub pied_actif: bool,
-    pub mention: String,
-    pub collection: String,
-    pub prix: String,
     pub style_pied: Style,
     pub pied_y: f64,
     pub isbn_actif: bool,
@@ -713,7 +706,7 @@ fn bloc_texte(livre: &Livre, cv: &Couverture, (fw, fh): (f64, f64)) -> String {
     )
 }
 
-fn bloc_pied(p: &Pied, cv: &Couverture, (fw, fh): (f64, f64)) -> String {
+fn bloc_pied(livre: &Livre, p: &Pied, cv: &Couverture, (fw, fh): (f64, f64)) -> String {
     if !p.actif {
         return String::new();
     }
@@ -727,9 +720,9 @@ fn bloc_pied(p: &Pied, cv: &Couverture, (fw, fh): (f64, f64)) -> String {
         mm(p.y / 100.0 * fh),
         mm(fw - 2.0 * pad),
         cv.align.typst(),
-        p.style_mono.applique(fw, &p.monogramme),
+        p.style_mono.applique(fw, &livre.monogramme),
         mm(0.06 * fw),
-        p.style_editeur.applique(fw, &p.editeur),
+        p.style_editeur.applique(fw, &livre.editeur),
     )
 }
 
@@ -759,8 +752,8 @@ impl Debords {
     }
 }
 
-fn bloc_pastille(p: &Pastille, fw: f64, d: Debords) -> String {
-    if !p.actif || p.texte.trim().is_empty() {
+fn bloc_pastille(p: &Pastille, collection: &str, fw: f64, d: Debords) -> String {
+    if !p.actif || collection.trim().is_empty() {
         return String::new();
     }
     let coin = match p.coin {
@@ -829,7 +822,7 @@ fn bloc_pastille(p: &Pastille, fw: f64, d: Debords) -> String {
         mm(droite),
         mm(if p.arrondie { 0.02 * fw } else { 0.0 }),
         style.typst_text(fw),
-        echappe(&p.texte),
+        echappe(collection),
     );
     // Quart de tour anti-horaire : la pastille se lit de bas en haut, calée dans son
     // coin. `reflow: true` donne à la boîte ses dimensions tournées, sans quoi le
@@ -936,8 +929,13 @@ pub fn corps_une(
 
     let mut cadre = bloc_cadre(&cv.cadre, format);
     cadre.push_str(&bloc_texte(livre, cv, format));
-    cadre.push_str(&bloc_pied(&cv.pied, cv, format));
-    cadre.push_str(&bloc_pastille(&cv.pastille, fw, Debords::de(b, format)));
+    cadre.push_str(&bloc_pied(livre, &cv.pied, cv, format));
+    cadre.push_str(&bloc_pastille(
+        &cv.pastille,
+        &livre.collection,
+        fw,
+        Debords::de(b, format),
+    ));
     s.push_str(&cale(b, format, &cadre));
     s
 }
@@ -1070,6 +1068,7 @@ pub fn photo_quatre<'a>(
 /// pour tenir — ici, il est explicite au lieu d'être recopié à la main, et la 4ème
 /// refuse de se composer sans lui plutôt que de se composer de travers.
 pub fn corps_quatre(
+    livre: &Livre,
     cv: &Couverture,
     format: (f64, f64),
     image_quatre: Option<&Ressource>,
@@ -1114,7 +1113,9 @@ pub fn corps_quatre(
     }
 
     if q.pied_actif {
-        let lignes: Vec<String> = [&q.mention, &q.collection, &q.prix]
+        // La collection est une clé, littérale ; la mention et le prix sont des champs
+        // libres, donc substitués.
+        let lignes: Vec<String> = [livre.mention(), livre.collection.clone(), livre.prix()]
             .iter()
             .map(|v| v.trim())
             .filter(|v| !v.is_empty())
@@ -1148,6 +1149,7 @@ pub fn corps_quatre(
 
 /// Source Typst de la 4ème de couverture, seule sur sa page.
 pub fn source_quatre(
+    livre: &Livre,
     cv: &Couverture,
     format: (f64, f64),
     image_quatre: Option<&Ressource>,
@@ -1156,7 +1158,7 @@ pub fn source_quatre(
 ) -> Result<String, String> {
     let b = Boite::rognee(format);
     let pano = panorama_face(format, dos_mm, false);
-    let corps = corps_quatre(cv, format, image_quatre, image_une, pano, b)?;
+    let corps = corps_quatre(livre, cv, format, image_quatre, image_une, pano, b)?;
     Ok(preambule(b.largeur, b.hauteur) + &corps)
 }
 
@@ -1168,7 +1170,6 @@ mod tests {
     fn pastille_au_bord(coin: Coin, verticale: bool) -> Pastille {
         Pastille {
             actif: true,
-            texte: "folio".into(),
             style: dos_style(),
             fond: "#111111".into(),
             coin,
@@ -1191,7 +1192,7 @@ mod tests {
             gauche: 0.0,
             droite: 5.0,
         };
-        let s = bloc_pastille(&pastille_au_bord(Coin::BasDroite, false), 135.0, d);
+        let s = bloc_pastille(&pastille_au_bord(Coin::BasDroite, false), "folio", 135.0, d);
         assert!(s.contains("bottom: 6.6200mm"), "{s}"); // 0.012 × 135 + 5
         assert!(s.contains("right: 8.7800mm"), "{s}"); // 0.028 × 135 + 5
                                                        // Le fond s'allonge et le placement suit d'autant : le texte, lui, ne bouge pas.
@@ -1209,7 +1210,7 @@ mod tests {
             gauche: 0.0,
             droite: 5.0,
         };
-        let s = bloc_pastille(&pastille_au_bord(Coin::BasGauche, false), 135.0, d);
+        let s = bloc_pastille(&pastille_au_bord(Coin::BasGauche, false), "folio", 135.0, d);
         assert!(s.contains("bottom: 6.6200mm"), "{s}");
         assert!(s.contains("left: 3.7800mm"), "{s}"); // 0.028 × 135, sans débord
         assert!(s.contains("dx: 0.0000mm"), "{s}");
@@ -1226,7 +1227,7 @@ mod tests {
             gauche: 0.0,
             droite: 0.0,
         };
-        let s = bloc_pastille(&pastille_au_bord(Coin::BasDroite, false), 135.0, d);
+        let s = bloc_pastille(&pastille_au_bord(Coin::BasDroite, false), "folio", 135.0, d);
         assert!(
             s.contains("inset: (top: 1.6200mm, bottom: 1.6200mm, left: 3.7800mm, right: 3.7800mm)"),
             "{s}"
@@ -1251,7 +1252,7 @@ mod tests {
         };
         let mut p = pastille_au_bord(Coin::BasDroite, false);
         p.dy = 3.5;
-        let s = bloc_pastille(&p, 135.0, d);
+        let s = bloc_pastille(&p, "folio", 135.0, d);
         assert!(s.contains("bottom: 1.6200mm"), "{s}");
         assert!(s.contains("right: 8.7800mm"), "{s}");
         assert!(s.contains("dx: 5.0000mm"), "{s}");
@@ -1455,7 +1456,7 @@ mod tests {
     fn le_prolongement_refuse_de_composer_sans_le_dos() {
         let mut cv = maquettes::folio();
         cv.quatrieme.fond = FondQuatre::Panorama;
-        let err = source_quatre(&cv, FORMAT, None, Some(&photo()), None).unwrap_err();
+        let err = source_quatre(&livre(), &cv, FORMAT, None, Some(&photo()), None).unwrap_err();
         assert!(err.contains("dos"), "{err}");
         assert!(err.contains("pagination"), "{err}");
     }
@@ -1470,7 +1471,7 @@ mod tests {
         let mut cv = maquettes::folio();
         cv.quatrieme.fond = FondQuatre::Panorama;
         let largeur_zone = |dos: f64| {
-            let s = source_quatre(&cv, FORMAT, None, Some(&photo()), Some(dos)).unwrap();
+            let s = source_quatre(&livre(), &cv, FORMAT, None, Some(&photo()), Some(dos)).unwrap();
             let i = s.find("image(\"").unwrap();
             s[..i]
                 .rsplit("box(width: ")
@@ -1492,7 +1493,7 @@ mod tests {
     fn la_zone_isbn_est_un_rectangle_blanc_vide() {
         let mut cv = maquettes::folio();
         cv.quatrieme.isbn_actif = true;
-        let s = source_quatre(&cv, FORMAT, None, None, None).unwrap();
+        let s = source_quatre(&livre(), &cv, FORMAT, None, None, None).unwrap();
         assert!(s.contains("fill: rgb(\"#ffffff\")"));
         assert!(!s.contains("isbn"), "aucun contenu dans la zone");
     }
@@ -1507,7 +1508,7 @@ mod tests {
             maquettes::surimpression(),
         ] {
             assert!(!source_une(&livre(), &cv, FORMAT, Some(&photo()), None).is_empty());
-            source_quatre(&cv, FORMAT, None, Some(&photo()), Some(15.0)).unwrap();
+            source_quatre(&livre(), &cv, FORMAT, None, Some(&photo()), Some(15.0)).unwrap();
         }
     }
 
@@ -1541,10 +1542,49 @@ mod tests {
     fn le_texte_saisi_ne_peut_pas_injecter_de_syntaxe_typst() {
         let mut l = livre();
         l.titre = "Le #Titre".into();
-        let mut cv = maquettes::folio();
-        cv.pastille.texte = "col#lection".into();
+        l.collection = "col#lection".into();
+        let cv = maquettes::folio();
         let s = source_une(&l, &cv, FORMAT, None, None);
         assert!(s.contains(r"Le \#Titre"));
         assert!(s.contains(r"col\#lection"));
+    }
+
+    /// **Point de sortie : la couverture.** Le pied de 1ère, la pastille et le pied de
+    /// 4ème composent désormais des textes du livre. Aucun jeton ne doit y survivre, et
+    /// la maquette n'a plus rien à dire de ce qui est écrit.
+    #[test]
+    fn la_couverture_compose_les_textes_du_livre() {
+        let mut l = livre();
+        l.editeur = "Ozalid".into();
+        l.monogramme = "O".into();
+        l.collection = "Les Heures".into();
+        l.prix = "18 € — %COLLECTION%".into();
+        l.mention = "%EDITEUR%".into();
+
+        let mut cv = maquettes::par_cle("blanche").unwrap();
+        cv.pied.actif = true;
+        cv.pastille.actif = true;
+        cv.quatrieme.pied_actif = true;
+
+        let une = page_une(&l, &cv, FORMAT, None, None);
+        assert!(
+            une.contains("Ozalid"),
+            "l'éditeur du livre n'est pas au pied"
+        );
+        assert!(
+            une.contains("Les Heures"),
+            "la collection n'est pas en pastille"
+        );
+
+        let quatre = source_quatre(&l, &cv, FORMAT, None, None, None).unwrap();
+        assert!(
+            quatre.contains("18 € — Les Heures"),
+            "le prix n'est pas substitué"
+        );
+        assert!(quatre.contains("Ozalid"), "la mention n'est pas substituée");
+        for jeton in ["%EDITEUR%", "%COLLECTION%", "%TITRE%"] {
+            assert!(!une.contains(jeton), "{jeton} a traversé la 1ère");
+            assert!(!quatre.contains(jeton), "{jeton} a traversé la 4ème");
+        }
     }
 }

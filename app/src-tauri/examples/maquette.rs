@@ -68,6 +68,7 @@ fn main() -> Result<(), String> {
             (
                 "quatre",
                 couverture::source_quatre(
+                    &projet.meta.livre,
                     &cv,
                     pr.format,
                     quatre.as_ref(),

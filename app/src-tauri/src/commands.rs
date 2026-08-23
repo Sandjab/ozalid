@@ -800,9 +800,14 @@ pub fn couverture_apercu(
     let mut mesures = None;
     let src = match face.as_str() {
         "une" => couverture::source_une(&o.projet.meta.livre, cv, pr.format, une.as_ref(), dos_mm),
-        "quatre" => {
-            couverture::source_quatre(cv, pr.format, quatre.as_ref(), une.as_ref(), dos_mm)?
-        }
+        "quatre" => couverture::source_quatre(
+            &o.projet.meta.livre,
+            cv,
+            pr.format,
+            quatre.as_ref(),
+            une.as_ref(),
+            dos_mm,
+        )?,
         // Le dos seul se compose sans fond perdu : il ne réclame donc que la
         // pagination, là où la planche réclame aussi le gabarit du prestataire.
         "dos" => {
@@ -961,7 +966,7 @@ pub fn couverture_calques(
     nu.quatrieme.couleur = PAPIER_TRANSPARENT.to_string();
     let corps = match face.as_str() {
         "une" => couverture::source_une(&o.projet.meta.livre, &nu, format, None, dos_mm),
-        _ => couverture::source_quatre(&nu, format, None, None, dos_mm)?,
+        _ => couverture::source_quatre(&o.projet.meta.livre, &nu, format, None, None, dos_mm)?,
     };
     // `#set page(fill: none)` en tête : une règle posée avant le préambule vaut avec
     // lui, et c'est elle qui rend le PNG transparent là où le papier ne peint plus.

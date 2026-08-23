@@ -999,10 +999,10 @@ auteur = "Ivan Pjig"
         p.meta.manuscrit.source = Some("/travail/roman.md".into());
         p.meta.interieur.police = "Cardo".into();
         p.meta.livre.dedicace = "À M., qui a tenu la lampe.".into();
+        p.meta.livre.collection = "collection « Ozalid »".into();
         let mut maquette = crate::maquettes::blanche();
         maquette.pad_x = 16.5;
         maquette.titre.taille = 9.25;
-        maquette.pastille.texte = "collection « Ozalid »".into();
         p.meta.couverture.maquette = Some(maquette);
         p.images
             .insert("couverture.jpg".into(), vec![0xFF, 0xD8, 0xFF]);
@@ -1032,7 +1032,7 @@ auteur = "Ivan Pjig"
         assert_eq!(m.titre.casse, crate::couverture::Casse::Capitales);
         assert!(m.cadre.actif);
         assert_eq!(m.cadre.filet2_couleur, "#c00000");
-        assert_eq!(m.pastille.texte, "collection « Ozalid »");
+        assert_eq!(r.meta.livre.collection, "collection « Ozalid »");
     }
 
     /// Un `.ozalid` écrit avant que la police ne soit réglable doit s'ouvrir, pas être

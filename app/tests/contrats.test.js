@@ -21,7 +21,9 @@ const PROJET = {
   chemin: '/livres/LHC.ozalid',
   livre: {
     titre: 'Les Heures creuses', titre_page: '%TITRE%', auteur: 'Ivan Pjig',
-    genre: 'roman', copyright: '', chapitres: null,
+    genre: 'roman', editeur: 'Editeur', collection: 'Collection',
+    monogramme: 'Monogramme', copyright: '', prix: 'Prix', mention: 'Mention',
+    chapitres: null,
   },
   manuscrit_source: null,
   chapitres_trouves: 12,
@@ -316,4 +318,19 @@ test('les champs libres voyagent en chaînes, jamais en null', async () => {
   await els.get('inDedicace').declenche('change');
   assert.strictEqual(envoye.titre_page, '%TITRE%');
   assert.strictEqual(envoye.dedicace, '  Pour %AUTEUR%.  ');
+});
+
+/**
+ * Les cinq textes déplacés ne doivent plus être offerts par l'onglet Couverture.
+ *
+ * Les y laisser ferait deux endroits où saisir un éditeur, qui peuvent se contredire —
+ * c'est précisément le défaut que ce lot corrige. Le schéma est lu tel quel : il casse
+ * si un chemin revient.
+ */
+test('les textes du livre ont quitté le schéma de la couverture', () => {
+  const js = source('src', 'couverture.js');
+  for (const chemin of ['pied.monogramme', 'pied.editeur', 'pastille.texte',
+    'quatrieme.mention', 'quatrieme.collection', 'quatrieme.prix']) {
+    assert.ok(!js.includes(`'${chemin}'`), `${chemin} est encore réglable en couverture`);
+  }
 });
