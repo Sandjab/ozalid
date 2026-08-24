@@ -126,19 +126,37 @@ pub fn converge(
     Err("la composition ne converge pas (gouttière ou parité oscillantes).".into())
 }
 
-/// Ce qu'un envoi dépose sur la page de titre.
+/// Ce qu'un envoi dépose sur sa page.
 ///
-/// `interieur` ne connaît pas la main du livre : il reçoit ce qu'elle a décidé. Une
-/// image écrite à la main et une image produite par un modèle de diffusion arrivent
-/// ici de la même façon — ce module n'a pas à savoir d'où l'image vient, seulement
-/// qu'elle est posée à côté de la source.
+/// `interieur` ne connaît ni la main du livre, ni d'où l'image vient : il reçoit ce
+/// que l'envoi a décidé. Une image écrite à la main et une image produite par un
+/// modèle de diffusion arrivent ici de la même façon — ce module n'a pas à savoir
+/// laquelle, seulement qu'elle est posée à côté de la source.
 #[derive(Debug, Clone, Copy)]
-pub enum Trace<'a> {
-    /// Un texte, composé dans la main du livre.
+pub enum Quoi<'a> {
+    /// Un texte, composé dans la main de cet envoi.
     Texte { police: &'a str, texte: &'a str },
     /// Une image, déjà écrite à côté de la source, désignée par son seul nom.
     Image { fichier: &'a str },
 }
+
+/// Un envoi et sa place sur la page.
+#[derive(Debug, Clone, Copy)]
+pub struct Trace<'a> {
+    pub quoi: Quoi<'a>,
+    pub place: &'a crate::envoi::Place,
+}
+
+/// Le rapport entre la largeur de l'objet et le corps de son écriture.
+///
+/// L'objet est self-similaire : l'agrandir agrandit les lettres, parce que tirer un
+/// coin à la souris agrandit une signature — il n'élargit pas une colonne de texte
+/// pour la laisser se recomposer. Le corps suit donc la taille.
+///
+/// La valeur cale le nouveau réglage sur l'ancien : jusqu'à la v4, l'envoi se composait
+/// en 14 pt dans un bloc de 70 % de la justification. Sur une page de 127 mm, une
+/// taille de 0,60 donne 76,2 mm de large, et 14 pt valent 4,94 mm — d'où 4,94 / 76,2.
+const CORPS_SUR_LARGEUR: f64 = 0.0648;
 
 /// Source Typst complète de l'intérieur.
 fn assemble(
@@ -179,7 +197,7 @@ fn assemble(
 #set page(
   width: {fw}mm, height: {fh}mm,
   margin: (top: {}mm, bottom: {}mm, inside: {}mm, outside: {}mm),
-  footer: none,
+  footer: none,{fg}
 )
 #set text(font: "{}", size: {}pt, lang: "fr", hyphenate: true,
           top-edge: 0.75em, bottom-edge: -0.25em,
@@ -204,6 +222,7 @@ fn assemble(
         // La police est validée en amont par `Interieur::verifie` : pas d'échappement.
         int.police,
         pr.corps_pt,
+        fg = foreground(envoi, fw),
     ));
 
     // La page insérée vient avant tout ce que `liminaires` écrit : c'est la page 1 du
@@ -212,7 +231,7 @@ fn assemble(
         s.push_str(a);
     }
 
-    s.push_str(&liminaires(livre, envoi, liminaires_manuscrit));
+    s.push_str(&liminaires(livre, liminaires_manuscrit));
 
     // — Corps, folio rétabli. La numérotation court depuis le faux-titre, seul son
     //   affichage était supprimé : le premier chapitre s'ouvre donc en page 5, ou en 7
@@ -290,6 +309,61 @@ fn assemble(
     s
 }
 
+/// Ce que l'envoi ajoute à `#set page` : un `foreground` conditionné au numéro de page.
+///
+/// **`foreground` et non le flux.** Un `#place` dans le flux ne pouvait déjà pas créer
+/// de page ; il fallait en revanche l'écrire là où la page visée se compose, ce qui
+/// enfermait l'envoi sur la page de titre. Le `foreground`, lui, se pose une fois au
+/// préambule et vise n'importe quelle page — un `#set page(…)` au milieu du document
+/// ouvrirait une page, d'où le préambule et lui seul.
+///
+/// Il survit au `#set page(footer: …)` qui ouvre le corps, les `set` de Typst
+/// fusionnant champ à champ, et aux `#page(…)[…]` des pages de partie. Ses pourcentages
+/// se résolvent sur la **page entière, marges comprises** : c'est ce qui les met en
+/// correspondance 1:1 avec le canevas de l'interface, qui montre la page entière.
+///
+/// `counter(page)` n'est jamais remis à zéro dans l'intérieur — seul son affichage est
+/// masqué jusqu'au corps —, si bien que la condition porte bien sur la n-ième page du
+/// fichier, celle que la vignette montre.
+fn foreground(envoi: Option<Trace>, largeur_mm: f64) -> String {
+    let Some(t) = envoi else {
+        return String::new();
+    };
+    let p = t.place;
+    let quoi = match t.quoi {
+        Quoi::Texte { police, texte } => format!(
+            r#"box(width: {taille}%)[
+        #set par(justify: false, first-line-indent: 0pt, leading: 0.9em)
+        #text(font: "{police}", size: {corps:.3}mm, hyphenate: false)[{mot}]
+      ]"#,
+            taille = p.taille * 100.0,
+            // La main est validée en amont par `Envois::verifie` : pas d'échappement.
+            mot = echappe(texte).replace('\n', r" \ "),
+            corps = p.taille * largeur_mm * CORPS_SUR_LARGEUR,
+        ),
+        // Le nom du fichier est fabriqué par `envoi::nom_image` : assaini, il ne porte
+        // ni guillemet qui refermerait la chaîne, ni séparateur qui la ferait sortir du
+        // répertoire où l'image vient d'être écrite.
+        //
+        // Aucune borne de hauteur, contrairement à la v3 : elle protégeait d'un envoi
+        // qui recouvrirait le titre, or le canevas montre désormais ce recouvrement, et
+        // le brider corrigerait l'auteur d'une faute qu'il voit.
+        Quoi::Image { fichier } => format!(r#"image("{fichier}", width: {}%)"#, p.taille * 100.0),
+    };
+    format!(
+        r#"
+  foreground: context {{
+    if counter(page).get().first() == {page} {{
+      place(center + horizon, dx: {dx}%, dy: {dy}%, rotate({angle}deg, {quoi}))
+    }}
+  }},"#,
+        page = p.page,
+        dx = (p.x - 0.5) * 100.0,
+        dy = (p.y - 0.5) * 100.0,
+        angle = p.angle,
+    )
+}
+
 /// Source Typst de l'intérieur du livre, tel qu'il part à l'impression.
 pub fn source(
     livre: &Livre,
@@ -330,7 +404,7 @@ pub fn source_ebook(
 ///
 /// Toutes sans folio, et sans avoir à le dire : `footer: none`, posé par l'entête que
 /// `source` écrit, court jusqu'au `#set page(footer: …)` qui ouvre le corps.
-fn liminaires(livre: &Livre, envoi: Option<Trace>, pieces: &[Piece]) -> String {
+fn liminaires(livre: &Livre, pieces: &[Piece]) -> String {
     let mut s = String::new();
     s.push_str(&format!(
         r#"#v(42mm)
@@ -351,42 +425,6 @@ fn liminaires(livre: &Livre, envoi: Option<Trace>, pieces: &[Piece]) -> String {
         echappe(&livre.genre),
     ));
 
-    // L'envoi se pose sur la page de titre, dans le blanc que son contenu laisse au
-    // bas. `#place` ne consomme pas le flux : il lui est impossible de créer une page,
-    // et c'est là-dessus que repose la promesse — la pagination, le dos et la planche
-    // sont les mêmes pour tous les envois du livre.
-    match envoi {
-        Some(Trace::Texte { police, texte }) => s.push_str(&format!(
-            r#"#place(bottom + center, dy: -28mm, block(width: 70%)[
-  #set par(justify: false, first-line-indent: 0pt, leading: 0.9em)
-  #text(font: "{police}", size: 14pt, hyphenate: false)[{}]
-])
-"#,
-            // La main est validée en amont par `Envois::verifie` : pas d'échappement.
-            echappe(texte).replace('\n', r" \ ")
-        )),
-        // Le nom du fichier est fabriqué par `envoi::nom_image` : assaini, il ne porte
-        // ni guillemet qui refermerait la chaîne, ni séparateur qui la ferait sortir du
-        // répertoire où l'image vient d'être écrite.
-        //
-        // La hauteur est bornée à 30 % du corps — le blanc que la page de titre laisse
-        // au bas, sur tous les formats. La largeur reste maîtresse tant que la hauteur
-        // tient : une image qui passait hier ne bouge pas d'un pixel ; seule celle qui
-        // recouvrirait le titre est ramenée à la borne. Pas de `fit: "contain"` : le
-        // cadre qu'il demande n'ancre pas son contenu en bas, l'image y flotterait.
-        Some(Trace::Image { fichier }) => s.push_str(&format!(
-            r#"#place(bottom + center, dy: -28mm, layout(zone => {{
-  let plein = measure(image("{fichier}", width: zone.width * 70%))
-  if plein.height > zone.height * 30% {{
-    image("{fichier}", height: zone.height * 30%)
-  }} else {{
-    image("{fichier}", width: 70%)
-  }}
-}}))
-"#
-        )),
-        None => {}
-    }
     s.push_str("#pagebreak()\n\n");
 
     // Le pavé de copyright est calé en bas de la justification. La chaîne Python le
@@ -494,6 +532,7 @@ fn blocs_typst(blocs: &[Bloc]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::envoi::Place;
     use crate::providers::provider;
     use std::cell::RefCell;
 
@@ -947,10 +986,10 @@ mod tests {
     /// faux, et il ne se découvre qu'après tirage.
     #[test]
     fn une_dedicace_ajoute_une_belle_page_et_sa_blanche() {
-        let sans = liminaires(&livre(), None, &[]);
+        let sans = liminaires(&livre(), &[]);
         let mut l = livre();
         l.dedicace = "À M., qui a tenu la lampe.".into();
-        let avec = liminaires(&l, None, &[]);
+        let avec = liminaires(&l, &[]);
 
         assert_eq!(
             avec.matches("#pagebreak()").count(),
@@ -968,12 +1007,12 @@ mod tests {
     /// du seul fait que le champ existe désormais.
     #[test]
     fn une_dedicace_vide_ou_blanche_ne_compose_rien() {
-        let sans = liminaires(&livre(), None, &[]);
+        let sans = liminaires(&livre(), &[]);
         for creux in ["", "   ", "\n \n"] {
             let mut l = livre();
             l.dedicace = creux.into();
             assert_eq!(
-                liminaires(&l, None, &[]),
+                liminaires(&l, &[]),
                 sans,
                 "« {creux:?} » a été pris pour une dédicace"
             );
@@ -987,7 +1026,7 @@ mod tests {
     fn une_dedicace_est_echappee_et_garde_ses_sauts_de_ligne() {
         let mut l = livre();
         l.dedicace = "À #M.,\nqui a tenu la lampe.".into();
-        let s = liminaires(&l, None, &[]);
+        let s = liminaires(&l, &[]);
 
         assert!(s.contains(r"À \#M.,"), "dédicace non échappée : {s}");
         assert!(
@@ -1153,79 +1192,180 @@ mod tests {
         assert!(s.contains("Après coup."));
     }
 
+    /// La place d'un envoi ordinaire : le bas de la page de titre, là où les projets
+    /// d'avant cette spec portaient le leur — le seul endroit qu'ils savaient viser.
+    const PLACE: &Place = &Place {
+        page: 3,
+        x: 0.5,
+        y: 0.80,
+        taille: 0.60,
+        angle: 0.0,
+    };
+
     fn trace() -> Trace<'static> {
-        Trace::Texte {
-            police: "Caveat",
-            texte: "À Léa, qui a lu la première version.",
+        Trace {
+            quoi: Quoi::Texte {
+                police: "Caveat",
+                texte: "À Léa, qui a lu la première version.",
+            },
+            place: PLACE,
         }
     }
 
-    /// L'envoi se pose par `#place`, qui ne consomme pas le flux : il lui est
-    /// impossible de créer une page. Ce n'est pas une précaution, c'est la propriété
-    /// sur laquelle repose toute la promesse — même pagination, même dos, même planche
-    /// pour tous les envois. Si ce test tombe, tous les packages d'envoi sont faux.
-    #[test]
-    fn un_envoi_ne_cree_aucune_page() {
-        let sans = liminaires(&livre(), None, &[]);
-        let avec = liminaires(&livre(), Some(trace()), &[]);
+    fn image(fichier: &str) -> Trace<'_> {
+        Trace {
+            quoi: Quoi::Image { fichier },
+            place: PLACE,
+        }
+    }
 
+    /// La source d'un intérieur ordinaire, avec ou sans envoi : tout ce que ces tests
+    /// comparent est ce que l'envoi y change.
+    fn source_avec(envoi: Option<Trace>) -> String {
+        let pr = provider("kdp-5x8").expect("gabarit kdp-5x8");
+        let r = Reglage {
+            gouttiere: pr.gouttieres[0].2,
+            blanche: false,
+        };
+        source(&livre(), &Interieur::default(), pr, &r, &chapitres(), envoi)
+    }
+
+    /// Le corps composé de l'envoi, en millimètres, relevé dans la source.
+    ///
+    /// C'est le premier `size:` du fichier : le `foreground` se pose dans le `#set
+    /// page` du préambule, donc avant le `#set text` du labeur.
+    fn corps_de(s: &str) -> f64 {
+        let i = s.find("size: ").expect("pas de corps d'envoi") + "size: ".len();
+        let j = s[i..].find("mm").expect("corps non exprimé en mm") + i;
+        s[i..j].parse().expect("corps illisible")
+    }
+
+    /// Le seul `foreground` de la source, isolé du reste.
+    ///
+    /// Les tests de contenu doivent s'y borner : la source entière porte déjà un
+    /// `justify: false` — le pavé de copyright — et un `font:` — la police de labeur —,
+    /// si bien qu'un `contains` sur elle serait vrai sans le moindre envoi. Un test qui
+    /// ne peut pas échouer ne protège rien.
+    fn foreground_de(s: &str) -> String {
+        let debut = s.find("foreground:").expect("pas de foreground");
+        let fin = s[debut..].find("\n)").expect("foreground non refermé") + debut;
+        s[debut..fin].to_string()
+    }
+
+    /// L'envoi se pose en `foreground` de page, conditionné au numéro de page. C'est
+    /// ce qui lui interdit de créer une page — donc de déplacer la pagination, le dos
+    /// et la planche — **sur n'importe quelle page**, et non plus sur la seule page de
+    /// titre. Si ce test tombe, tous les packages d'envoi sont faux.
+    #[test]
+    fn un_envoi_se_pose_en_foreground_conditionne_a_sa_page() {
+        let p = Place { page: 37, ..*PLACE };
+        let s = source_avec(Some(Trace {
+            quoi: Quoi::Texte {
+                police: "Caveat",
+                texte: "À Léa,",
+            },
+            place: &p,
+        }));
+        assert!(s.contains("foreground:"), "pas de foreground : {s}");
+        assert!(
+            s.contains("counter(page).get().first() == 37"),
+            "la page visée n'est pas dans la condition : {s}"
+        );
+        // Le flux ne doit rien recevoir : un `#pagebreak` de plus, et le compte bouge.
+        let sans = source_avec(None);
         assert_eq!(
-            avec.matches("#pagebreak()").count(),
+            s.matches("#pagebreak()").count(),
             sans.matches("#pagebreak()").count(),
-            "l'envoi a déplacé une page"
-        );
-        // Compter les `#place(` plutôt que d'en chercher un : le pavé de copyright en
-        // pose déjà un, si bien qu'un `contains` serait vrai même sans envoi — un test
-        // qui ne peut pas échouer.
-        assert_eq!(
-            avec.matches("#place(").count(),
-            sans.matches("#place(").count() + 1,
-            "l'envoi ne se pose pas par #place : {avec}"
-        );
-        // Et surtout : rien qui consomme le flux. Un `#v` de plus pousserait le
-        // contenu vers le bas, ce que le compte de sauts de page ne verrait pas.
-        assert_eq!(
-            avec.matches("#v(").count(),
-            sans.matches("#v(").count(),
-            "l'envoi pousse le flux au lieu de se poser dessus : {avec}"
+            "l'envoi a ajouté une rupture de page"
         );
     }
 
-    /// Hors de la page de titre, la source ne bouge pas d'un octet. Un envoi qui
-    /// modifierait le corps changerait la pagination sans qu'aucun compte ne le
-    /// signale.
+    /// Le `foreground` se pose au préambule, une fois : un `#set page(…)` au milieu du
+    /// document ouvrirait une page. Il doit donc paraître **avant** le premier contenu.
     #[test]
-    fn un_envoi_ne_touche_que_la_page_de_titre() {
-        let pr = provider("lulu").unwrap();
-        let r = Reglage {
-            gouttiere: 25.0,
-            blanche: false,
-        };
-        let sans = source(&livre(), &Interieur::default(), pr, &r, &chapitres(), None);
-        let avec = source(
-            &livre(),
-            &Interieur::default(),
-            pr,
-            &r,
-            &chapitres(),
-            Some(trace()),
+    fn le_foreground_est_au_preambule() {
+        let s = source_avec(Some(trace()));
+        let f = s.find("foreground:").expect("pas de foreground");
+        let premier_contenu = s.find("#v(42mm)").expect("pas de faux-titre");
+        assert!(
+            f < premier_contenu,
+            "le foreground est posé après le contenu : {s}"
         );
+    }
 
-        let corps = |s: &str| {
-            s.split("#set page(footer: context")
-                .nth(1)
-                .unwrap()
-                .to_string()
+    /// Hors du `foreground`, la source ne bouge pas d'un octet : c'est ce qui garantit
+    /// que tous les exemplaires d'un tirage partagent la même pagination.
+    #[test]
+    fn un_envoi_ne_touche_que_le_foreground() {
+        let avec = source_avec(Some(trace()));
+        let sans = source_avec(None);
+        let debut = avec.find("foreground:").expect("pas de foreground");
+        let fin = avec[debut..].find("\n)").expect("foreground non refermé") + debut;
+        let ampute = format!("{}{}", &avec[..debut], &avec[fin..]);
+        assert_eq!(
+            ampute.replace(char::is_whitespace, ""),
+            sans.replace(char::is_whitespace, ""),
+            "l'envoi a modifié la source hors du foreground"
+        );
+    }
+
+    /// L'échelle grossit l'objet entier, lettres comprises : tirer un coin à la souris
+    /// agrandit une signature, il n'élargit pas une colonne de texte pour la laisser se
+    /// recomposer. Le corps suit donc la taille.
+    #[test]
+    fn l_echelle_emporte_le_corps() {
+        let petit = Place {
+            taille: 0.30,
+            ..*PLACE
         };
-        assert_eq!(corps(&sans), corps(&avec), "le corps a changé");
+        let grand = Place {
+            taille: 0.60,
+            ..*PLACE
+        };
+        let sp = corps_de(&source_avec(Some(Trace {
+            quoi: Quoi::Texte {
+                police: "Caveat",
+                texte: "À Léa,",
+            },
+            place: &petit,
+        })));
+        let sg = corps_de(&source_avec(Some(Trace {
+            quoi: Quoi::Texte {
+                police: "Caveat",
+                texte: "À Léa,",
+            },
+            place: &grand,
+        })));
+        assert!(
+            sg > sp * 1.9 && sg < sp * 2.1,
+            "le corps n'a pas doublé : {sp} → {sg}"
+        );
+    }
+
+    /// L'inclinaison passe par `rotate`, dont l'origine est le centre — comme en CSS,
+    /// sans quoi le canevas et Typst ne montreraient pas la même chose.
+    #[test]
+    fn l_inclinaison_passe_par_rotate() {
+        let p = Place {
+            angle: -4.0,
+            ..*PLACE
+        };
+        let s = source_avec(Some(Trace {
+            quoi: Quoi::Texte {
+                police: "Caveat",
+                texte: "À Léa,",
+            },
+            place: &p,
+        }));
+        assert!(s.contains("rotate(-4"), "pas de rotation : {s}");
     }
 
     /// La main choisie doit être celle qui compose : sans le `font:`, Typst écrirait
     /// l'envoi dans la police de labeur du livre, et le mot ne ressemblerait plus à un
     /// mot écrit à la main.
     #[test]
-    fn l_envoi_est_compose_dans_la_main_du_livre() {
-        let s = liminaires(&livre(), Some(trace()), &[]);
+    fn l_envoi_est_compose_dans_sa_main() {
+        let s = foreground_de(&source_avec(Some(trace())));
         assert!(s.contains(r#"font: "Caveat""#), "main absente : {s}");
     }
 
@@ -1235,7 +1375,7 @@ mod tests {
     /// premier coup d'œil et ne se voit dans aucun compte.
     #[test]
     fn un_envoi_n_est_pas_justifie() {
-        let s = liminaires(&livre(), Some(trace()), &[]);
+        let s = foreground_de(&source_avec(Some(trace())));
         assert!(s.contains("justify: false"), "envoi justifié : {s}");
     }
 
@@ -1244,68 +1384,8 @@ mod tests {
     /// envoi réellement composé, pas supposé.
     #[test]
     fn un_envoi_ne_cesure_pas() {
-        let s = liminaires(&livre(), Some(trace()), &[]);
+        let s = foreground_de(&source_avec(Some(trace())));
         assert!(s.contains("hyphenate: false"), "envoi césuré : {s}");
-    }
-
-    /// L'image se pose par le même `#place` que le texte, et pour la même raison : elle
-    /// ne consomme pas le flux, donc elle ne peut pas créer de page. Une image écrite à
-    /// la main est bien plus haute qu'un mot de deux lignes — si elle poussait quoi que
-    /// ce soit, la pagination du livre entier suivrait, et le dos avec.
-    #[test]
-    fn une_image_d_envoi_ne_cree_aucune_page_non_plus() {
-        let sans = liminaires(&livre(), None, &[]);
-        let avec = liminaires(
-            &livre(),
-            Some(Trace::Image {
-                fichier: "Léa.png"
-            }),
-            &[],
-        );
-
-        assert_eq!(
-            avec.matches("#pagebreak()").count(),
-            sans.matches("#pagebreak()").count(),
-            "l'image a déplacé une page"
-        );
-        assert_eq!(
-            avec.matches("#place(").count(),
-            sans.matches("#place(").count() + 1,
-            "l'image ne se pose pas par #place : {avec}"
-        );
-        assert_eq!(
-            avec.matches("#v(").count(),
-            sans.matches("#v(").count(),
-            "l'image pousse le flux au lieu de se poser dessus : {avec}"
-        );
-        assert!(
-            avec.contains(r#"image("Léa.png", width: 70%)"#),
-            "l'image n'est pas posée : {avec}"
-        );
-    }
-
-    /// Une image trop haute recouvrait le titre — vu à l'aperçu, comme prévu par la
-    /// spec, et tranché ensuite : le blanc du bas fait 30 % du corps, l'image s'y
-    /// borne. La largeur reste maîtresse tant que la hauteur tient — une image déjà
-    /// acceptée ne bouge pas d'un pixel — et la hauteur ne prend la main que sur
-    /// celles qui déborderaient.
-    #[test]
-    fn une_image_trop_haute_est_bornee_au_blanc_du_bas() {
-        let s = liminaires(
-            &livre(),
-            Some(Trace::Image {
-                fichier: "Léa.png"
-            }),
-            &[],
-        );
-        assert!(
-            s.contains(r#"image("Léa.png", height: zone.height * 30%)"#),
-            "aucune borne de hauteur : {s}"
-        );
-        assert!(
-            s.contains(r#"if plein.height > zone.height * 30%"#),
-            "la borne s'applique même quand la largeur suffit : {s}"
-        );
     }
 
     /// Une image ne s'écrit pas dans une police : lui en imposer une reviendrait à
@@ -1313,25 +1393,26 @@ mod tests {
     /// travers.
     #[test]
     fn une_image_d_envoi_n_emporte_aucune_police() {
-        let s = liminaires(
-            &livre(),
-            Some(Trace::Image {
-                fichier: "Léa.png"
-            }),
-            &[],
-        );
+        let s = foreground_de(&source_avec(Some(image("Léa.png"))));
         assert!(!s.contains("font:"), "une police s'est glissée : {s}");
+        assert!(
+            s.contains(r#"image("Léa.png", width: 60%)"#),
+            "l'image n'est pas posée à sa taille : {s}"
+        );
     }
 
     /// Même piège que le titre de page et que la dédicace : le markup Typst doit être
     /// échappé, les sauts de ligne voulus doivent survivre.
     #[test]
     fn un_envoi_est_echappe_et_garde_ses_sauts_de_ligne() {
-        let t = Trace::Texte {
-            police: "Caveat",
-            texte: "À #Léa,\navec mon amitié.",
+        let t = Trace {
+            quoi: Quoi::Texte {
+                police: "Caveat",
+                texte: "À #Léa,\navec mon amitié.",
+            },
+            place: PLACE,
         };
-        let s = liminaires(&livre(), Some(t), &[]);
+        let s = foreground_de(&source_avec(Some(t)));
 
         assert!(s.contains(r"À \#Léa,"), "envoi non échappé : {s}");
         assert!(
