@@ -109,6 +109,7 @@ pub fn run() {
             commands::maquette_effacer,
             commands::couverture_modifier,
             commands::image_choisir,
+            commands::image_retirer,
             commands::couverture_apercu,
             commands::couverture_calques,
             commands::couverture_dos_boites,

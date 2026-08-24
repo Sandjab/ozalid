@@ -502,6 +502,44 @@ async function choisirImage(face) {
     afficherProjet(await invoke('image_choisir', { face, chemin })));
 }
 
+/**
+ * Les photos du projet dans la barre, chacune avec le geste qui la retire.
+ *
+ * Le retrait est posé sur le nom plutôt que sur un bouton de plus : la barre en porte
+ * déjà six et tronque ses libellés, et le nom est justement l'endroit où la présence de
+ * la photo se lit.
+ *
+ * Il retire la photo du `.ozalid` — c'est le seul geste qui allège l'archive, régler le
+ * fond de la 4ème sur le papier de la 1ère cesse seulement de la composer. La maquette
+ * n'est pas touchée : un fond réglé sur « Image propre » compose alors son papier seul,
+ * et l'aperçu le montre.
+ */
+function afficherPhotos(noms) {
+  const box = $('etatImages');
+  box.replaceChildren();
+  if (!noms.length) {
+    box.textContent = 'aucune photo';
+    return;
+  }
+  for (const nom of noms) box.append(lignePhoto(nom));
+}
+
+/**
+ * Un nom de photo et sa croix. Sans `innerHTML` : le nom vient d'un `.ozalid` qu'on n'a
+ * pas forcément écrit.
+ */
+function lignePhoto(nom) {
+  const ligne = h('span', undefined, 'photo');
+  ligne.append(h('span', nom, 'nom'));
+  const croix = h('button', '×', 'retirer');
+  croix.type = 'button';
+  croix.title = `Retirer ${nom} du projet`;
+  croix.addEventListener('click', () =>
+    tente(async () => afficherProjet(await invoke('image_retirer', { nom }))));
+  ligne.append(croix);
+  return ligne;
+}
+
 /** Un contrôle du schéma. Son id porte le chemin, ce qui suffit à le relire. */
 function controle(c) {
   let el;

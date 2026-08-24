@@ -644,6 +644,23 @@ impl Style {
     }
 }
 
+/// Le voile de lisibilité posé sur une boîte entière, ou rien s'il n'y en a pas.
+///
+/// Extraite pour la même raison que [`photo_quatre`] : deux appelants en ont besoin et
+/// un seul compose. L'autre est l'habillage de la manipulation directe, qui compose la
+/// 4ème **sans** sa photo pour la laisser bouger dessous — et qui doit néanmoins porter
+/// le voile, puisque c'est par-dessus la photo qu'il se pose. Le recopier là-bas, c'est
+/// accepter qu'un jour le direct montre une photo nue et l'aperçu une photo voilée.
+pub fn bloc_voile(b: Boite, v: Voile, opacite: f64) -> String {
+    voile_fond(v, opacite).map_or_else(String::new, |f| {
+        format!(
+            "#place(top + left, rect(width: {}, height: {}, fill: {f}, stroke: none))\n",
+            mm(b.largeur),
+            mm(b.hauteur)
+        )
+    })
+}
+
 /// Voile de lisibilité, en fond d'un rectangle.
 fn voile_fond(v: Voile, opacite: f64) -> Option<String> {
     let noir = |a: f64| couleur_alpha("#000000", a);
@@ -1020,7 +1037,9 @@ fn bloc_pastille(p: &Pastille, collection: &str, fw: f64, d: Debords) -> String 
 }
 
 /// Préambule d'une page d'une seule face. La planche a le sien.
-fn preambule(largeur: f64, hauteur: f64) -> String {
+/// Publique pour l'habillage de la manipulation directe : il glisse le voile entre le
+/// préambule et le corps, et ne peut donc pas prendre la source d'une face toute faite.
+pub fn preambule(largeur: f64, hauteur: f64) -> String {
     format!(
         "#set page(width: {}, height: {}, margin: 0mm)\n\
          // Boîte de ligne ramenée à 1em : « leading » Typst et « line-height » CSS\n\
@@ -1301,19 +1320,12 @@ pub fn corps_quatre(
     let q = &cv.quatrieme;
     let mut s = bloc_fond(b, papier_quatre(cv));
 
+    // Le voile suit la photo réellement composée, et non le mode : un fond réglé sur
+    // l'image se règle avant que la photo n'arrive, et le reste quand on la retire. Sur
+    // le mode, le voile devenait alors un rectangle sombre sur du papier nu.
     if let Some((zone, g, r)) = photo_quatre(cv, format, image_quatre, photo_une, pano, b)? {
         s.push_str(&bloc_image(zone, &g, &r.fichier));
-    }
-
-    let avec_image = matches!(q.fond, FondQuatre::Image | FondQuatre::Panorama);
-    if avec_image {
-        if let Some(f) = voile_fond(q.voile, q.voile_opacite) {
-            s.push_str(&format!(
-                "#place(top + left, rect(width: {}, height: {}, fill: {f}, stroke: none))\n",
-                mm(b.largeur),
-                mm(b.hauteur)
-            ));
-        }
+        s.push_str(&bloc_voile(b, q.voile, q.voile_opacite));
     }
 
     let mut c = String::new();
@@ -1636,6 +1648,36 @@ mod tests {
         let s = source_une(&livre(), &cv, FORMAT, Some(&photo()), None);
         assert!(!s.contains("image("), "image émise en mode typo");
         assert!(!s.contains("gradient"), "voile émis en mode typo");
+    }
+
+    /// Une 4ème qui réclame sa propre image sans en avoir compose son papier, et rien
+    /// d'autre : pas de voile.
+    ///
+    /// Même raison qu'en composition typographique — un voile sans photo dessous n'est
+    /// qu'un rectangle sombre sur du papier — mais l'état s'atteint autrement : le fond
+    /// se règle avant que la photo n'arrive, et il reste réglé quand on la retire.
+    /// Conditionner le voile au **mode** le posait alors sur une 4ème qui n'a rien à
+    /// assombrir.
+    #[test]
+    fn une_quatrieme_sans_photo_ne_compose_pas_son_voile() {
+        let mut cv = maquettes::fournie("bandeau");
+        cv.quatrieme.fond = FondQuatre::Image;
+        cv.quatrieme.voile = Voile::Uni;
+        cv.quatrieme.voile_opacite = 0.5;
+
+        let sans = source_quatre(&livre(), &cv, FORMAT, None, None, None).unwrap();
+        assert!(!sans.contains("image("), "image émise sans photo");
+        assert!(
+            !sans.contains("transparentize"),
+            "voile émis sans photo :\n{sans}"
+        );
+
+        // La photo revenue, le voile revient avec elle : c'est bien la photo qu'il suit.
+        let avec = source_quatre(&livre(), &cv, FORMAT, Some(&photo()), None, None).unwrap();
+        assert!(
+            avec.contains("transparentize"),
+            "voile perdu avec la photo :\n{avec}"
+        );
     }
 
     /// Le cadre est le dessin le plus scruté de la maquette : trois filets, dans

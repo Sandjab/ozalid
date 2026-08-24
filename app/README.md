@@ -292,6 +292,13 @@ polices/        la police manuscrite de l'auteur, quand il en fournit une
 envois/         les images des envois, une par dédicataire
 ```
 
+Chaque photo se retire par la croix posée sur son nom, dans la barre de la Couverture.
+C'est le seul geste qui **allège** l'archive : régler le fond de la 4ème sur le papier de
+la 1ère cesse de composer sa photo, mais celle-ci reste embarquée, et une photo
+d'appareil pèse plus que le manuscrit. Le retrait ne touche pas la maquette — un fond
+resté sur « Image propre » compose alors son papier seul, et l'aperçu le montre, sans
+voile puisqu'il n'y a plus rien à assombrir.
+
 Les images d'envoi sont rangées à part de celles de la couverture, et ce n'est pas
 une préférence d'organisation : `package::ecrire_images` donne un rôle aux images du
 projet **par leur seul nom**, et tout ce qui ne commence pas par `quatrieme` y devient

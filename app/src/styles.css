@@ -478,31 +478,26 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
 
 /* La barre d'outils de la Couverture : les faces à gauche, ce qui alimente la maquette
    à droite, et rien entre les deux qu'un ressort.
-   `nowrap` est délibéré, et c'est une contrainte, pas une négligence : la barre tient
-   sur une ligne à 900 px — la fenêtre la plus étroite qu'on autorise — et lui laisser le
-   droit de se replier ferait revenir en douce les deux rangs qu'on vient d'enlever. Ce
-   qui cède sous la pression, c'est la mention des photos, la seule dont la longueur ne
-   se prévoit pas. Ajouter un contrôle ici, c'est d'abord vérifier qu'il reste de la
-   place à 900. */
+   Elle se replie, mais aucun de ses groupes ne se coupe. Le repli était refusé tant que
+   ce qui manquait de place n'était qu'une mention : elle s'effaçait entièrement sous
+   1015 px, et c'était assumé plutôt que de rendre à la barre un second rang permanent.
+   Depuis que chaque nom de photo porte le geste qui la retire, s'effacer n'est plus une
+   option — un geste qu'aucune largeur n'offre n'existe pas, et à 1040 px il ne reste que
+   50 px après le dernier bouton.
+   Le rang de plus ne paraît donc que lorsqu'il sert, et il n'emporte que la mention :
+   elle ferme la barre, c'est elle qui bascule la première. Les quatre faces restent
+   insécables — `.onglets` en `nowrap` —, ce qui écarte le défaut qui avait fait refuser
+   le repli : elles se mettaient sur trois rangs dès 900 px.
+   Ajouter un contrôle ici, c'est donc décider ce qu'il repousse au rang suivant. */
 .outils {
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: .5rem .8rem;
   padding: .5rem 0;
   min-width: 0;
 }
 
-/* Rien ne se replie ni ne se comprime, sauf la mention des photos. `.ligne` autorise le
-   repli partout ailleurs, et à raison — mais les quatre faces s'y mettaient sur trois
-   rangs dès 900 px, rendant à la barre les deux étages qu'on venait de lui retirer.
-   Ce qui cède est donc désigné, et c'est le seul élément qui ne soit pas un contrôle.
-   Mesuré : les quatre faces, le menu et les deux boutons réclament 779 px, gouttières
-   comprises 830. La mention n'a donc de place qu'à partir de 1015 px de fenêtre, et
-   au-dessous elle s'efface — entièrement, pas tronquée. C'est assumé : à cette largeur,
-   l'alternative était de rendre à la barre un second rang permanent.
-   Les 6 px qui restent à 900 px sont toute la marge du calcul. Un libellé rallongé ici
-   ne se replie pas, il déborde. */
 .outils > * { flex: none; }
 .outils .onglets { flex-wrap: nowrap; }
 
@@ -515,16 +510,48 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
    select d'ajout d'un destinataire. */
 .outils select { width: auto; }
 
-/* Les noms des photos source. Seul élément de la barre à céder de la place : ce qui
-   dépasse se tronque plutôt que de pousser un bouton hors de la ligne. */
+/* Les noms des photos source. Une rangée et non un texte depuis que chaque nom porte le
+   geste qui retire sa photo : la croix ne se tronque ni ne se comprime jamais — un geste
+   à demi visible ne se clique pas, et celui-ci retire une photo du projet. Ce qui cède
+   est le nom seul, et seulement s'il est très long : la mention passe au rang suivant
+   bien avant d'en arriver là. */
 .outils .source {
   margin: 0;
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.outils .source .photo {
+  display: flex;
+  align-items: center;
+  gap: .15rem;
   min-width: 0;
+}
+
+.outils .source .photo .nom {
   max-width: 12rem;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
+
+/* La croix : un geste, pas un bouton de barre. Elle ne prend ni fond ni bordure tant
+   qu'on ne la vise pas — la barre en porte déjà six, et sept boutons noirs feraient
+   passer le retrait d'une photo pour une commande d'égale importance. */
+.outils .source .retirer {
+  flex: none;
+  padding: 0 .25rem;
+  border: 0;
+  background: none;
+  color: var(--gris);
+  font-size: 1.1em;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.outils .source .retirer:hover,
+.outils .source .retirer:focus-visible { color: var(--rouge); }
 
 /* L'aperçu prend la place, le panneau prend ce qu'il lui faut — et c'est l'inverse de
    ce que faisait cette ligne. Elle plafonnait l'aperçu à 22 rem et donnait `1fr` au

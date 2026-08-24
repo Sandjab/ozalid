@@ -514,6 +514,52 @@ test('un sélecteur de photo annulé ne touche pas au projet', async () => {
   assert.ok(!appels.some(([c]) => c === 'image_choisir'), 'photo posée sans fichier');
 });
 
+/** Le geste de retrait porté par le nom d'une photo, dans la barre. */
+const retrait = (els, nom) => {
+  const ligne = [...els.get('etatImages').children].find((l) => l.textContent.includes(nom));
+  assert.ok(ligne, `aucune photo « ${nom} » dans la barre`);
+  const b = [...ligne.children].find((e) => e.tagName === 'BUTTON');
+  assert.ok(b, `« ${nom} » n'offre pas de retrait`);
+  return b;
+};
+
+/**
+ * Retirer une photo la sort du `.ozalid`, et pas seulement de la composition.
+ *
+ * Régler le fond de la 4ème sur le papier de la 1ère cesse de la composer, mais elle
+ * reste embarquée — une photo d'appareil pèse plus que le manuscrit, et le projet la
+ * porte partout ensuite. C'est le seul geste qui allège l'archive.
+ *
+ * Le retrait est posé sur le nom, là où l'état se lit, et non sur un bouton de plus :
+ * la barre en porte déjà six et tronque ses libellés à la largeur de fenêtre courante.
+ *
+ * Deux photos, et c'est la seconde qu'on clique : le nom envoyé doit être celui du geste
+ * et non le premier de la liste — c'est tout ce qui distingue la 4ème de la 1ère ici.
+ */
+test('retirer une photo la sort du projet, par son nom', async () => {
+  let retiree = null;
+  const { els } = await ouvre(maquette(), {
+    projet_ouvrir: () => ({ ...projet(maquette()), images: ['couverture.jpg', 'quatrieme.png'] }),
+    image_retirer: (args) => {
+      retiree = args.nom;
+      return projet(maquette());
+    },
+  });
+
+  await retrait(els, 'quatrieme.png').declenche('click');
+  assert.strictEqual(retiree, 'quatrieme.png');
+});
+
+/** Un projet sans photo n'offre rien à retirer, et le dit. */
+test('sans photo, la barre ne porte aucun retrait', async () => {
+  const { els } = await ouvre(maquette(), {
+    projet_ouvrir: () => ({ ...projet(maquette()), images: [] }),
+  });
+  assert.match(els.get('etatImages').textContent, /aucune photo/);
+  assert.strictEqual(
+    [...els.get('etatImages').children].length, 0, 'un geste posé sur une photo absente');
+});
+
 /* ---------- aperçu ---------- */
 
 test('l\'aperçu est demandé et affiché à l\'ouverture du projet', async () => {

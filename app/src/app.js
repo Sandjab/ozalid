@@ -556,7 +556,8 @@ function afficherProjet(p) {
   // Dans la barre, à côté des deux boutons qui la changent : les noms suffisent, et
   // l'absence se dit en deux mots. La phrase qui expliquait ce qu'une couverture sans
   // photo compose — le papier seul — est partie avec le bloc : l'aperçu la montre.
-  $('etatImages').textContent = p.images.length ? p.images.join(', ') : 'aucune photo';
+  // Chaque nom porte le geste qui retire sa photo du projet ; voir `afficherPhotos`.
+  afficherPhotos(p.images);
 
   // Le panneau, la face montrée et la disposition qu'elle demande sortent tous de
   // `poserDisposition` : c'est la couverture qui les commande, et sans elle il n'y a

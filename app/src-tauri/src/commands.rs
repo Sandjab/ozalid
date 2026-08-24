@@ -828,6 +828,36 @@ fn poser_image(images: &mut BTreeMap<String, Vec<u8>>, nom: String, octets: Vec<
     images.insert(nom, octets);
 }
 
+/// Retire du projet la photo que ce nom désigne.
+///
+/// Par nom et non par rôle, contrairement à [`poser_image`] : la fenêtre montre les noms
+/// que cette même vue vient de lui servir, et c'est l'un d'eux qu'on clique. Un nom
+/// absent est refusé plutôt qu'ignoré — il dit une liste périmée, donc un geste qui a
+/// porté sur autre chose que ce qu'on voyait.
+fn retirer_image(images: &mut BTreeMap<String, Vec<u8>>, nom: &str) -> Result<(), String> {
+    images
+        .remove(nom)
+        .map(|_| ())
+        .ok_or_else(|| format!("{nom} : le projet ne porte pas cette image."))
+}
+
+/// Retire une photo du projet, et la retire donc du `.ozalid`.
+///
+/// C'est le seul geste qui allège l'archive : régler le fond de la 4ème sur le papier de
+/// la 1ère cesse de composer la photo, mais elle reste embarquée — et une photo
+/// d'appareil pèse plus que le manuscrit.
+///
+/// La maquette n'est pas touchée : un fond réglé sur « Image propre » le reste, et
+/// compose alors son papier seul. Le corriger d'autorité déciderait à la place de qui
+/// remplace une photo par une autre en deux gestes.
+#[tauri::command]
+pub fn image_retirer(nom: String, atelier: State<Atelier>) -> Result<ProjetVue, String> {
+    let mut garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_mut().ok_or_else(aucun_projet)?;
+    retirer_image(&mut o.projet.images, &nom)?;
+    vue_modifiee(o)
+}
+
 /// Ce qu'un aperçu de face donne à voir : l'image, et où la planche se coupe et se plie
 /// s'il y a lieu.
 #[derive(Serialize)]
@@ -1081,9 +1111,25 @@ pub fn couverture_calques(
     let mut nu = cv.clone();
     nu.papier = PAPIER_TRANSPARENT.to_string();
     nu.quatrieme.couleur = PAPIER_TRANSPARENT.to_string();
+    // La 4ème s'assemble à la main, préambule et corps séparés, pour y glisser son
+    // voile : celui-ci suit désormais la photo réellement composée, et l'habillage se
+    // compose sans photo — c'est tout son objet, la laisser bouger dessous. Sans cette
+    // reprise, le direct montrerait une photo nue et l'aperçu une photo voilée.
+    //
+    // Entre les deux et non avant : un `#set page` qui suit du contenu ouvre une page de
+    // plus. Et entre les deux met bien le voile sous les textes et sous le rectangle de
+    // fond — lequel est transparent ici, et une couleur d'alpha nul ne masque rien.
+    //
+    // La 1ère n'a rien à reprendre : son voile suit le mode de la page, qui vaut pour
+    // l'habillage comme pour la face entière.
     let corps = match face.as_str() {
         "une" => couverture::source_une(&o.projet.meta.livre, &nu, format, None, dos_mm),
-        _ => couverture::source_quatre(&o.projet.meta.livre, &nu, format, None, None, dos_mm)?,
+        _ => {
+            let pano = couverture::panorama_face(format, dos_mm, false);
+            couverture::preambule(b.largeur, b.hauteur)
+                + &couverture::bloc_voile(b, nu.quatrieme.voile, nu.quatrieme.voile_opacite)
+                + &couverture::corps_quatre(&o.projet.meta.livre, &nu, format, None, None, pano, b)?
+        }
     };
     // `#set page(fill: none)` en tête : une règle posée avant le préambule vaut avec
     // lui, et c'est elle qui rend le PNG transparent là où le papier ne peint plus.
@@ -2042,6 +2088,31 @@ mod tests {
             images.keys().collect::<Vec<_>>(),
             ["couverture.png", "quatrieme.png"]
         );
+    }
+
+    /// Retirer une photo ne retire que celle-là, et un nom que le projet ne porte pas
+    /// est refusé.
+    ///
+    /// Le refus n'est pas une politesse : la fenêtre clique un nom que cette vue-là
+    /// venait de lui servir. Qu'il ait disparu entre les deux dit une liste périmée,
+    /// donc un geste qui a porté sur autre chose que ce qu'on voyait — et réussir en
+    /// silence laisserait croire la photo partie alors qu'une autre est restée.
+    #[test]
+    fn retirer_une_photo_ne_touche_que_celle_la() {
+        let mut images = BTreeMap::from([
+            ("couverture.jpeg".to_string(), vec![1]),
+            ("quatrieme.jpeg".to_string(), vec![2]),
+        ]);
+
+        retirer_image(&mut images, "quatrieme.jpeg").unwrap();
+        assert_eq!(
+            images.keys().collect::<Vec<_>>(),
+            ["couverture.jpeg"],
+            "la 1ère est partie avec la 4ème, ou la 4ème est restée"
+        );
+
+        let refus = retirer_image(&mut images, "quatrieme.jpeg").unwrap_err();
+        assert!(refus.contains("quatrieme.jpeg"), "{refus}");
     }
 
     /// Le nom porte le rôle : c'est tout ce que la composition lit pour savoir quelle
