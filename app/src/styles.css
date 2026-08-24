@@ -1188,18 +1188,47 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
    la ferait juger fausse. */
 .envois .rail [aria-current="true"] img { border-color: var(--prise); }
 
-/* La scène : la page posée sur le carton, comme la couverture. */
+/* La scène a la hauteur de la bande, et non celle de ce qu'on y pose : sans elle, le
+   `max-height` du canevas et celui de la confirmation se mesurent sur une hauteur
+   automatique, c'est-à-dire sur rien. Même geste que le rail, deux bandes plus à
+   gauche. */
+.envois .scene { position: relative; height: 100%; }
+
+/* Le bouton se pose sur l'établi, en haut à droite, et non dans la rangée qui centre
+   la page : au centre, sa largeur entre dans le calcul, et « Revenir au canevas » est
+   plus long que « Voir la page » — la page se déplaçait de la moitié de la différence
+   entre les deux vues. Une confirmation qui bouge ne confirme rien.
+   Le `max-width` est pour l'état qui l'accompagne : un refus nomme la personne, la page
+   et le compte, et sans borne il partirait chercher sa place hors de l'établi. */
+.envois .scene .ligne {
+  position: absolute;
+  top: 0;
+  right: 0;
+  max-width: 100%;
+  justify-content: flex-end;
+}
+
+/* Le canevas : la page posée sur le carton, comme la couverture sur son établi.
+   Il se dimensionne par son rapport d'aspect, et la page le remplit — c'est le
+   montage du cadre de l'aperçu, et le commentaire de `.cadre` dit pourquoi l'inverse
+   ne tient pas debout. Borné sur sa seule largeur, il suivait la bande élastique : une
+   fenêtre large lui valait une page plus haute que l'étape, qui ne défile pas, et le bas
+   de la page — là où l'envoi se pose — passait sous le bord.
+   `--ratio` est posé par `poserRatioPage` une fois la page décodée, et retiré avec
+   elle : un canevas sans page garderait sinon sa place, l'établi seul. */
 .envois .canevas {
   position: relative;
   display: inline-block;
   max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: var(--ratio);
   background: var(--etabli);
   /* Le geste appartient au pointeur : sans cela, un glisser sur pavé tactile ferait
      défiler la fenêtre au lieu de déplacer l'envoi. */
   touch-action: none;
 }
 
-.envois .canevas .fond { display: block; width: 100%; }
+.envois .canevas .fond { display: block; width: 100%; height: 100%; }
 
 /* L'objet : le PNG rendu par Typst, à la place et à l'inclinaison réglées.
    Sa largeur est un pourcentage du canevas — c'est le `box(width: …%)` que Typst

@@ -1182,16 +1182,23 @@ $('btReperes').addEventListener('click', basculerReperes);
 // Le seul écouteur de l'application qui ne réponde pas à un geste : c'est l'image
 // décodée qui donne au cadre sa taille, et elle ne l'est qu'après avoir été posée.
 $('apercu').addEventListener('load', poserRatio);
+$('fondPage').addEventListener('load', poserRatioPage);
 $('btPackager').addEventListener('click', packager);
 $('btEbooks').addEventListener('click', ebooks);
 $('btEpreuve').addEventListener('click', epreuve);
 $('inPoliceInterieur').addEventListener('change', majInterieur);
 // Changer de destinataire déplace le format de l'aperçu et l'épaisseur du dos : c'est
-// le projet qui les porte, donc `afficherProjet` suffit à tout remettre d'accord.
-$('inDestinataire').addEventListener('change', () => tente(async () =>
+// le projet qui les porte, et `afficherProjet` suffit à les remettre d'accord.
+// Les vignettes du rail, elles, ne sont pas dans le projet : ce sont les pages d'une
+// pagination, et deux destinataires n'ont pas les mêmes. Elles se périment donc ici, et
+// non dans `composer` seul — revenir à un destinataire déjà mesuré ne recompose rien, et
+// le rail garderait les pages du précédent.
+$('inDestinataire').addEventListener('change', () => tente(async () => {
   afficherProjet(await invoke('destinataire_viser', {
     providerCle: $('inDestinataire').value,
-  }))));
+  }));
+  oublierPages();
+}));
 $('btAjouterDestinataire').addEventListener('click', () => tente(async () =>
   afficherProjet(await invoke('destinataire_ajouter', {
     providerCle: $('inAjoutDestinataire').value,

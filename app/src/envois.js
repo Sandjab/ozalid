@@ -258,9 +258,17 @@ async function accepterEnvoi(i) {
  */
 let pages = null;
 
-/** Les vignettes de l'intérieur sont périmées : la prochaine ouverture les refera. */
+/**
+ * Les vignettes de l'intérieur sont périmées : la prochaine ouverture les refera.
+ *
+ * Et tout de suite si l'on regarde déjà le rail : vider le cache ne décroche pas les
+ * images accrochées, et l'on continuerait de viser les pages d'une pagination qui
+ * n'est plus celle du pied — page 264 d'un intérieur qui n'en fait plus que 190. Le
+ * refus à la génération le dirait, mais une fois le mot écrit.
+ */
 function oublierPages() {
   pages = null;
+  if (etape === 'envois') ouvrirCanevas();
 }
 
 /**
@@ -326,8 +334,14 @@ function marquerVignette(n) {
 async function majPage() {
   const e = envoi();
   const img = $('fondPage');
+  // La page change : la confirmation, elle, est figée sur celle d'avant. La laisser
+  // reviendrait à confirmer une page qu'on vient de quitter, le canevas caché derrière.
+  revenirAuCanevas();
   if (!e) {
     img.hidden = true;
+    // Le rapport s'en va avec la page : un canevas qui le garderait garderait sa
+    // place, l'établi seul, un rectangle sombre là où il n'y a rien à montrer.
+    $('canevas').style.removeProperty('--ratio');
     return;
   }
   await tente(async () => {
@@ -335,6 +349,22 @@ async function majPage() {
     img.alt = `Page ${e.place.page} de l'intérieur`;
     img.hidden = false;
   });
+}
+
+/**
+ * Le canevas prend le rapport de la page décodée.
+ *
+ * C'est lui qui lui donne sa taille, comme au cadre de l'aperçu de couverture et pour
+ * la même raison : borné sur sa seule largeur, le canevas suit la bande élastique, et
+ * une fenêtre large lui vaut une page plus haute que l'étape. L'étape ne défilant pas,
+ * le bas de la page passe sous le bord — et l'envoi s'y pose.
+ *
+ * Le rapport ne se connaît qu'une fois l'image décodée : d'où l'écoute du chargement.
+ */
+function poserRatioPage() {
+  const img = $('fondPage');
+  if (!img.naturalHeight) return;
+  $('canevas').style.setProperty('--ratio', String(img.naturalWidth / img.naturalHeight));
 }
 
 /**
@@ -386,12 +416,25 @@ function poserObjet() {
  */
 async function apercuEnvoi(i) {
   const img = $('apercuEnvoi');
-  await tente(async () => {
+  if (!img.hidden) return revenirAuCanevas();
+  return tente(async () => {
     img.src = await invoke('envoi_apercu', { index: i });
     img.alt = `Page ${projet.envois.liste[i].place.page} de l'exemplaire de `
       + `${projet.envois.liste[i].dedicataire}`;
     img.hidden = false;
+    // À la place du canevas, et non par-dessus : la bande n'a la hauteur que d'une
+    // page. C'est aussi ce qui rend la confirmation lisible — on va et vient d'une
+    // image à l'autre, et l'objet ne doit pas bouger d'un pouce.
+    $('canevas').hidden = true;
+    $('btVoirPage').textContent = 'Revenir au canevas';
   });
+}
+
+/** Referme la confirmation : le canevas reprend sa place, et le bouton son mot. */
+function revenirAuCanevas() {
+  $('apercuEnvoi').hidden = true;
+  $('canevas').hidden = false;
+  $('btVoirPage').textContent = 'Voir la page';
 }
 
 /* ---------- la génération ---------- */

@@ -93,6 +93,7 @@ function atelier({
       case 'envoi_vignettes': return ['data:image/png;base64,UDE', 'data:image/png;base64,UDI',
         'data:image/png;base64,UDM', 'data:image/png;base64,UDQ'];
       case 'envoi_page': return 'data:image/png;base64,R1JBTkQ=';
+      case 'envoi_apercu': return 'data:image/png;base64,Q09ORklSTQ==';
       case 'envoi_objet': return { image: 'data:image/png;base64,T0JK', ratio: 0.2 };
       case 'envoi_ajouter': {
         // La règle vit dans le Rust — `Envois::ajouter` : un envoi neuf naît comme le
@@ -1328,6 +1329,207 @@ test('recomposer refait le rail', async () => {
 
   assert.ok(a.appels.filter(([c]) => c === 'envoi_vignettes').length > avant,
     'le rail garde les vignettes d\'avant la recomposition');
+});
+
+/**
+ * Le pied vit sous l'étape : on change de destinataire **sans la quitter**, et c'est
+ * le seul chemin qui change la pagination pendant qu'on la regarde.
+ *
+ * Oublier les vignettes ne suffit pas alors : le cache se vide, mais celles d'avant
+ * restent à l'écran. On viserait les pages d'un tirage qui n'est plus celui du pied —
+ * page 264 d'un intérieur qui n'en fait plus que 190 —, et seul le refus à la
+ * génération le dirait, une fois le mot écrit.
+ */
+test('changer de destinataire au pied refait le rail sans quitter l\'étape', async () => {
+  const a = atelier({
+    providers: [LULU, KDP],
+    destinataires: [LULU, KDP].map(dest),
+    composition: { pages: 100, gouttiere: 20, blanche: false, dos: 7 },
+    sur: {
+      envois: {
+        gabarit: '',
+        liste: [{ dedicataire: 'Léa', main: { mode: 'police', police: 'Caveat' },
+          place: PLACE_DEFAUT, contenu: 'À Léa.', image: null }],
+      },
+    },
+  });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  await allerAuxEnvois(els);
+  const avant = a.appels.filter(([c]) => c === 'envoi_vignettes').length;
+  assert.ok(avant > 0, 'le rail ne s\'est jamais rendu');
+
+  els.get('inDestinataire').value = 'kdp-6x9';
+  await els.get('inDestinataire').declenche('change');
+  await new Promise((r) => setImmediate(r));
+
+  assert.ok(a.appels.filter(([c]) => c === 'envoi_vignettes').length > avant,
+    'le rail montre encore les pages du destinataire d\'avant');
+});
+
+/**
+ * Revenir à un destinataire **déjà composé** ne recompose rien : sa mesure est là. Le
+ * rail n'a donc aucune recomposition à laquelle s'accrocher, et pourtant il montre les
+ * pages de l'autre — deux paginations n'ont ni le même nombre de pages ni la même
+ * gouttière. C'est le changement de visée qui périme les vignettes, pas la composition.
+ */
+test('revenir à un destinataire déjà composé refait aussi le rail', async () => {
+  const a = atelier({
+    providers: [LULU, KDP],
+    destinataires: [LULU, KDP].map(dest),
+    composition: { pages: 100, gouttiere: 20, blanche: false, dos: 7 },
+    sur: {
+      envois: {
+        gabarit: '',
+        liste: [{ dedicataire: 'Léa', main: { mode: 'police', police: 'Caveat' },
+          place: PLACE_DEFAUT, contenu: 'À Léa.', image: null }],
+      },
+    },
+  });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  await faireComposer(els);
+  els.get('inDestinataire').value = 'kdp-6x9';
+  await els.get('inDestinataire').declenche('change');
+  await faireComposer(els);
+  await allerAuxEnvois(els);
+  const avant = a.appels.filter(([c]) => c === 'envoi_vignettes').length;
+  assert.ok(avant > 0, 'le rail ne s\'est jamais rendu');
+
+  // Lulu est composé : rien ne repagine, et c'est tout le sujet.
+  els.get('inDestinataire').value = 'lulu';
+  await els.get('inDestinataire').declenche('change');
+  await new Promise((r) => setImmediate(r));
+
+  assert.equal(a.appels.filter(([c]) => c === 'composer').length, 2,
+    'le décor a bougé : ce retour a recomposé, il ne prouve plus rien');
+  assert.ok(a.appels.filter(([c]) => c === 'envoi_vignettes').length > avant,
+    'le rail garde les pages de l\'autre destinataire');
+});
+
+/**
+ * Le canevas se dimensionne par le rapport de la page, comme le cadre de l'aperçu de
+ * couverture et pour la même raison : sans lui, il ne tient sa taille que de sa
+ * largeur, et une fenêtre large lui donne une page plus haute que la bande. L'étape
+ * ne défilant pas, le bas de la page — donc l'envoi, qui s'y pose — passe sous le
+ * bord et devient inatteignable.
+ */
+test('le canevas prend le rapport de la page qu\'il montre', async () => {
+  const a = atelier({
+    sur: {
+      envois: {
+        gabarit: '',
+        liste: [{ dedicataire: 'Léa', main: { mode: 'police', police: 'Caveat' },
+          place: PLACE_DEFAUT, contenu: 'À Léa.', image: null }],
+      },
+    },
+  });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  await allerAuxEnvois(els);
+
+  const fond = els.get('fondPage');
+  // Une page Lulu poche : 108 × 175 mm à 150 ppi.
+  fond.naturalWidth = 638;
+  fond.naturalHeight = 1033;
+  await fond.declenche('load');
+
+  assert.strictEqual(
+    els.get('canevas').style.getPropertyValue('--ratio'), String(638 / 1033)
+  );
+});
+
+/**
+ * Un canevas qui garderait son rapport sans page garderait sa place : l'établi seul,
+ * un rectangle sombre et vide au milieu de l'étape, là où il n'y a rien à montrer.
+ * Même règle que le cadre de l'aperçu de couverture, et pour la même raison.
+ */
+test('le dernier envoi retiré emporte le rapport du canevas', async () => {
+  const a = atelier({
+    sur: {
+      envois: {
+        gabarit: '',
+        liste: [{ dedicataire: 'Léa', main: { mode: 'police', police: 'Caveat' },
+          place: PLACE_DEFAUT, contenu: 'À Léa.', image: null }],
+      },
+    },
+  });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  await allerAuxEnvois(els);
+  const fond = els.get('fondPage');
+  fond.naturalWidth = 638;
+  fond.naturalHeight = 1033;
+  await fond.declenche('load');
+
+  await els.get('btRetirerEnvoi').declenche('click');
+  await new Promise((r) => setImmediate(r));
+
+  assert.strictEqual(els.get('canevas').style.getPropertyValue('--ratio'), '');
+});
+
+/**
+ * « Voir la page » est la confirmation, pas un second aperçu : la page composée prend
+ * la place du canevas, et le bouton ramène. C'est ce va-et-vient qui la rend utile —
+ * l'objet ne doit pas bouger d'un pouce entre les deux images, et c'est la seule
+ * manière de le voir à l'œil.
+ *
+ * Les montrer ensemble ne tient pas : la bande n'a la hauteur que d'une page, et la
+ * confirmation posée par-dessus recouvrait le canevas et son bouton, sans rien pour
+ * la refermer.
+ */
+test('la page composée prend la place du canevas, et le bouton ramène', async () => {
+  const a = atelier({
+    sur: {
+      envois: {
+        gabarit: '',
+        liste: [{ dedicataire: 'Léa', main: { mode: 'police', police: 'Caveat' },
+          place: PLACE_DEFAUT, contenu: 'À Léa.', image: null }],
+      },
+    },
+  });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  await allerAuxEnvois(els);
+
+  await els.get('btVoirPage').declenche('click');
+  assert.equal(els.get('apercuEnvoi').hidden, false, 'la page composée ne paraît pas');
+  assert.equal(els.get('canevas').hidden, true,
+    'les deux pages se superposent : la confirmation recouvre le canevas');
+
+  await els.get('btVoirPage').declenche('click');
+  assert.equal(els.get('apercuEnvoi').hidden, true, 'rien ne referme la confirmation');
+  assert.equal(els.get('canevas').hidden, false, 'le canevas ne revient pas');
+});
+
+/**
+ * La confirmation est une image figée : elle vaut pour la page et l'exemplaire d'où
+ * elle sort. Déplacer l'envoi pendant qu'elle est à l'écran la laisserait confirmer une
+ * page qu'on vient de quitter — et c'est le canevas, désormais caché derrière elle, qui
+ * dirait la vérité.
+ */
+test('déplacer l\'envoi referme la confirmation', async () => {
+  const a = atelier({
+    sur: {
+      envois: {
+        gabarit: '',
+        liste: [{ dedicataire: 'Léa', main: { mode: 'police', police: 'Caveat' },
+          place: PLACE_DEFAUT, contenu: 'À Léa.', image: null }],
+      },
+    },
+  });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  await allerAuxEnvois(els);
+  await els.get('btVoirPage').declenche('click');
+  assert.equal(els.get('apercuEnvoi').hidden, false, 'la confirmation devait être là');
+
+  await [...els.get('vignettes').children][0].declenche('click');
+  await new Promise((r) => setImmediate(r));
+
+  assert.equal(els.get('apercuEnvoi').hidden, true,
+    'la confirmation montre encore la page d\'avant le déplacement');
+  assert.equal(els.get('canevas').hidden, false, 'le canevas reste caché derrière elle');
 });
 
 /* ---------- l'image générée ---------- */
