@@ -534,7 +534,9 @@ mod tests {
     use super::*;
     use crate::envoi::Place;
     use crate::providers::provider;
+    use crate::typst::Typst;
     use std::cell::RefCell;
+    use std::path::Path;
 
     fn livre() -> Livre {
         Livre {
@@ -1449,5 +1451,156 @@ mod tests {
             "la valeur n'a pas remplacé le jeton"
         );
         assert!(src.contains("Les Heures creuses"));
+    }
+
+    /* ---------- le témoin de l'invariant, composé pour de vrai ---------- */
+
+    /// Un PNG minuscule mais valide : 2 × 2 pixels, deux gris.
+    ///
+    /// Fabriqué en dur plutôt que lu sur le disque : la variante image doit s'exercer
+    /// sans dépendre d'un fichier du dépôt, et une image qu'on peut compter en octets
+    /// ne cache rien.
+    const PNG: &[u8] = &[
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x08, 0x02, 0x00, 0x00, 0x00, 0xfd,
+        0xd4, 0x9a, 0x73, 0x00, 0x00, 0x00, 0x11, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x60,
+        0x60, 0x60, 0x68, 0x68, 0x68, 0x60, 0x80, 0x50, 0x00, 0x10, 0x8e, 0x03, 0x01, 0x6b, 0xa0,
+        0x19, 0xc2, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    ];
+
+    /// Un manuscrit assez long pour que « page 37 » veuille dire quelque chose.
+    ///
+    /// `chapitres()` fait six pages : y placer un envoi ne dirait rien du cas qui compte,
+    /// celui d'une page du corps, loin des liminaires où l'ancien `#place` savait déjà
+    /// vivre. Quarante chapitres d'une page chacun donnent de quoi viser au milieu.
+    fn manuscrit_long() -> Vec<Piece> {
+        (1..=40)
+            .map(|n| Piece {
+                sorte: Sorte::Chapitre(n),
+                titre: format!("Chapitre {n}"),
+                blocs: (0..6)
+                    .map(|_| {
+                        Bloc::Paragraphe(
+                            "Le vent tournait dans la cour, et les heures avec lui. \
+                             On attendait sans savoir quoi, comme on attend toujours."
+                                .into(),
+                        )
+                    })
+                    .collect(),
+            })
+            .collect()
+    }
+
+    /// Le sidecar Typst et ses polices, tels que les exemples les montent.
+    fn typst_de_test() -> Typst {
+        Typst::new("typst").avec_polices(Path::new(env!("CARGO_MANIFEST_DIR")).join("fonts"))
+    }
+
+    /// Compose et rend le nombre de pages.
+    fn pages_de(typst: &Typst, dossier: &Path, nom: &str, s: &str) -> u32 {
+        std::fs::write(dossier.join(format!("{nom}.typ")), s).expect("source non écrite");
+        typst
+            .pages(&dossier.join(format!("{nom}.typ")))
+            .expect("pagination refusée")
+    }
+
+    /// Une page rendue en PNG, telle qu'on la verrait.
+    fn page_rendue(typst: &Typst, dossier: &Path, nom: &str, page: u32) -> Vec<u8> {
+        let png = dossier.join(format!("{nom}-{page}.png"));
+        typst
+            .apercu(&dossier.join(format!("{nom}.typ")), &png, page, 40)
+            .expect("rendu refusé");
+        std::fs::read(&png).expect("rendu illisible")
+    }
+
+    /// **L'invariant qui tient toute la chaîne**, vérifié en composant pour de vrai.
+    ///
+    /// Compter les `#place` ou les `#pagebreak` dans la source ne prouve rien : c'est
+    /// Typst qui décide du nombre de pages, et lui seul. Si cet invariant tombe, la
+    /// pagination change, donc le dos, donc la planche — et les exemplaires partent à
+    /// l'impression avec une couverture fausse, sans que rien ne le signale.
+    ///
+    /// Quatre pages visées, choisies pour ce qu'elles ont de différent : la première,
+    /// la page de titre où l'ancien `#place` savait déjà vivre, une page du corps, et
+    /// la dernière. Plus la variante image, dont la largeur en pourcentage se résout
+    /// dans un `place` imbriqué dans un `foreground` — un chemin que le texte
+    /// n'exerce pas.
+    #[test]
+    #[ignore = "lance le sidecar Typst : cargo test -- --ignored"]
+    fn un_envoi_ne_cree_aucune_page_ou_qu_il_se_pose() {
+        let typst = typst_de_test();
+        let dossier = tempfile::tempdir().expect("répertoire de travail");
+        let pr = provider("kdp-5x8").expect("gabarit kdp-5x8");
+        let r = Reglage {
+            gouttiere: pr.gouttieres[0].2,
+            blanche: false,
+        };
+        let livre = livre();
+        let int = Interieur::default();
+        let pieces = manuscrit_long();
+        let sans = pages_de(
+            &typst,
+            dossier.path(),
+            "sans",
+            &source(&livre, &int, pr, &r, &pieces, None),
+        );
+        assert!(
+            sans > 30,
+            "le manuscrit de ce test est trop court pour viser une page du corps : {sans}"
+        );
+
+        std::fs::write(dossier.path().join("mot.png"), PNG).expect("image non écrite");
+
+        for page in [1, 3, sans / 2, sans] {
+            let place = Place {
+                page,
+                x: 0.42,
+                y: 0.73,
+                taille: 0.55,
+                angle: -4.0,
+            };
+            for (nom, quoi) in [
+                (
+                    "texte",
+                    Quoi::Texte {
+                        police: "Caveat",
+                        texte: "À Léa,\nces heures creuses.",
+                    },
+                ),
+                ("image", Quoi::Image { fichier: "mot.png" }),
+            ] {
+                let s = source(
+                    &livre,
+                    &int,
+                    pr,
+                    &r,
+                    &pieces,
+                    Some(Trace {
+                        quoi,
+                        place: &place,
+                    }),
+                );
+                let cle = format!("{nom}-{page}");
+                assert_eq!(
+                    pages_de(&typst, dossier.path(), &cle, &s),
+                    sans,
+                    "un envoi en {nom} posé page {page} a déplacé la pagination"
+                );
+                // Le compte de pages seul ne prouverait rien : il serait tout aussi
+                // identique si l'envoi ne s'imprimait nulle part. La page visée doit
+                // donc différer de la même page sans envoi — et elle seule.
+                assert_ne!(
+                    page_rendue(&typst, dossier.path(), &cle, page),
+                    page_rendue(&typst, dossier.path(), "sans", page),
+                    "un envoi en {nom} visant la page {page} ne s'y voit pas"
+                );
+                let ailleurs = if page == 1 { 2 } else { 1 };
+                assert_eq!(
+                    page_rendue(&typst, dossier.path(), &cle, ailleurs),
+                    page_rendue(&typst, dossier.path(), "sans", ailleurs),
+                    "un envoi visant la page {page} a débordé sur la {ailleurs}"
+                );
+            }
+        }
     }
 }
