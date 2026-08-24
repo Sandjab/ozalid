@@ -858,6 +858,37 @@ test('tirer la photo déplace l\'ancrage de son mou réel, dans le sens du geste
 });
 
 /**
+ * Une photo qui **tient** dans sa zone suit la souris du même côté qu'une photo qui en
+ * déborde.
+ *
+ * Les deux cas ne se ressemblent pas : la géométrie donne `gauche = ancrage × (zone −
+ * affichée)`. Débordante, le facteur est négatif — l'ancrage recule ce que la souris
+ * avance, et c'est le cas que le test précédent couvre. Contenue, il est positif et
+ * l'ancrage accompagne le geste. Un mou pris en valeur absolue perd ce signe, et la
+ * photo part alors exactement à l'envers de la main qui la tient.
+ *
+ * 1000 × 1000 en proportions conservées dans une zone de 108 × 122,5 mm se compose en
+ * 108 × 108 : rien à découvrir en largeur, 14,5 mm de mou en hauteur. Les 10 px du geste
+ * valent 5 mm sur cet aperçu-là, soit un peu plus du tiers du mou : l'ancrage passe de
+ * 0,5 à 0,84 — et non à 0,16, qui remonterait la photo pendant qu'on la descend.
+ */
+test('une photo contenue dans sa zone suit la souris, elle aussi', async () => {
+  const cv = maquette();
+  cv.quatrieme.fond = 'image';
+  cv.quatrieme.cadrage.proportions = true;
+  const { els, appels, contexte } = await ouvre(cv, { couverture_modifier: (a) => projet(a.couverture) });
+  await face(els, '4ème').declenche('click');
+  await attendreApercu();
+  poserBoite(els);
+
+  await glisser(els, 'priseImage', [100, 200], [100, 210]);
+  assert.strictEqual(contexte.valeurSaisie('quatrieme.cadrage.y'), 0.84);
+  assert.strictEqual(contexte.valeurSaisie('quatrieme.cadrage.x'), 0.5, 'axe sans mou déplacé');
+  assert.strictEqual(
+    derniereMaquette(appels).quatrieme.cadrage.y, 0.84, 'valeur non commise au Rust');
+});
+
+/**
  * La hauteur du bloc de la 4ème se compte en pourcentage de la **largeur** de la
  * couverture, celle de la 1ère en pourcentage de sa **hauteur** — c'est le schéma qui le
  * dit, chacun dans son unité.

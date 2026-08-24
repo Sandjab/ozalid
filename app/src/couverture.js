@@ -895,11 +895,17 @@ function zoneMm() {
 }
 
 /**
- * Le mou de la photo sur chaque axe : la course dont le cadrage dispose.
+ * Le mou de la photo sur chaque axe : la course dont le cadrage dispose, **et son sens**.
  *
  * Nul quand l'image couvre sa zone pile — et le geste se refuse alors plutôt que de
  * déplacer un curseur qui ne déplace rien. C'est le parti de l'atelier HTML, repris
  * ici : un geste sans effet visible fait douter du réglage, pas du cadrage.
+ *
+ * Signé, et ce n'est pas un détail : la géométrie donne `gauche = ancrage × (zone −
+ * affichée)`. Une photo qui déborde de sa zone a un facteur négatif — l'ancrage recule
+ * ce que la souris avance — et une photo qui y tient un facteur positif, où l'ancrage
+ * accompagne le geste. Pris en valeur absolue, comme il l'était, le mou perdait ce signe
+ * et la photo d'une 4ème en proportions conservées partait à l'envers de la main.
  */
 function mouPhoto() {
   const zone = zoneMm();
@@ -907,7 +913,7 @@ function mouPhoto() {
   const g = placeImage(zone, { largeur: calques.naturel_l, hauteur: calques.naturel_h },
     cadrageSaisi(REGLAGES[face].cadrage));
   if (!g) return null;
-  return { x: Math.abs(zone.largeur - g.largeur), y: Math.abs(zone.hauteur - g.hauteur), g, zone };
+  return { x: zone.largeur - g.largeur, y: zone.hauteur - g.hauteur, g, zone };
 }
 
 /* ---------- le direct ---------- */
@@ -1238,17 +1244,23 @@ function cablerPrises() {
     direct: true,
     prete: () => {
       const m = mouPhoto();
-      return !!m && (m.x >= 0.5 || m.y >= 0.5);
+      return !!m && (Math.abs(m.x) >= 0.5 || Math.abs(m.y) >= 0.5);
     },
     deplace: (d, depart) => {
       const r = REGLAGES[face];
       const f = formatCourant();
       const m = mouPhoto();
       if (!m) return;
-      // Tirer vers la droite déplace la photo vers la droite, donc découvre sa gauche :
-      // l'ancrage décroît. D'où le signe, et il est le même dans l'atelier HTML.
-      if (m.x >= 0.5) poserValeur(`${r.cadrage}.x`, depart[`${r.cadrage}.x`] - d.x * f.largeur / m.x);
-      if (m.y >= 0.5) poserValeur(`${r.cadrage}.y`, depart[`${r.cadrage}.y`] - d.y * f.hauteur / m.y);
+      // Le mou porte le sens : négatif, la photo déborde de sa zone et tirer vers la
+      // droite découvre sa gauche — l'ancrage décroît, comme dans l'atelier HTML ;
+      // positif, elle y tient et l'ancrage accompagne le geste. La division fait le
+      // reste, la course restant celle du mou et non de la face.
+      if (Math.abs(m.x) >= 0.5) {
+        poserValeur(`${r.cadrage}.x`, depart[`${r.cadrage}.x`] + d.x * f.largeur / m.x);
+      }
+      if (Math.abs(m.y) >= 0.5) {
+        poserValeur(`${r.cadrage}.y`, depart[`${r.cadrage}.y`] + d.y * f.hauteur / m.y);
+      }
     },
   });
 
