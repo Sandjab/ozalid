@@ -560,9 +560,16 @@ function memePlace(a, b) {
 /**
  * Câble les trois gestes du canevas. Une fois, au démarrage : les poignées sont dans le
  * balisage, seul l'objet qu'elles tiennent change d'un dédicataire à l'autre.
+ *
+ * Le déplacement se saisit sur `#objet` et non sur l'image qu'il contient : celle-ci
+ * porte `pointer-events: none` — sans quoi WebKit y verrait une image à traîner —, si
+ * bien que le hit-test la traverse et qu'un écouteur posé dessus n'est jamais appelé.
+ * C'est aussi le conteneur que le CSS annonce par son `cursor: grab`. Les poignées,
+ * elles, sont ses enfants et arrêtent la propagation : le geste ne se prend pas deux
+ * fois.
  */
 function cablerPlacement() {
-  saisirPlacement($('objetImage'), (p, d, c) => deplace(p, d, c));
+  saisirPlacement($('objet'), (p, d, c) => deplace(p, d, c));
   saisirPlacement($('poigneeTaille'), (p, d, c) => redimensionne(p, d, c));
   saisirPlacement($('poigneeAngle'), (p, d, c) => incline(p, { x: d.x, y: d.y }, c));
 }

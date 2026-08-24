@@ -44,6 +44,15 @@ function projet(sur = {}) {
 }
 
 /**
+ * Un événement de souris, réduit à ce que la manipulation directe en lit. Même forme
+ * que dans `couverture.test.js`, dont les gestes du canevas reprennent l'idiome.
+ */
+const souris = (x, y) => ({
+  button: 0, clientX: x, clientY: y, pointerId: 1,
+  preventDefault() {}, stopPropagation() {},
+});
+
+/**
  * Le placement d'un envoi neuf, tel que `Place::default()` le pose côté Rust : la page
  * de titre, au bas. Le faux le reprend pour que l'écran montre les mêmes chiffres.
  */
@@ -1690,4 +1699,50 @@ test('une image proposée ne survit pas au livre suivant', async () => {
 
   assert.equal(els.get('btAccepter').disabled, true,
     'le livre suivant hérite de l\'image proposée pour le précédent');
+});
+
+/**
+ * Glisser l'objet déplace l'envoi.
+ *
+ * C'est le seul des trois gestes du canevas qui ne se rattrape nulle part : l'échelle
+ * et l'inclinaison ont chacune leur champ dans les réglages, la position n'en a aucun.
+ * Un déplacement qui ne prend pas laisse donc l'envoi au bas de la page de titre, sans
+ * recours — et l'étape paraît entière, puisque les deux poignées répondent.
+ *
+ * Le geste se saisit sur `#objet`, non sur l'image qu'il contient : voir la garde
+ * `styles.css → envois.js` de `contrats.test.js`, qui dit pourquoi.
+ */
+test('glisser l\'objet déplace l\'envoi', async () => {
+  const a = atelier({
+    sur: {
+      envois: {
+        gabarit: '',
+        liste: [{ dedicataire: 'Léa', main: { mode: 'police', police: 'Caveat' },
+          place: PLACE_DEFAUT, contenu: 'À Léa.', image: null }],
+      },
+    },
+  });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  await allerAuxEnvois(els);
+
+  // Le faux DOM ne met rien en page : sans boîte, le geste se refuse — comme il le fait
+  // dans la fenêtre devant un canevas qui n'est pas encore affiché. Deux pixels par
+  // millimètre sur une poche Lulu de 108 × 175, ce qui rend les comptes lisibles.
+  els.get('canevas').rect = { left: 0, top: 0, width: 216, height: 350 };
+
+  const objet = els.get('objet');
+  await objet.declenche('pointerdown', souris(100, 100));
+  await objet.declenche('pointermove', souris(154, 100));
+  await objet.declenche('pointerup', souris(154, 100));
+  await new Promise((r) => setImmediate(r));
+
+  const regle = a.appels.findLast(([c]) => c === 'envoi_regler');
+  assert.ok(regle, 'le geste n\'est jamais parti : l\'objet ne se saisit pas');
+  // 54 px sur 216 : un quart de la largeur de page. La fraction et non les pixels —
+  // c'est ce qui fait qu'un canevas plus petit montre le même placement.
+  assert.equal(regle[1].envoi.place.x, PLACE_DEFAUT.x + 0.25,
+    'le déplacement ne se compte pas en fraction du canevas');
+  assert.equal(regle[1].envoi.place.y, PLACE_DEFAUT.y,
+    'l\'envoi a dérivé en hauteur alors que le geste était horizontal');
 });

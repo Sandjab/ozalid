@@ -330,6 +330,38 @@ test('le canevas de placement reste utilisable dans la fenêtre minimale', () =>
   );
 });
 
+/* ---------- styles.css → envois.js ---------- */
+
+/**
+ * Ce que le CSS rend inerte au pointeur, aucun geste ne peut le saisir.
+ *
+ * L'image de l'objet porte `pointer-events: none` — sans quoi WebKit y verrait une
+ * image à traîner, et son drag natif emporterait le geste. Le prix est qu'elle ne
+ * reçoit plus rien : le hit-test la traverse pour atteindre `#objet`, et un
+ * `pointerdown` posé sur elle n'est jamais appelé. C'est ce qui est arrivé au
+ * déplacement, seul des trois gestes à viser l'image — les poignées sont des `span`,
+ * et elles marchaient. Le faux DOM ne met rien en page : il ne connaît pas
+ * `pointer-events` et laisserait passer la même erreur. D'où cette garde, qui
+ * confronte les deux fichiers.
+ */
+test('aucun geste ne se saisit sur l\'image, que le CSS rend inerte', () => {
+  const css = source('src', 'styles.css');
+  const js = source('src', 'envois.js');
+
+  const regle = css.match(/\.envois \.objet img \{[^}]*\}/s);
+  assert.ok(regle, 'la règle de l\'image de l\'objet a changé de forme');
+  assert.match(regle[0], /pointer-events:\s*none/,
+    'l\'image de l\'objet n\'est plus inerte : vérifier le drag natif de WebKit avant '
+      + 'de lever cette garde');
+
+  const cibles = [...js.matchAll(/saisirPlacement\(\$\('([^']+)'\)/g)].map((m) => m[1]);
+  assert.equal(cibles.length, 3, `trois gestes attendus, vu : ${cibles}`);
+  assert.ok(!cibles.includes('objetImage'),
+    'un geste est câblé sur #objetImage, que la règle ci-dessus rend inerte : il ne se '
+      + 'déclenchera jamais dans la fenêtre. Le conteneur #objet est la prise — c\'est '
+      + 'lui que le CSS annonce par son `cursor: grab`');
+});
+
 /* ---------- app.js → livre_modifier ---------- */
 
 /**
