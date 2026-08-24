@@ -255,7 +255,7 @@ main {
    descendu au pied — et **cela n'a rien résorbé** : le débordement vient du volume de
    l'étape, pas d'un panneau. Mesuré avant et après, à l'identique. Ce qui le fermerait
    est une étape de moins ou des blocs plus courts, pas un compte rendu de moins. */
-#etapeLivre, #etapeEnvois {
+#etapeLivre {
   columns: 23rem;
   column-gap: 3rem;
   /* Seule des quatre étapes à ne pas prendre la hauteur de la bande : un flux doit
@@ -271,7 +271,7 @@ main {
    Le filet qui les séparait quand ils s'empilaient ne veut plus rien dire une fois
    qu'ils coulent en colonnes — il ne courrait que sous la première, au hasard de
    l'ordre du balisage. C'est le blanc qui sépare désormais. */
-#etapeLivre > .bloc, #etapeEnvois > .bloc {
+#etapeLivre > .bloc {
   break-inside: avoid;
   padding: 0;
   margin-bottom: 1rem;
@@ -1133,3 +1133,123 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
    et de la spécificité de tous les autres sélecteurs, `#visee` compris : c'est le rappel
    des deux fois qui doit empêcher la troisième. */
 [hidden] { display: none !important; }
+
+/* ---------- l'étape Envois : quatre bandes ---------- */
+
+/* Seule étape en grille et non en flux : ses quatre bandes ne sont pas
+   interchangeables — on lit de gauche à droite « qui », « quelle page », « à quoi ça
+   ressemble », « avec quels réglages ». Les faire couler en colonnes les rangerait dans
+   l'ordre du balisage et au hasard de la hauteur.
+   Aucune ne défile sauf le rail, dont la hauteur est irréductible : un livre a deux
+   cents pages. La liste et les réglages sont courts ; la page prend ce qui reste. */
+.etape.envois {
+  display: grid;
+  /* Trois bandes bornées et une élastique. Les bornes basses sont ce qui reste
+     lisible à `minWidth` ; les hautes évitent qu'une grande fenêtre n'étire les
+     réglages au lieu d'agrandir la page. Le canevas prend tout le reste — c'est lui
+     qu'on regarde, et c'est donc lui qui doit gagner à chaque pixel de fenêtre.
+     `contrats.test.js` refait l'addition : qui touche à ces nombres sans la refaire
+     écrase le canevas à la taille minimale, et rien d'autre ne le verrait. */
+  grid-template-columns:
+    minmax(11rem, 13rem) 5.5rem minmax(0, 1fr) minmax(14rem, 19rem);
+  gap: 1.5rem;
+  align-items: start;
+  min-height: 0;
+}
+
+.envois .bande { min-width: 0; min-height: 0; }
+.envois .bande > h2:not(:first-child) { margin-top: 1.25rem; }
+
+/* Le rail défile seul, et jusqu'à la hauteur de la bande : c'est la seule chose de
+   cette étape dont on ne puisse pas réduire la longueur. */
+.envois .rail { height: 100%; }
+
+.envois .rail ol {
+  height: 100%;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.envois .rail li { margin-bottom: .35rem; }
+
+.envois .rail img {
+  display: block;
+  width: 100%;
+  cursor: pointer;
+  /* Le liseré est toujours là, transparent quand la page n'est pas visée : le poser
+     seulement sur la page courante décalerait toutes les autres d'un pixel. */
+  border: 2px solid transparent;
+  background: var(--surface);
+}
+
+/* La page visée : un liseré, pas un fond — une vignette est une image, et la teinter
+   la ferait juger fausse. */
+.envois .rail [aria-current="true"] img { border-color: var(--prise); }
+
+/* La scène : la page posée sur le carton, comme la couverture. */
+.envois .canevas {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  background: var(--etabli);
+  /* Le geste appartient au pointeur : sans cela, un glisser sur pavé tactile ferait
+     défiler la fenêtre au lieu de déplacer l'envoi. */
+  touch-action: none;
+}
+
+.envois .canevas .fond { display: block; width: 100%; }
+
+/* L'objet : le PNG rendu par Typst, à la place et à l'inclinaison réglées.
+   Sa largeur est un pourcentage du canevas — c'est le `box(width: …%)` que Typst
+   recevra —, et son pivot est son centre, comme le `rotate` de Typst. */
+.envois .objet {
+  position: absolute;
+  transform: translate(-50%, -50%) rotate(var(--angle, 0deg));
+  transform-origin: center;
+  cursor: grab;
+}
+
+.envois .objet img { display: block; width: 100%; pointer-events: none; }
+.envois .canevas[data-geste] .objet { cursor: grabbing; }
+
+/* Les poignées ne portent pas la classe `.prise` de la couverture : celle-là se place
+   par des variables CSS et vit dans une autre scène. Deux noms pour deux gestes. */
+.envois .poignee {
+  position: absolute;
+  width: .7rem;
+  height: .7rem;
+  background: var(--prise);
+  border: 1px solid var(--surface);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity .12s ease-out;
+}
+
+.envois .objet:hover .poignee,
+.envois .canevas[data-geste] .poignee { opacity: 1; }
+
+.envois .poignee.taille { right: -.35rem; bottom: -.35rem; cursor: nwse-resize; }
+.envois .poignee.angle { left: 50%; top: -1.4rem; margin-left: -.35rem; cursor: grab; }
+
+/* La liste : une ligne par personne, celle qu'on règle marquée. */
+.envois .dedicataires ul {
+  margin: 0 0 .5rem;
+  padding: 0;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--trait);
+}
+
+.envois .dedicataires li {
+  cursor: pointer;
+  padding: .25rem .5rem;
+}
+
+.envois .dedicataires li + li { border-top: 1px solid var(--trait); }
+.envois .dedicataires li:hover { background: var(--survol); }
+.envois .dedicataires [aria-selected="true"] {
+  background: var(--eteint);
+  font-weight: 600;
+}

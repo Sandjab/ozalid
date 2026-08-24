@@ -259,7 +259,7 @@ test('un récent du Rust est reconnu comme récent par le front', async () => {
 test('deux colonnes tiennent dans la fenêtre minimale', () => {
   const css = source('src', 'styles.css');
 
-  const etapes = css.match(/#etapeLivre, #etapeEnvois \{[^}]*\}/s);
+  const etapes = css.match(/#etapeLivre \{[^}]*\}/s);
   assert.ok(etapes, 'la règle des étapes en colonnes a changé de forme');
   const colonne = etapes[0].match(/columns: ([\d.]+)rem/);
   const gouttiere = etapes[0].match(/column-gap: ([\d.]+)rem/);
@@ -278,6 +278,55 @@ test('deux colonnes tiennent dans la fenêtre minimale', () => {
   assert.ok(
     requis <= minWidth,
     `deux colonnes réclament ${requis} px, minWidth n'en donne que ${minWidth}`
+  );
+});
+
+/**
+ * L'étape Envois garde un canevas où l'on puisse encore travailler.
+ *
+ * Quatre bandes, dont trois bornées : à `minWidth`, ce qui reste va au canevas, et
+ * c'est lui qu'on regarde. Élargir la liste ou les réglages de deux centimètres le
+ * réduirait à une vignette sur laquelle plus personne ne placerait rien — et l'étape
+ * paraîtrait intacte à qui travaille sur un grand écran. L'addition est donc refaite
+ * ici, comme celle des deux colonnes juste au-dessus.
+ */
+test('le canevas de placement reste utilisable dans la fenêtre minimale', () => {
+  const css = source('src', 'styles.css');
+
+  const grille = css.match(/\.etape\.envois \{[^}]*\}/s);
+  assert.ok(grille, 'la grille de l\'étape Envois a changé de forme');
+  const colonnes = grille[0].match(/grid-template-columns:([^;]*);/s);
+  assert.ok(colonnes, `colonnes illisibles dans : ${grille[0]}`);
+  // La borne basse de chaque bande : `minmax(11rem, 13rem)` compte pour 11, `5.5rem`
+  // pour 5.5, et `minmax(0, 1fr)` pour 0 — c'est la bande élastique.
+  const bandes = [...colonnes[1].matchAll(/minmax\(([^,]+),[^)]*\)|([\d.]+rem)/g)]
+    .map((m) => {
+      const borne = (m[1] ?? m[2]).trim();
+      return borne.endsWith('rem') ? Number(borne.slice(0, -3)) : 0;
+    });
+  assert.equal(bandes.length, 4, `quatre bandes attendues, vu : ${colonnes[1]}`);
+  // La bande élastique est déclarée `minmax(0, 1fr)` : son minimum est nul, et c'est
+  // elle qui reçoit le reste.
+  const fixes = bandes.filter((b) => b > 0);
+  assert.equal(fixes.length, 3, `trois bandes bornées attendues : ${colonnes[1]}`);
+
+  const gouttiere = grille[0].match(/\n  gap: ([\d.]+)rem;/);
+  assert.ok(gouttiere, `gouttière illisible dans : ${grille[0]}`);
+
+  const main = css.match(/\nmain \{[^}]*\}/s);
+  const rembourrage = main[0].match(/padding: 0 ([\d.]+)rem/);
+  const pris = (fixes.reduce((a, b) => a + b, 0)
+    + 3 * Number(gouttiere[1]) + 2 * Number(rembourrage[1])) * 16;
+
+  const conf = JSON.parse(source('src-tauri', 'tauri.conf.json'));
+  const { minWidth } = conf.app.windows[0];
+  // 260 px : de quoi montrer une page de livre et y poser un envoi à la souris. En
+  // deçà, la poignée d'échelle et celle d'inclinaison se chevauchent.
+  const CANEVAS_MIN = 260;
+  assert.ok(
+    minWidth - pris >= CANEVAS_MIN,
+    `les bandes prennent ${pris} px sur ${minWidth} : il ne reste que `
+      + `${minWidth - pris} px au canevas, il en faut ${CANEVAS_MIN}`
   );
 });
 

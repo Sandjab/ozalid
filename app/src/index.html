@@ -309,25 +309,92 @@
 
   </section>
 
-  <section id="etapeEnvois" class="etape" role="tabpanel" hidden>
-    <div class="bloc">
-      <h2>Main</h2>
-      <p class="note">Un mot manuscrit sur la page de titre, et un exemplaire par
-        personne. L'envoi ne déplace aucune page : le dos et la planche restent ceux du
-        tirage. Les fichiers sont écrits dans <code>envois/</code>, à côté du
-        <code>.ozalid</code>.</p>
+  <section id="etapeEnvois" class="etape envois" role="tabpanel" hidden>
+
+    <!-- La liste ne porte que le nom. Le mot, la main et l'image ont rejoint la colonne
+         de droite, où ils concernent l'exemplaire ouvert : vingt lignes portant chacune
+         leur textarea faisaient de la liste un formulaire qu'on ne lisait plus. -->
+    <div class="bande dedicataires">
+      <h2>Dédicataires</h2>
       <div class="ligne">
-        <label><span>Main</span><select id="inMain"></select></label>
-        <!-- La police de l'auteur entre dans le `.ozalid` : le projet compose la même
-             écriture sur une machine où elle n'est installée nulle part. -->
+        <!-- Même parti que le select d'ajout d'un destinataire : posé contre son bouton,
+             il se lit comme le geste d'ajout, et l'`aria-label` le dit à qui ne le voit
+             pas. -->
+        <input type="text" id="inDedicataire" placeholder="à qui ?"
+               aria-label="Dédicataire à ajouter">
+        <button id="btAjouterEnvoi" type="button">Ajouter</button>
+      </div>
+      <ul id="envois" role="listbox" aria-label="Dédicataires"></ul>
+      <!-- Retirer porte sur l'exemplaire ouvert et non sur chaque ligne : vingt boutons
+           « Retirer » dans une liste sont vingt occasions de se tromper de personne. -->
+      <button id="btRetirerEnvoi" type="button" disabled>Retirer cet envoi</button>
+
+      <!-- Ce qui appartient au livre et non à l'exemplaire : l'écriture de l'auteur
+           entre dans le `.ozalid` pour que le projet compose la même main sur une
+           machine où elle n'est installée nulle part. -->
+      <h2>Police personnelle</h2>
+      <div class="ligne">
         <button id="btPolice" type="button">Ma police…</button>
         <button id="btPoliceRetirer" type="button" disabled>Retirer</button>
       </div>
       <p class="note" id="etatPolice"></p>
+    </div>
+
+    <!-- Le rail : toutes les pages du destinataire visé. Cliquer une vignette déplace
+         l'envoi sur cette page — c'est le seul moyen d'en changer, et c'est pourquoi il
+         n'y a pas de champ « page ». -->
+    <div class="bande rail">
+      <ol id="vignettes" aria-label="Pages de l'intérieur"></ol>
+    </div>
+
+    <!-- Le canevas : la page en fond, l'objet par-dessus, deux poignées. Le fond est
+         rendu **sans envoi** — un foreground ne réordonne rien, la page ne dépend donc
+         d'aucun dédicataire et la même image sert à tous. -->
+    <div class="bande scene">
+      <div id="canevas" class="canevas">
+        <img id="fondPage" class="fond" alt="" hidden>
+        <div id="objet" class="objet" hidden>
+          <img id="objetImage" alt="">
+          <span id="poigneeTaille" class="poignee taille"
+                aria-label="Échelle de l'envoi"></span>
+          <span id="poigneeAngle" class="poignee angle"
+                aria-label="Inclinaison de l'envoi"></span>
+        </div>
+      </div>
+      <div class="ligne">
+        <button id="btVoirPage" type="button">Voir la page</button>
+        <span id="etatEnvois" class="etat"></span>
+      </div>
+      <img id="apercuEnvoi" class="apercu" alt="" hidden>
+    </div>
+
+    <!-- Les réglages de l'exemplaire ouvert. Ce que la main ne réclame pas ne paraît
+         pas : un champ grisé sous une main en images donnerait à croire qu'on peut y
+         écrire. -->
+    <div class="bande reglages">
+      <h2>Réglages</h2>
+      <label><span>Main</span><select id="inMain"></select></label>
+
+      <label id="champMot"><span>Mot</span>
+        <textarea id="inMot" rows="4"></textarea></label>
+
+      <div id="champImage" class="ligne" hidden>
+        <button id="btImageEnvoi" type="button">Choisir une image…</button>
+      </div>
+
       <!-- Le modèle de diffusion : l'adresse et la clé appartiennent à la machine, le
            gabarit au livre. Un `.ozalid` est fait pour être ouvert ailleurs — y écrire
            une clé la publierait au premier partage. -->
-      <div id="diffusion" hidden>
+      <div id="champDiffusion" hidden>
+        <div class="ligne">
+          <button id="btGenerer" type="button">Générer</button>
+          <button id="btAccepter" type="button" disabled>Retenir</button>
+        </div>
+        <label><span>Gabarit du livre</span>
+          <textarea id="inGabarit" rows="3"></textarea></label>
+        <p class="note">Partagé par tous les envois : c'est le style d'écriture du
+          livre, pas le mot d'une personne. <code>{envoi}</code> y marque l'endroit où
+          le mot de chacun s'insère.</p>
         <label><span>Adresse du modèle</span>
           <input type="url" id="inDiffusionUrl" placeholder="https://…"></label>
         <label><span>Clé</span>
@@ -338,30 +405,22 @@
           <span id="etatDiffusion" class="etat"></span>
         </div>
         <p class="note">L'adresse et la clé restent sur cette machine, hors du
-          <code>.ozalid</code>. Le gabarit, lui, appartient au livre :
-          <code>{envoi}</code> y marque l'endroit où le mot de chacun s'insère.</p>
-        <label><span>Gabarit</span><textarea id="inGabarit" rows="2"></textarea></label>
+          <code>.ozalid</code>.</p>
       </div>
-    </div>
 
-    <div class="bloc">
-      <h2>Envois</h2>
-      <div class="ligne">
-        <!-- Même parti que le select d'ajout d'un destinataire : posé contre son bouton,
-             il se lit comme le geste d'ajout, et l'`aria-label` le dit à qui ne le voit
-             pas. -->
-        <input type="text" id="inDedicataire" placeholder="à qui ?"
-               aria-label="Dédicataire à ajouter">
-        <button id="btAjouterEnvoi" type="button">Ajouter</button>
-      </div>
-      <div id="envois" class="destinataires"></div>
-      <img id="apercuEnvoi" class="apercu" alt="" hidden>
+      <label><span>Échelle</span>
+        <input type="range" id="inTaille" min="5" max="100" step="1">
+        <span class="val" id="vTaille"></span></label>
+      <label><span>Inclinaison</span>
+        <input type="range" id="inAngle" min="-45" max="45" step="1">
+        <span class="val" id="vAngle"></span></label>
+
       <div class="ligne">
         <button id="btEnvoyer" type="button" disabled>Générer les envois</button>
-        <span id="etatEnvois" class="etat"></span>
       </div>
       <div id="resultatEnvois" class="resultat" hidden></div>
     </div>
+
   </section>
 
 </main>
@@ -385,6 +444,7 @@
 
 <script src="couverture.js"></script>
 <script src="livraison.js"></script>
+<script src="placement.js"></script>
 <script src="envois.js"></script>
 <script src="app.js"></script>
 </body>
