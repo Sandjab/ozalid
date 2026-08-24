@@ -521,6 +521,9 @@ function afficherProjet(p) {
   $('inDedicace').value = p.livre.dedicace ?? '';
   $('inChapitres').value = p.livre.chapitres ?? '';
   $('inPoliceInterieur').value = p.interieur.police;
+  // Sans attendre : l'échantillon est une image de l'écriture, pas une donnée du projet,
+  // et le reste de l'affichage n'a pas à tenir derrière une police de huit cent kilo-octets.
+  montrerEchantillon(p.interieur.police);
   // Lu dans la mesure du projet, jamais dans le retour de `composer` : un PDF composé
   // dans une écriture de repli ne redevient pas juste en refermant le livre, et cette
   // phrase doit être là à la réouverture. Le pied n'en porte que le signe.
@@ -1021,6 +1024,54 @@ async function majInterieur() {
   await tente(async () => afficherProjet(await invoke('interieur_modifier', {
     interieur: { police: $('inPoliceInterieur').value },
   })));
+}
+
+/**
+ * Les écritures déjà chargées, par famille. `afficherProjet` repasse ici à chaque
+ * frappe dans l'onglet Livre, et chaque lecture côté Rust parcourt les dix mégaoctets
+ * des polices embarquées : ce qui est chargé une fois l'est pour la session.
+ *
+ * On y range la promesse, jamais son résultat : deux affichages rapprochés tombent
+ * alors sur la même lecture, là où deux promesses parallèles la feraient deux fois.
+ */
+const ecritures = new Map();
+
+/**
+ * Montre le texte d'exemple dans l'écriture d'intérieur choisie — et ne le montre pas
+ * autrement.
+ *
+ * La police est chargée dans ses propres octets, ceux que Typst composera. Un
+ * `font-family` posé sur le seul nom de la famille aurait pris celle du poste quand
+ * elle s'y trouve : la face reçoit donc un nom qui n'existe sur aucun système.
+ *
+ * Un échec ne laisse rien à l'écran : le repli d'un navigateur est muet, comme celui de
+ * Typst, et un échantillon rendu dans l'écriture de la fenêtre montrerait une police que
+ * le livre n'aura pas. La raison, elle, s'affiche — c'est sous ce sélecteur qu'on vient
+ * réparer, comme pour le repli de composition juste au-dessus.
+ */
+async function montrerEchantillon(famille) {
+  if (!ecritures.has(famille)) ecritures.set(famille, chargerEcriture(famille));
+  const { nom, erreur } = await ecritures.get(famille);
+  // La lecture a pu durer plus longtemps que le choix : c'est le dernier qui compte.
+  if (famille !== $('inPoliceInterieur').value) return;
+  if (nom) $('echantillonPolice').style.setProperty('--police-echantillon', `"${nom}"`);
+  else $('echantillonAbsent').textContent = `Pas d'échantillon de « ${famille} » : ${erreur}`;
+  $('echantillonPolice').hidden = !nom;
+  $('echantillonAbsent').hidden = !!nom;
+}
+
+/** Une famille d'intérieur, chargée dans la fenêtre sous un nom à elle. */
+async function chargerEcriture(famille) {
+  const nom = `echantillon-${famille}`;
+  try {
+    const donnee = await invoke('police_texte_donnee', { famille });
+    const face = new FontFace(nom, `url(${donnee})`);
+    await face.load();
+    document.fonts.add(face);
+    return { nom };
+  } catch (e) {
+    return { erreur: String(e) };
+  }
 }
 
 /* ---------- composition ---------- */

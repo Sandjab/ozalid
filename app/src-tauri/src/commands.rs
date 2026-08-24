@@ -396,6 +396,33 @@ pub fn polices_texte_liste() -> Vec<&'static str> {
     interieur::POLICES_TEXTE.to_vec()
 }
 
+/// L'écriture d'intérieur choisie, en donnée `data:`, pour l'échantillon de l'onglet
+/// Livre. Comme les aperçus : la fenêtre ne lit pas les fichiers, une police n'y entre
+/// pas autrement.
+///
+/// Les octets sont ceux que Typst composera, pris dans les mêmes répertoires. Un
+/// échantillon rendu dans la police du poste montrerait une écriture que le livre
+/// n'aura pas — et c'est un mensonge qu'aucune fenêtre ne rattrape : le repli d'un
+/// navigateur est muet, comme celui de Typst.
+///
+/// Le romain seul : l'échantillon montre une écriture, pas ses coupes. La lecture
+/// parcourt les répertoires de polices en entier — c'est le prix de `polices_du_livre`,
+/// et il se paie une fois par famille, la fenêtre gardant ce qu'elle a reçu.
+#[tauri::command]
+pub fn police_texte_donnee(famille: String) -> Result<String, String> {
+    let typst = typst()?;
+    let polices = crate::ebook::polices_du_livre(&famille, typst.polices()).ok_or_else(|| {
+        format!("police d'intérieur « {famille} » introuvable dans les polices embarquées")
+    })?;
+    Ok(format!(
+        "data:font/ttf;base64,{}",
+        base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            &polices.romain.octets
+        )
+    ))
+}
+
 #[tauri::command]
 pub fn interieur_modifier(
     interieur: Interieur,

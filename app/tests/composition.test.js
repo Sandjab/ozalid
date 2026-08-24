@@ -2,6 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
 const { charge } = require('./dom_shim');
 
 const LULU = {
@@ -488,6 +490,139 @@ test('une composition sans substitution n\'alerte nulle part', async () => {
 
   assert.strictEqual(els.get('piedRepli').textContent, '');
   assert.strictEqual(els.get('repliPolices').hidden, true);
+});
+
+/* ---------- échantillon d'écriture ---------- */
+
+/** Le romain de la police d'intérieur, tel que le Rust le rend : des octets, en `data:`. */
+const DONNEE_POLICE = 'data:font/ttf;base64,AAEAAAA=';
+
+/**
+ * L'échantillon montre l'écriture **choisie**, dans ses propres octets — ceux que Typst
+ * composera. Un `font-family` posé sur le seul nom de la famille aurait pris la police
+ * du poste quand elle s'y trouve, et rien n'aurait distingué les deux à l'écran.
+ */
+test('l\'échantillon est rendu dans la police d\'intérieur du projet', async () => {
+  const demandes = [];
+  const { els, faces } = await charge({
+    invoke: faux([LULU], {
+      projet_ouvrir: PROJET,
+      police_texte_donnee: (args) => {
+        demandes.push(args.famille);
+        return DONNEE_POLICE;
+      },
+    }),
+    open: async () => '/livres/LHC.ozalid',
+  });
+  await els.get('btOuvrir').declenche('click');
+  await new Promise((r) => setImmediate(r));
+
+  assert.deepStrictEqual(demandes, ['Alegreya']);
+  assert.strictEqual(faces.length, 1, 'aucune police chargée dans la fenêtre');
+  assert.match(faces[0].source, /AAEAAAA=/, 'la face ne porte pas les octets du Rust');
+  const echantillon = els.get('echantillonPolice');
+  assert.strictEqual(echantillon.hidden, false);
+  // La face porte un nom qui n'existe sur aucun système : sans cela, une « Alegreya »
+  // installée sur le poste passerait devant celle du livre.
+  assert.strictEqual(
+    echantillon.style.getPropertyValue('--police-echantillon'),
+    `"${faces[0].family}"`
+  );
+  assert.notStrictEqual(faces[0].family, 'Alegreya');
+});
+
+/**
+ * Le texte d'exemple porte ce sur quoi une écriture française se choisit : accents,
+ * ligature œ, guillemets et apostrophe courbe. Un « Lorem ipsum » ne montrerait aucun
+ * des caractères qui font préférer une police à une autre — et c'est précisément sur
+ * ceux-là qu'une police embarquée peut manquer.
+ */
+test('le texte d\'exemple montre ce qui distingue une écriture française', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.html'), 'utf8');
+  const texte = html.match(/id="echantillonPolice"[^>]*>([^<]*)</)[1];
+  for (const c of ['œ', '’', '«', 'î']) {
+    assert.ok(texte.includes(c), `« ${c} » absent du texte d'exemple : ${texte}`);
+  }
+});
+
+/**
+ * Une police que la fenêtre ne peut pas charger ne doit **rien** montrer : le repli d'un
+ * navigateur est muet, comme celui de Typst, et un échantillon rendu dans l'écriture de
+ * l'interface donnerait à voir une police que le livre n'aura pas.
+ */
+test('une police illisible ne se montre pas dans une autre écriture', async () => {
+  const { els } = await charge({
+    invoke: faux([LULU], {
+      projet_ouvrir: PROJET,
+      police_texte_donnee: () => {
+        throw 'police d\'intérieur « Alegreya » introuvable dans les polices embarquées';
+      },
+    }),
+    open: async () => '/livres/LHC.ozalid',
+  });
+  await els.get('btOuvrir').declenche('click');
+  await new Promise((r) => setImmediate(r));
+
+  assert.strictEqual(els.get('echantillonPolice').hidden, true);
+  assert.strictEqual(els.get('echantillonAbsent').hidden, false);
+  assert.match(els.get('echantillonAbsent').textContent, /Alegreya/);
+});
+
+/** Une face qui refuse de se charger est le même cas qu'un Rust qui refuse de la lire. */
+test('une police que la fenêtre refuse de charger ne se montre pas non plus', async () => {
+  const { els } = await charge({
+    invoke: faux([LULU], { projet_ouvrir: PROJET, police_texte_donnee: DONNEE_POLICE }),
+    open: async () => '/livres/LHC.ozalid',
+    FontFace: class {
+      constructor(famille) {
+        this.family = famille;
+      }
+
+      async load() {
+        throw new Error('OTS parsing error');
+      }
+    },
+  });
+  await els.get('btOuvrir').declenche('click');
+  await new Promise((r) => setImmediate(r));
+
+  assert.strictEqual(els.get('echantillonPolice').hidden, true);
+  assert.strictEqual(els.get('echantillonAbsent').hidden, false);
+});
+
+/**
+ * `afficherProjet` repasse à chaque frappe dans l'onglet Livre, et chaque lecture côté
+ * Rust parcourt les dix mégaoctets des polices embarquées. Une famille déjà chargée ne
+ * se redemande donc pas — mais en changer en redemande une, sans quoi l'échantillon
+ * mentirait sur le champ.
+ */
+test('une écriture déjà chargée ne se redemande pas, une autre si', async () => {
+  const demandes = [];
+  const { els } = await charge({
+    invoke: faux([LULU], {
+      projet_ouvrir: PROJET,
+      police_texte_donnee: (args) => {
+        demandes.push(args.famille);
+        return DONNEE_POLICE;
+      },
+      livre_modifier: PROJET,
+      interieur_modifier: { ...PROJET, interieur: { police: 'Cardo' } },
+    }),
+    open: async () => '/livres/LHC.ozalid',
+  });
+  await els.get('btOuvrir').declenche('click');
+  await new Promise((r) => setImmediate(r));
+
+  // Une frappe dans un champ du livre : le projet est redessiné, la police n'a pas bougé.
+  els.get('inTitre').value = 'Les Heures creuses !';
+  await els.get('inTitre').declenche('input');
+  await new Promise((r) => setImmediate(r));
+  assert.deepStrictEqual(demandes, ['Alegreya']);
+
+  els.get('inPoliceInterieur').value = 'Cardo';
+  await els.get('inPoliceInterieur').declenche('change');
+  await new Promise((r) => setImmediate(r));
+  assert.deepStrictEqual(demandes, ['Alegreya', 'Cardo']);
 });
 
 /**

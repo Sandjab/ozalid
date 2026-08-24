@@ -425,6 +425,22 @@ button:active:not(:disabled) { background: var(--encre); border-color: var(--enc
 .note { margin: .6rem 0 0; color: var(--gris); font-size: .85rem; }
 .note.alerte { color: var(--rouge); }
 
+/* L'échantillon d'écriture, sous le choix de police. La famille vient d'une variable
+   posée par `montrerEchantillon` : c'est le nom de la face que la fenêtre a chargée,
+   et non celui de la famille — une police du poste qui porterait le même nom passerait
+   sinon devant celle du livre, sans que rien ne les distingue à l'écran.
+   Aucune police de repli n'est nommée : l'élément reste caché tant que la face n'a pas
+   chargé, et un repli n'aurait ici que le seul effet de mentir en silence.
+   Le corps est celui d'une lecture, pas d'une légende : une écriture ne se juge pas à
+   la taille des notes qui l'entourent. */
+.echantillon {
+  margin: .6rem 0 0;
+  font-family: var(--police-echantillon);
+  font-size: 1.35rem;
+  line-height: 1.45;
+  color: var(--encre);
+}
+
 .etat { font-size: .85rem; color: var(--gris); }
 
 /* La taille de la fenêtre : des chiffres qu'on lit pour les recopier, donc alignés et

@@ -83,6 +83,14 @@ repli — un PDF composé dans une écriture de repli ne redevient pas juste en 
 le livre. Le détail de l'alerte — quelles familles manquent — se lit sous le sélecteur
 de police, là où l'on va réparer.
 
+Sous ce même sélecteur, un texte d'exemple montre l'écriture choisie — dans ses propres
+octets, ceux que Typst composera, chargés dans la fenêtre sous un nom qui n'existe sur
+aucun système : un `font-family` posé sur le seul nom de la famille aurait pris celle du
+poste quand elle s'y trouve. Une police que la fenêtre ne peut pas charger n'affiche
+rien, et le dit : le repli d'un navigateur est muet, comme celui de Typst, et un
+échantillon rendu dans l'écriture de l'interface montrerait une police que le livre
+n'aura pas.
+
 L'étape **Intérieur** a existé, entre Livre et Couverture, et elle ne portait que deux
 champs et deux boutons. La police et l'épreuve ont rejoint le Livre — la première parce
 qu'elle est un attribut du livre au même titre que le genre, la seconde parce qu'elle

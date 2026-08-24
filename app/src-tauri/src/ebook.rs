@@ -144,6 +144,9 @@ pub fn generer(
 
 /// Le romain et l'italique de la police du livre, lus dans les répertoires de Typst.
 ///
+/// Publique pour l'échantillon de l'onglet Livre : la fenêtre montre l'écriture choisie
+/// dans ses propres octets, et il n'y a qu'un endroit qui sache les trouver.
+///
 /// `None` si la famille n'y est pas : l'EPUB se fait alors dans l'écriture du lecteur,
 /// et le compte rendu le dit. Ce n'est pas une erreur — contrairement à la composition,
 /// où une police absente donnerait un livre imprimé faux.
@@ -153,7 +156,7 @@ pub fn generer(
 /// se donner deux échecs muets : une seconde lecture ratée sur l'italique le faisait
 /// disparaître de l'EPUB en laissant le compte rendu dire que tout allait bien, et sur le
 /// romain elle annonçait « famille introuvable » alors qu'elle venait d'être trouvée.
-fn polices_du_livre(famille: &str, dossiers: &[std::path::PathBuf]) -> Option<epub::Polices> {
+pub fn polices_du_livre(famille: &str, dossiers: &[std::path::PathBuf]) -> Option<epub::Polices> {
     let mut trouves: Vec<(String, Vec<u8>)> = Vec::new();
     for d in dossiers {
         let Ok(entrees) = std::fs::read_dir(d) else {

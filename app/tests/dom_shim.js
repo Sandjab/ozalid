@@ -268,6 +268,22 @@ function idsDuHtml(html) {
 }
 
 /**
+ * Une police que la fenêtre charge pour la montrer : l'échantillon d'écriture de
+ * l'onglet Livre est le seul endroit de l'application qui en demande une. Celle-ci
+ * charge toujours ; un test qui veut éprouver l'échec en passe une autre.
+ */
+class FacePolice {
+  constructor(famille, source) {
+    this.family = famille;
+    this.source = source;
+  }
+
+  async load() {
+    return this;
+  }
+}
+
+/**
  * Charge src/app.js dans un contexte muni d'un faux DOM.
  * `ids` : identifiants à créer ; par défaut, tous ceux du vrai index.html, avec leur
  * balise et leur état initial. `invoke` : implémentation des commandes Rust.
@@ -280,15 +296,20 @@ async function charge({
   listen,
   destroy = () => {},
   openPath = async () => {},
+  FontFace = FacePolice,
 }) {
   const html = fs.readFileSync(
     path.join(__dirname, '..', 'src', 'index.html'),
     'utf8'
   );
+  // Les polices que l'application a chargées, dans l'ordre : un test les relit pour
+  // vérifier ce que l'échantillon montre.
+  const faces = [];
   const document = {
     activeElement: null,
     getElementById: (id) => els.get(id) ?? null,
     createElement: (tag) => Object.assign(new El(tag), { _registre: els, _doc: document }),
+    fonts: { add: (f) => faces.push(f) },
   };
   const els = new Map(
     (ids ?? idsDuHtml(html)).map((id) => {
@@ -337,6 +358,7 @@ async function charge({
       },
     },
     console,
+    FontFace,
     // L'aperçu est débounce : sans minuteur, rien ne se déclenche.
     setTimeout,
     clearTimeout,
@@ -370,6 +392,7 @@ async function charge({
   return {
     els,
     contexte,
+    faces,
     /** Ce que fait une entrée de menu, désignée par son identifiant côté Rust. */
     menu: (id) => declencheEvenement('menu', { payload: id }),
     /** La fenêtre demande à se fermer. */
@@ -383,4 +406,4 @@ async function charge({
   };
 }
 
-module.exports = { El, charge, idsDuHtml };
+module.exports = { El, charge, idsDuHtml, FacePolice };
