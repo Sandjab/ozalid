@@ -152,7 +152,7 @@ async function ouvre(
     if (cmd === 'polices_texte_liste') return ['EB Garamond', 'Alegreya', 'Cardo'];
     if (cmd === 'jetons_liste') return ['%TITRE%', '%AUTEUR%', '%GENRE%', '%EDITEUR%', '%COLLECTION%', '%MONOGRAMME%'];
     if (cmd === 'mains_liste') return ['Caveat', 'Dancing Script'];
-    if (cmd === 'maquettes_liste') return [{ cle: 'folio', libelle: 'Folio' }];
+    if (cmd === 'maquettes_liste') return [{ cle: 'bandeau', libelle: 'Bandeau' }];
     if (cmd === 'projet_ouvrir') return projet;
     if (cmd === 'couverture_apercu') return { image: 'data:image/png;base64,QUJD', reperes: null };
     if (cmd === 'destinataire_viser') return maj({ courant: args.providerCle });

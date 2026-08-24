@@ -986,15 +986,15 @@ auteur = "Ivan Pjig"
     }
 
     /// La pastille portait un nom de collection sous un autre nom — « folio » dans la
-    /// maquette Folio. Elle supplée une collection vide : la laisser tomber ferait
+    /// maquette Bandeau. Elle supplée une collection vide : la laisser tomber ferait
     /// perdre la seule chose que ce champ disait.
     #[test]
     fn la_pastille_supplee_une_collection_vide() {
         let v2 = v2_avec(&[
             (&["quatrieme", "collection"], ""),
-            (&["pastille", "texte"], "folio"),
+            (&["pastille", "texte"], "bandeau"),
         ]);
-        assert_eq!(migre(v2).unwrap().livre.collection, "folio");
+        assert_eq!(migre(v2).unwrap().livre.collection, "bandeau");
     }
 
     /// La collection explicite gagne toujours : le repli n'est qu'un repli.
@@ -1002,7 +1002,7 @@ auteur = "Ivan Pjig"
     fn une_collection_explicite_bat_la_pastille() {
         let v2 = v2_avec(&[
             (&["quatrieme", "collection"], "Les Heures"),
-            (&["pastille", "texte"], "folio"),
+            (&["pastille", "texte"], "bandeau"),
         ]);
         assert_eq!(migre(v2).unwrap().livre.collection, "Les Heures");
     }
@@ -1109,11 +1109,11 @@ mode = "image"
         assert_eq!(m.envois.liste[0].main, crate::envoi::Main::Image);
     }
 
-    /// Un projet en version 2, maquette Folio, avec les textes posés là où la v2 les
+    /// Un projet en version 2, maquette Bandeau, avec les textes posés là où la v2 les
     /// rangeait — sous `couverture.maquette`.
     fn v2_avec(textes: &[(&[&str], &str)]) -> toml::Value {
         let mut p = Projet::nouveau(livre(), String::new());
-        p.meta.couverture.maquette = Some(crate::maquettes::fournie("folio"));
+        p.meta.couverture.maquette = Some(crate::maquettes::fournie("bandeau"));
         let brut = toml::to_string_pretty(&p.meta)
             .unwrap()
             .replace(&format!("version = {VERSION}"), "version = 2");
@@ -1265,7 +1265,7 @@ mode = "image"
         p.meta.interieur.police = "Cardo".into();
         p.meta.livre.dedicace = "À M., qui a tenu la lampe.".into();
         p.meta.livre.collection = "collection « Ozalid »".into();
-        let mut maquette = crate::maquettes::fournie("blanche");
+        let mut maquette = crate::maquettes::fournie("filets");
         maquette.pad_x = 16.5;
         maquette.titre.taille = 9.25;
         p.meta.couverture.maquette = Some(maquette);

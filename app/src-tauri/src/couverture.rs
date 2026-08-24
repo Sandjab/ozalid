@@ -81,11 +81,11 @@ fn encre(police: &str) -> f64 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Mode {
-    /// Bande de titre en haut, image à fond perdu dessous (archétype Folio).
+    /// Bande de titre en haut, image à fond perdu dessous (archétype Bandeau).
     Bandeau,
     /// Image sur toute la surface, texte par-dessus.
     Surimpression,
-    /// Composition purement typographique (archétype Blanche).
+    /// Composition purement typographique : ni photo ni bandeau, le cadre pour seul ornement.
     Typo,
 }
 
@@ -489,6 +489,14 @@ pub struct Quatrieme {
     pub texte: String,
     pub style: Style,
     pub interligne: f64,
+    /// Écart entre deux paragraphes du texte de présentation, % de largeur, **en plus**
+    /// de l'espacement ordinaire.
+    ///
+    /// L'interligne sépare les lignes d'un même passage ; celui-ci sépare les passages.
+    /// Une 4ème n'a ni alinéa ni blanc de série : sans lui, deux paragraphes s'y lisent
+    /// comme un seul. Nul dans les maquettes d'avant, qui composent donc comme avant.
+    #[serde(default)]
+    pub paragraphe_ecart: f64,
     pub align: Align,
     /// % de largeur.
     pub pad_x: f64,
@@ -608,7 +616,26 @@ impl Style {
     }
 
     pub fn applique(&self, largeur: f64, texte: &str) -> String {
-        let t = echappe(texte);
+        self.habille(largeur, echappe(texte))
+    }
+
+    /// Comme [`Style::applique`], mais le texte est lu comme celui du manuscrit :
+    /// `*mot*` passe en italique, `**mot**` en gras.
+    ///
+    /// C'est la **même** lecture que celle du livre — `manuscrit::inline` —, et c'est
+    /// tout son intérêt : une marque veut dire la même chose des deux côtés. Réservé au
+    /// texte de présentation de la 4ème : ailleurs, une astérisque dans un titre ou un
+    /// nom d'auteur doit s'imprimer plutôt que d'ouvrir une emphase.
+    ///
+    /// Le piège en est un vrai : une famille sans italique embarqué — Prata, Oswald —
+    /// compose `#emph` **sans une inclinaison et sans un mot**, relevé sur PDF. Typst
+    /// n'avertit pas : la face manque, la famille non.
+    pub fn applique_emphase(&self, largeur: f64, texte: &str) -> String {
+        self.habille(largeur, crate::manuscrit::inline(texte))
+    }
+
+    /// Le texte déjà mis en markup, habillé de sa casse et de son style.
+    fn habille(&self, largeur: f64, t: String) -> String {
         let t = match self.casse {
             Casse::Capitales => format!("#upper[{t}]"),
             Casse::Telle => t,
@@ -1306,11 +1333,13 @@ pub fn corps_quatre(
                 corps.push_str(&format!("#v({})\n", mm(q.tete.ecart / 100.0 * fw)));
             }
             corps.push_str(&format!(
-                "#set align({})\n#set par(leading: {}em, spacing: {}em, justify: false)\n#{}\n",
+                "#set align({})\n\
+                 #set par(leading: {}em, spacing: {}em + {}, justify: false)\n#{}\n",
                 q.align.typst(),
                 q.interligne - 1.0,
                 q.interligne - 1.0,
-                q.style.applique(fw, &resume),
+                mm(q.paragraphe_ecart / 100.0 * fw),
+                q.style.applique_emphase(fw, &resume),
             ));
         }
         c.push_str(&format!(
@@ -1401,7 +1430,12 @@ mod tests {
             gauche: 0.0,
             droite: 5.0,
         };
-        let s = bloc_pastille(&pastille_au_bord(Coin::BasDroite, false), "folio", 135.0, d);
+        let s = bloc_pastille(
+            &pastille_au_bord(Coin::BasDroite, false),
+            "bandeau",
+            135.0,
+            d,
+        );
         assert!(s.contains("bottom: 6.6200mm"), "{s}"); // 0.012 × 135 + 5
         assert!(s.contains("right: 8.7800mm"), "{s}"); // 0.028 × 135 + 5
                                                        // Le fond s'allonge et le placement suit d'autant : le texte, lui, ne bouge pas.
@@ -1419,7 +1453,12 @@ mod tests {
             gauche: 0.0,
             droite: 5.0,
         };
-        let s = bloc_pastille(&pastille_au_bord(Coin::BasGauche, false), "folio", 135.0, d);
+        let s = bloc_pastille(
+            &pastille_au_bord(Coin::BasGauche, false),
+            "bandeau",
+            135.0,
+            d,
+        );
         assert!(s.contains("bottom: 6.6200mm"), "{s}");
         assert!(s.contains("left: 3.7800mm"), "{s}"); // 0.028 × 135, sans débord
         assert!(s.contains("dx: 0.0000mm"), "{s}");
@@ -1436,7 +1475,12 @@ mod tests {
             gauche: 0.0,
             droite: 0.0,
         };
-        let s = bloc_pastille(&pastille_au_bord(Coin::BasDroite, false), "folio", 135.0, d);
+        let s = bloc_pastille(
+            &pastille_au_bord(Coin::BasDroite, false),
+            "bandeau",
+            135.0,
+            d,
+        );
         assert!(
             s.contains("inset: (top: 1.6200mm, bottom: 1.6200mm, left: 3.7800mm, right: 3.7800mm)"),
             "{s}"
@@ -1461,7 +1505,7 @@ mod tests {
         };
         let mut p = pastille_au_bord(Coin::BasDroite, false);
         p.dy = 3.5;
-        let s = bloc_pastille(&p, "folio", 135.0, d);
+        let s = bloc_pastille(&p, "bandeau", 135.0, d);
         assert!(s.contains("bottom: 1.6200mm"), "{s}");
         assert!(s.contains("right: 8.7800mm"), "{s}");
         assert!(s.contains("dx: 5.0000mm"), "{s}");
@@ -1536,7 +1580,7 @@ mod tests {
     /// durant.
     #[test]
     fn la_couverture_inseree_ne_pose_aucun_reglage_de_document() {
-        let p = page_une(&livre(), &maquettes::fournie("folio"), FORMAT, None, None);
+        let p = page_une(&livre(), &maquettes::fournie("bandeau"), FORMAT, None, None);
         // Tout est enveloppé dans un seul bloc de page : un `#set` posé dedans ne vaut
         // que pour elle, quelle que soit la colonne où il tombe. Ce qui vaudrait pour
         // le document, c'est ce que `preambule` écrit *avant* la page — `#set page`, et
@@ -1561,7 +1605,7 @@ mod tests {
     /// qu'aucune erreur ne soit levée.
     #[test]
     fn seule_la_forme_autonome_de_la_1ere_regle_le_document() {
-        let (l, cv) = (livre(), maquettes::fournie("folio"));
+        let (l, cv) = (livre(), maquettes::fournie("bandeau"));
         assert!(source_une(&l, &cv, FORMAT, None, None).contains("#set page("));
         assert!(!page_une(&l, &cv, FORMAT, None, None).contains("#set page("));
     }
@@ -1571,7 +1615,7 @@ mod tests {
     /// jamais laisser une valeur figée derrière.
     #[test]
     fn une_maquette_suit_le_format_sans_valeur_figee() {
-        let cv = maquettes::fournie("folio");
+        let cv = maquettes::fournie("bandeau");
         let petit = source_une(&livre(), &cv, (100.0, 160.0), None, None);
         let grand = source_une(&livre(), &cv, (200.0, 320.0), None, None);
         let corps = |s: &str| {
@@ -1586,7 +1630,7 @@ mod tests {
     /// poserait un rectangle noir sur une couverture qui n'a pas d'image dessous.
     #[test]
     fn la_composition_typographique_n_emet_ni_image_ni_voile() {
-        let mut cv = maquettes::fournie("blanche");
+        let mut cv = maquettes::fournie("filets");
         cv.voile = Voile::Uni;
         cv.voile_opacite = 0.5;
         let s = source_une(&livre(), &cv, FORMAT, Some(&photo()), None);
@@ -1598,7 +1642,7 @@ mod tests {
     /// l'ordre, avec les bonnes couleurs.
     #[test]
     fn le_cadre_emet_trois_filets_dans_l_ordre() {
-        let cv = maquettes::fournie("blanche");
+        let cv = maquettes::fournie("filets");
         assert!(cv.cadre.actif);
         let s = source_une(&livre(), &cv, FORMAT, None, None);
         // Le fond de la face est un rectangle lui aussi : seuls les filets portent un
@@ -1613,7 +1657,7 @@ mod tests {
 
     #[test]
     fn un_cadre_inactif_n_emet_rien() {
-        let cv = maquettes::fournie("folio");
+        let cv = maquettes::fournie("bandeau");
         assert!(!cv.cadre.actif);
         assert!(!source_une(&livre(), &cv, FORMAT, None, None).contains("stroke:"));
     }
@@ -1623,8 +1667,8 @@ mod tests {
     #[test]
     fn le_titre_et_l_auteur_viennent_du_projet() {
         for cv in [
-            maquettes::fournie("folio"),
-            maquettes::fournie("blanche"),
+            maquettes::fournie("bandeau"),
+            maquettes::fournie("filets"),
             maquettes::fournie("surimpression"),
         ] {
             let s = source_une(&livre(), &cv, FORMAT, None, None);
@@ -1636,7 +1680,7 @@ mod tests {
     /// Le bandeau réserve le haut de la couverture : l'image commence dessous.
     #[test]
     fn le_bandeau_pousse_l_image_sous_la_bande() {
-        let cv = maquettes::fournie("folio");
+        let cv = maquettes::fournie("bandeau");
         let s = source_une(&livre(), &cv, FORMAT, Some(&photo()), None);
         let dy = s
             .split("dy: ")
@@ -1663,7 +1707,7 @@ mod tests {
     /// sans elle produirait une 4ème décalée — et personne ne le verrait avant tirage.
     #[test]
     fn le_prolongement_refuse_de_composer_sans_le_dos() {
-        let mut cv = maquettes::fournie("folio");
+        let mut cv = maquettes::fournie("bandeau");
         cv.quatrieme.fond = FondQuatre::Panorama;
         let err = source_quatre(&livre(), &cv, FORMAT, None, Some(&photo()), None).unwrap_err();
         assert!(err.contains("dos"), "{err}");
@@ -1677,7 +1721,7 @@ mod tests {
     /// 4ème en papier nu : la divergence est ici, et elle est voulue.
     #[test]
     fn le_prolongement_cadre_l_image_sur_la_planche_entiere() {
-        let mut cv = maquettes::fournie("folio");
+        let mut cv = maquettes::fournie("bandeau");
         cv.quatrieme.fond = FondQuatre::Panorama;
         let largeur_zone = |dos: f64| {
             let s = source_quatre(&livre(), &cv, FORMAT, None, Some(&photo()), Some(dos)).unwrap();
@@ -1700,7 +1744,7 @@ mod tests {
     /// prestataire. En imprimer un serait le pire des services.
     #[test]
     fn la_zone_isbn_est_un_rectangle_blanc_vide() {
-        let mut cv = maquettes::fournie("folio");
+        let mut cv = maquettes::fournie("bandeau");
         cv.quatrieme.isbn_actif = true;
         let s = source_quatre(&livre(), &cv, FORMAT, None, None, None).unwrap();
         assert!(s.contains("fill: rgb(\"#ffffff\")"));
@@ -1712,8 +1756,8 @@ mod tests {
     #[test]
     fn les_trois_maquettes_composent_les_deux_faces() {
         for cv in [
-            maquettes::fournie("folio"),
-            maquettes::fournie("blanche"),
+            maquettes::fournie("bandeau"),
+            maquettes::fournie("filets"),
             maquettes::fournie("surimpression"),
         ] {
             assert!(!source_une(&livre(), &cv, FORMAT, Some(&photo()), None).is_empty());
@@ -1726,8 +1770,8 @@ mod tests {
     #[test]
     fn les_maquettes_n_utilisent_que_des_polices_embarquees() {
         for cv in [
-            maquettes::fournie("folio"),
-            maquettes::fournie("blanche"),
+            maquettes::fournie("bandeau"),
+            maquettes::fournie("filets"),
             maquettes::fournie("surimpression"),
         ] {
             for st in [
@@ -1752,7 +1796,7 @@ mod tests {
         let mut l = livre();
         l.titre = "Le #Titre".into();
         l.collection = "col#lection".into();
-        let cv = maquettes::fournie("folio");
+        let cv = maquettes::fournie("bandeau");
         let s = source_une(&l, &cv, FORMAT, None, None);
         assert!(s.contains(r"Le \#Titre"));
         assert!(s.contains(r"col\#lection"));
@@ -1770,7 +1814,7 @@ mod tests {
         l.prix = "18 € — %COLLECTION%".into();
         l.mention = "%EDITEUR%".into();
 
-        let mut cv = maquettes::fournie("blanche");
+        let mut cv = maquettes::fournie("filets");
         cv.pied.actif = true;
         cv.pastille.actif = true;
         cv.quatrieme.pied_actif = true;
@@ -1797,6 +1841,64 @@ mod tests {
         }
     }
 
+    /// Le texte de présentation se lit comme le manuscrit : `*mot*` en italique,
+    /// `**mot**` en gras. C'est la **même** lecture — `manuscrit::morceaux` —, et c'est
+    /// tout l'intérêt : une marque veut dire la même chose sur la couverture et dans le
+    /// livre, sans qu'on ait à se rappeler laquelle des deux on est en train d'écrire.
+    ///
+    /// Le reste de la maquette n'en veut pas : un titre ou un nom d'auteur portant une
+    /// astérisque doit l'imprimer, pas ouvrir une emphase.
+    #[test]
+    fn le_texte_de_presentation_lit_l_emphase_du_manuscrit() {
+        let mut cv = maquettes::fournie("filets");
+        cv.quatrieme.texte = "Un *mot* et un **autre**.".into();
+        let s = source_quatre(&livre(), &cv, FORMAT, None, None, None).unwrap();
+        assert!(s.contains("#emph[mot]"), "{s}");
+        assert!(s.contains("#strong[autre]"), "{s}");
+
+        // Le titre, lui, garde ses astérisques : la tête n'est pas du markup.
+        let mut l = livre();
+        l.titre = "Un *titre*".into();
+        let mut cv = maquettes::fournie("filets");
+        cv.quatrieme.tete.titre_visible = true;
+        let s = source_quatre(&l, &cv, FORMAT, None, None, None).unwrap();
+        assert!(s.contains(r"\*titre\*"), "{s}");
+        assert!(!s.contains("#emph["), "{s}");
+    }
+
+    /// Le texte de présentation s'aère par un écart entre paragraphes, distinct de
+    /// l'interligne : celle-ci sépare les lignes d'un même passage, celui-là les
+    /// passages entre eux. Sans lui, une 4ème n'a ni blanc ni alinéa — deux paragraphes
+    /// s'y lisent comme un seul, et c'est le défaut relevé sur la première 4ème composée
+    /// avec sa tête.
+    ///
+    /// À zéro — la valeur que reprend toute maquette écrite avant ce réglage — la
+    /// composition ne bouge pas d'un point.
+    #[test]
+    fn l_ecart_entre_paragraphes_de_la_quatrieme_s_ajoute_a_l_interligne() {
+        let compose = |ecart| {
+            let mut cv = maquettes::fournie("filets");
+            cv.quatrieme.texte = "Premier passage.\n\nSecond passage.".into();
+            cv.quatrieme.interligne = 1.45;
+            cv.quatrieme.paragraphe_ecart = ecart;
+            source_quatre(&livre(), &cv, FORMAT, None, None, None).unwrap()
+        };
+
+        // 5 % de 110 mm : l'écart s'ajoute à l'espacement ordinaire, il ne le remplace
+        // pas — un espacement plus petit que l'interligne resserrerait les passages.
+        let large = compose(5.0);
+        assert!(
+            large.contains("em + 5.5000mm"),
+            "l'écart n'est pas composé : {large}"
+        );
+
+        let nul = compose(0.0);
+        assert!(
+            nul.contains("em + 0.0000mm"),
+            "l'écart nul doit laisser l'espacement ordinaire : {nul}"
+        );
+    }
+
     /// **Non-régression de la tête.** Une maquette écrite avant elle compose sa 4ème
     /// comme avant : ni auteur, ni titre, ni filet. Les trois naissent éteints, sans
     /// quoi tout projet existant verrait son identité paraître sur sa 4ème sans que
@@ -1804,7 +1906,7 @@ mod tests {
     /// au tirage.
     #[test]
     fn une_tete_de_quatrieme_eteinte_ne_compose_rien() {
-        let cv = maquettes::fournie("blanche");
+        let cv = maquettes::fournie("filets");
         let s = source_quatre(&livre(), &cv, FORMAT, None, None, None).unwrap();
         assert!(
             !s.contains("Ivan Pjig"),
@@ -1825,7 +1927,7 @@ mod tests {
     #[test]
     fn chaque_element_de_la_tete_s_allume_seul() {
         let compose = |auteur, titre, filet| {
-            let mut cv = maquettes::fournie("blanche");
+            let mut cv = maquettes::fournie("filets");
             cv.quatrieme.tete.auteur_visible = auteur;
             cv.quatrieme.tete.titre_visible = titre;
             cv.quatrieme.tete.filet_visible = filet;
@@ -1854,7 +1956,7 @@ mod tests {
         let mut l = livre();
         l.auteur = "Ivan Pjig".into();
         l.titre = "Les Heures creuses".into();
-        let mut cv = maquettes::fournie("blanche");
+        let mut cv = maquettes::fournie("filets");
         cv.quatrieme.tete.auteur_visible = true;
         cv.quatrieme.tete.titre_visible = true;
         cv.quatrieme.tete.auteur.couleur = "#c00000".into();
@@ -1870,7 +1972,7 @@ mod tests {
     /// par la composition et non par l'ordre où les réglages sont écrits.
     #[test]
     fn la_tete_se_compose_avant_le_texte() {
-        let mut cv = maquettes::fournie("blanche");
+        let mut cv = maquettes::fournie("filets");
         cv.quatrieme.tete.auteur_visible = true;
         cv.quatrieme.tete.titre_visible = true;
         cv.quatrieme.tete.filet_visible = true;
@@ -1891,7 +1993,7 @@ mod tests {
     /// sur sa seule tête resterait vide sans rien dire.
     #[test]
     fn une_tete_sans_texte_se_compose_quand_meme() {
-        let mut cv = maquettes::fournie("blanche");
+        let mut cv = maquettes::fournie("filets");
         cv.quatrieme.texte = String::new();
         cv.quatrieme.tete.titre_visible = true;
 
@@ -1906,7 +2008,7 @@ mod tests {
     fn le_resume_de_quatrieme_cite_les_cles() {
         let mut l = livre();
         l.genre = "roman".into();
-        let mut cv = maquettes::fournie("blanche");
+        let mut cv = maquettes::fournie("filets");
         cv.quatrieme.texte = "%TITRE%, un %GENRE% de %AUTEUR%.".into();
 
         let quatre = source_quatre(&l, &cv, FORMAT, None, None, None).unwrap();

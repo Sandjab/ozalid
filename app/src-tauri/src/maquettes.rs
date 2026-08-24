@@ -126,8 +126,8 @@ fn ecrire_archive<W: Write + Seek>(sortie: W, m: &Maquette) -> Result<(), String
 /// Les trois fournies, incorporées au binaire : rien à résoudre sur le poste, donc
 /// aucun écart entre développement et livraison, et l'immuabilité est un fait.
 const FOURNIES: [(&str, &[u8]); 3] = [
-    ("folio", include_bytes!("../maquettes/folio.maquette")),
-    ("blanche", include_bytes!("../maquettes/blanche.maquette")),
+    ("bandeau", include_bytes!("../maquettes/bandeau.maquette")),
+    ("filets", include_bytes!("../maquettes/filets.maquette")),
     (
         "surimpression",
         include_bytes!("../maquettes/surimpression.maquette"),
@@ -276,10 +276,10 @@ pub fn ecrire(
 /// Ce que porte un nom de clone, sans son rang.
 const COPIE: &str = " (copie)";
 
-/// Un nom libre pour le clone de `nom` : « Folio (copie) », puis « Folio (copie) 2 ».
+/// Un nom libre pour le clone de `nom` : « Bandeau (copie) », puis « Bandeau (copie) 2 ».
 ///
 /// Le suffixe se **remplace** plutôt que de s'empiler : cloner un clone donne un
-/// deuxième clone, non « Folio (copie) (copie) ». Le rang monte tant que la place est
+/// deuxième clone, non « Bandeau (copie) (copie) ». Le rang monte tant que la place est
 /// prise — un nom fabriqué par le code n'a pas à se faire refuser, là où un nom saisi,
 /// lui, l'est, pour que l'utilisateur sache que le sien existait déjà.
 pub fn nom_de_copie(config: Option<&Path>, nom: &str) -> String {
@@ -452,7 +452,7 @@ mod tests {
             cle: "ma-collection".into(),
             nom: "Ma collection".into(),
             fournie: false,
-            couverture: fournie("blanche"),
+            couverture: fournie("filets"),
             images,
         };
 
@@ -472,7 +472,7 @@ mod tests {
             cle: "peu-importe".into(),
             nom: "Ma collection".into(),
             fournie: false,
-            couverture: fournie("folio"),
+            couverture: fournie("bandeau"),
             images: BTreeMap::new(),
         };
         let mut octets = Vec::new();
@@ -496,8 +496,8 @@ mod tests {
         assert_eq!(
             vues,
             [
-                ("folio".to_string(), "Folio".to_string(), true),
-                ("blanche".to_string(), "Blanche".to_string(), true),
+                ("bandeau".to_string(), "Bandeau".to_string(), true),
+                ("filets".to_string(), "Filets".to_string(), true),
                 (
                     "surimpression".to_string(),
                     "Surimpression".to_string(),
@@ -516,7 +516,7 @@ mod tests {
             cle: String::new(),
             nom: nom.into(),
             fournie: false,
-            couverture: fournie("folio"),
+            couverture: fournie("bandeau"),
             images: BTreeMap::new(),
         };
         ecrire_archive(std::fs::File::create(dir.join(fichier)).unwrap(), &m).unwrap();
@@ -543,8 +543,8 @@ mod tests {
         assert_eq!(
             vues,
             [
-                ("folio".to_string(), "Folio".to_string(), true),
-                ("blanche".to_string(), "Blanche".to_string(), true),
+                ("bandeau".to_string(), "Bandeau".to_string(), true),
+                ("filets".to_string(), "Filets".to_string(), true),
                 (
                     "surimpression".to_string(),
                     "Surimpression".to_string(),
@@ -582,7 +582,7 @@ mod tests {
             .into_iter()
             .map(|m| m.cle)
             .collect();
-        assert_eq!(cles, ["folio", "blanche", "surimpression", "bonne"]);
+        assert_eq!(cles, ["bandeau", "filets", "surimpression", "bonne"]);
     }
 
     /// Répertoire de configuration inatteignable, ou aucune personnalisée encore
@@ -601,28 +601,34 @@ mod tests {
     #[test]
     fn le_nom_d_un_clone_s_ecarte_de_ce_qui_est_pris() {
         let dir = tempfile::tempdir().unwrap();
-        assert_eq!(nom_de_copie(Some(dir.path()), "Folio"), "Folio (copie)");
+        assert_eq!(nom_de_copie(Some(dir.path()), "Bandeau"), "Bandeau (copie)");
 
         ecrire(
             dir.path(),
-            "Folio (copie)",
-            &fournie("folio"),
+            "Bandeau (copie)",
+            &fournie("bandeau"),
             &BTreeMap::new(),
         )
         .unwrap();
-        assert_eq!(nom_de_copie(Some(dir.path()), "Folio"), "Folio (copie) 2");
+        assert_eq!(
+            nom_de_copie(Some(dir.path()), "Bandeau"),
+            "Bandeau (copie) 2"
+        );
 
         ecrire(
             dir.path(),
-            "Folio (copie) 2",
-            &fournie("folio"),
+            "Bandeau (copie) 2",
+            &fournie("bandeau"),
             &BTreeMap::new(),
         )
         .unwrap();
-        assert_eq!(nom_de_copie(Some(dir.path()), "Folio"), "Folio (copie) 3");
+        assert_eq!(
+            nom_de_copie(Some(dir.path()), "Bandeau"),
+            "Bandeau (copie) 3"
+        );
     }
 
-    /// Cloner un clone ne fait pas « Folio (copie) (copie) (copie) » : le suffixe se
+    /// Cloner un clone ne fait pas « Bandeau (copie) (copie) (copie) » : le suffixe se
     /// remplace, il ne s'empile pas.
     #[test]
     fn cloner_un_clone_ne_reempile_pas_le_suffixe() {
@@ -630,16 +636,16 @@ mod tests {
         // La source d'un clonage existe forcément : c'est elle qu'on clone.
         ecrire(
             dir.path(),
-            "Folio (copie)",
-            &fournie("folio"),
+            "Bandeau (copie)",
+            &fournie("bandeau"),
             &BTreeMap::new(),
         )
         .unwrap();
 
         assert_eq!(
-            nom_de_copie(Some(dir.path()), "Folio (copie)"),
-            "Folio (copie) 2",
-            "le suffixe s'empilerait en « Folio (copie) (copie) »"
+            nom_de_copie(Some(dir.path()), "Bandeau (copie)"),
+            "Bandeau (copie) 2",
+            "le suffixe s'empilerait en « Bandeau (copie) (copie) »"
         );
     }
 
@@ -650,14 +656,14 @@ mod tests {
     fn une_fournie_ne_se_renomme_ni_ne_s_efface() {
         let dir = tempfile::tempdir().unwrap();
 
-        let e = renommer(dir.path(), "folio", "Ma folio").unwrap_err();
+        let e = renommer(dir.path(), "bandeau", "Ma folio").unwrap_err();
         assert!(e.contains("fournie"), "{e}");
-        let e = effacer(dir.path(), "folio").unwrap_err();
+        let e = effacer(dir.path(), "bandeau").unwrap_err();
         assert!(e.contains("fournie"), "{e}");
 
         assert!(
-            par_cle(Some(dir.path()), "folio").is_some(),
-            "Folio doit tenir"
+            par_cle(Some(dir.path()), "bandeau").is_some(),
+            "Bandeau doit tenir"
         );
     }
 
@@ -691,7 +697,7 @@ mod tests {
         ecrire(
             dir.path(),
             "ma collection",
-            &fournie("folio"),
+            &fournie("bandeau"),
             &BTreeMap::new(),
         )
         .unwrap();
@@ -718,14 +724,14 @@ mod tests {
         ecrire(
             dir.path(),
             "Ma collection",
-            &fournie("folio"),
+            &fournie("bandeau"),
             &BTreeMap::new(),
         )
         .unwrap();
         ecrire(
             dir.path(),
             "Nuit blanche",
-            &fournie("blanche"),
+            &fournie("filets"),
             &BTreeMap::new(),
         )
         .unwrap();
@@ -744,14 +750,14 @@ mod tests {
         ecrire(
             dir.path(),
             "Ma collection",
-            &fournie("folio"),
+            &fournie("bandeau"),
             &BTreeMap::new(),
         )
         .unwrap();
         ecrire(
             dir.path(),
             "Nuit blanche",
-            &fournie("blanche"),
+            &fournie("filets"),
             &BTreeMap::new(),
         )
         .unwrap();
@@ -792,15 +798,15 @@ mod tests {
     }
 
     /// L'unicité porte sur **tout** l'ensemble, fournies comprises : une personnalisée
-    /// nommée « Folio » ferait deux entrées de même clé dans le menu, et la seconde
+    /// nommée « Bandeau » ferait deux entrées de même clé dans le menu, et la seconde
     /// serait inatteignable. Le refus nomme celle qui tient déjà la place.
     #[test]
     fn un_nom_deja_pris_est_refuse_fournie_comprise() {
         let dir = tempfile::tempdir().unwrap();
-        let cv = fournie("folio");
+        let cv = fournie("bandeau");
 
-        let e = ecrire(dir.path(), "Folio", &cv, &BTreeMap::new()).unwrap_err();
-        assert!(e.contains("Folio"), "{e}");
+        let e = ecrire(dir.path(), "Bandeau", &cv, &BTreeMap::new()).unwrap_err();
+        assert!(e.contains("Bandeau"), "{e}");
 
         ecrire(dir.path(), "Ma collection", &cv, &BTreeMap::new()).unwrap();
         // Même slug, autre casse et autre ponctuation : c'est le même nom.
@@ -813,7 +819,7 @@ mod tests {
     #[test]
     fn un_nom_sans_slug_est_refuse_plutot_qu_arrange() {
         let dir = tempfile::tempdir().unwrap();
-        let e = ecrire(dir.path(), "  ", &fournie("folio"), &BTreeMap::new()).unwrap_err();
+        let e = ecrire(dir.path(), "  ", &fournie("bandeau"), &BTreeMap::new()).unwrap_err();
         assert!(e.contains("lettre"), "{e}");
         assert!(
             toutes(Some(dir.path())).iter().all(|m| m.fournie),
@@ -830,15 +836,15 @@ mod tests {
         assert_eq!(slug("Élan  vital !").as_deref(), Some("elan-vital"));
         assert_eq!(slug("Cœur").as_deref(), Some("coeur"));
         assert_eq!(slug("Ma Collection"), slug("ma  collection…"));
-        assert_eq!(slug("Folio").as_deref(), Some("folio"));
+        assert_eq!(slug("Bandeau").as_deref(), Some("bandeau"));
     }
 
     /// Un slug ne borde jamais de tiret : `folio-.maquette` se relirait en clé
     /// « folio- », qui ne serait plus le slug de son propre nom.
     #[test]
     fn le_slug_ne_borde_pas_de_tiret() {
-        assert_eq!(slug("  Folio  ").as_deref(), Some("folio"));
-        assert_eq!(slug("— Folio —").as_deref(), Some("folio"));
+        assert_eq!(slug("  Bandeau  ").as_deref(), Some("bandeau"));
+        assert_eq!(slug("— Bandeau —").as_deref(), Some("bandeau"));
     }
 
     /// Un nom qui ne s'écrit avec aucune lettre latine ne peut pas nommer un fichier.
@@ -864,7 +870,7 @@ mod tests {
             let opts = SimpleFileOptions::default();
             let f = Fichier {
                 nom: "Piégée".into(),
-                couverture: fournie("folio"),
+                couverture: fournie("bandeau"),
             };
             crate::projet::ajoute(
                 &mut zip,
@@ -898,7 +904,7 @@ mod tests {
     #[test]
     fn une_cle_inconnue_ne_rend_pas_de_maquette() {
         assert!(par_cle(None, "gallimard").is_none());
-        assert!(par_cle(None, "folio").is_some());
+        assert!(par_cle(None, "bandeau").is_some());
     }
 
     /// Le pied éditeur est posé depuis le bas, en % de la hauteur ; le filet interne du
@@ -906,13 +912,13 @@ mod tests {
     /// deux ne varient donc pas ensemble d'un format à l'autre, et un pied qui dégage le
     /// filet en poche peut le traverser en A4.
     ///
-    /// La maquette Blanche porte 13,5 % et non les 11 % du CSS de l'atelier : c'est le
+    /// La maquette Filets porte 13,5 % et non les 11 % du CSS de l'atelier : c'est le
     /// seul écart assumé vis-à-vis d'`index.html`, qui a le défaut et ne l'a pas vu.
     /// L'archive porte la valeur, ce test la borne sur tous les formats de la table —
     /// c'est ici, et nulle part ailleurs, que la raison de ce 13,5 est écrite.
     #[test]
     fn le_pied_editeur_ne_traverse_jamais_le_cadre() {
-        let cv = fournie("blanche");
+        let cv = fournie("filets");
         let c = &cv.cadre;
         for pr in crate::providers::PROVIDERS {
             let (fw, fh) = pr.format;
@@ -937,8 +943,8 @@ mod tests {
     /// une couverture qui n'a rien dessous.
     #[test]
     fn seule_la_maquette_a_image_pleine_page_porte_un_voile() {
-        assert_eq!(fournie("folio").voile, Voile::Aucun);
-        assert_eq!(fournie("blanche").voile, Voile::Aucun);
+        assert_eq!(fournie("bandeau").voile, Voile::Aucun);
+        assert_eq!(fournie("filets").voile, Voile::Aucun);
         assert_ne!(fournie("surimpression").voile, Voile::Aucun);
     }
 }

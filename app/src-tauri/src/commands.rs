@@ -739,7 +739,7 @@ pub fn maquette_enregistrer(
 
 /// Clone une maquette, fournie ou non, sous un nom que le Rust fabrique.
 ///
-/// Aucun nom n'est demandé : « Folio (copie) » convient neuf fois sur dix, et
+/// Aucun nom n'est demandé : « Bandeau (copie) » convient neuf fois sur dix, et
 /// « Renommer » est à côté pour la dixième. Faire saisir ce nom aurait obligé le
 /// dialogue à se donner un mode — un champ qui veut dire tantôt « enregistrer », tantôt
 /// « cloner ceci ».

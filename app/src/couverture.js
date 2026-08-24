@@ -174,6 +174,10 @@ const SCHEMA = [
       { chemin: 'quatrieme.couleur', libelle: 'Couleur du fond', type: 'couleur' },
       { chemin: 'quatrieme.texte', libelle: 'Texte de présentation', type: 'zone' },
       { chemin: 'quatrieme.interligne', libelle: 'Interligne', type: 'nombre', min: 1, max: 2.5, pas: 0.05 },
+      // L'interligne sépare les lignes d'un passage, celui-ci les passages entre eux.
+      // Une 4ème n'a ni alinéa ni blanc de série : à zéro, deux paragraphes s'y lisent
+      // comme un seul.
+      { chemin: 'quatrieme.paragraphe_ecart', libelle: 'Écart entre paragraphes', type: 'nombre', min: 0, max: 20, pas: 0.5, unite: '% larg.' },
       {
         chemin: 'quatrieme.align', libelle: 'Alignement', type: 'liste', options: [
           ['gauche', 'Gauche'], ['centre', 'Centre'], ['droite', 'Droite'],
@@ -183,7 +187,13 @@ const SCHEMA = [
       { chemin: 'quatrieme.top', libelle: 'Hauteur du texte', type: 'nombre', min: 0, max: 60, pas: 0.5, unite: '% larg.' },
     ],
   },
-  { ...style('quatrieme.style', '4ème — style du texte', { casse: false }), face: 'quatre' },
+  {
+    // L'italique est offert ici et nulle part ailleurs sur la 4ème : il couche tout le
+    // bloc — un exergue, une citation. Pour un seul mot, le texte se marque comme le
+    // manuscrit, `*mot*` et `**mot**`.
+    ...style('quatrieme.style', '4ème — style du texte', { casse: false, italique: true }),
+    face: 'quatre',
+  },
   {
     // La tête de la 4ème : l'auteur, le titre et un filet, au-dessus du texte. Trois
     // interrupteurs et non un seul — une collection met l'auteur et le filet sans
@@ -463,7 +473,7 @@ async function enregistrerMaquette() {
  *
  * Le menu ne montre pas un état : le projet ne garde pas de quelle maquette il est
  * parti, et il n'aurait rien de vrai à dire une fois les réglages repris un par un. Il
- * ne porte donc qu'un geste, et revient sur son invite — y laisser « Folio » affiché
+ * ne porte donc qu'un geste, et revient sur son invite — y laisser « Bandeau » affiché
  * ferait passer pour un état ce qui est un bouton, et le geste, refait par mégarde,
  * écrase tous les réglages.
  */

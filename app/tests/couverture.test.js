@@ -49,7 +49,7 @@ function maquette(mode = 'bandeau') {
       style_editeur: style('Archivo', 3.2, '#191917'),
     },
     pastille: {
-      actif: true, texte: 'folio', style: style('Archivo', 3.2, '#ffffff'),
+      actif: true, texte: 'bandeau', style: style('Archivo', 3.2, '#ffffff'),
       fond: '#111111', coin: 'bas-droite', verticale: false, arrondie: true,
       dx: 4.5, dy: 3.5,
     },
@@ -66,7 +66,7 @@ function maquette(mode = 'bandeau') {
         filet_visible: false, filet: { couleur: '#191917', epaisseur: 0.3, largeur: 12 },
         ecart: 6,
       },
-      interligne: 1.45, align: 'gauche', pad_x: 10, top: 12,
+      interligne: 1.45, paragraphe_ecart: 0, align: 'gauche', pad_x: 10, top: 12,
       pied_actif: true, mention: '', collection: '', prix: '',
       style_pied: style('Archivo', 2.4, '#191917'), pied_y: 4,
       isbn_actif: false, isbn_l: 34, isbn_h: 21, isbn_dx: 7, isbn_dy: 7,
@@ -129,8 +129,8 @@ async function ouvre(couverture, sur = {}, dialogues = []) {
     if (cmd === 'mains_liste') return ['Caveat', 'Dancing Script'];
     if (cmd === 'maquettes_liste') {
       return [
-        { cle: 'folio', libelle: 'Folio', fournie: true },
-        { cle: 'blanche', libelle: 'Blanche', fournie: true },
+        { cle: 'bandeau', libelle: 'Bandeau', fournie: true },
+        { cle: 'filets', libelle: 'Filets', fournie: true },
         { cle: 'surimpression', libelle: 'Surimpression', fournie: true },
       ];
     }
@@ -459,7 +459,7 @@ test('modifier un réglage renvoie la maquette entière', async () => {
   await papier.declenche('change');
 
   assert.strictEqual(recue.papier, '#fcf0d8');
-  assert.strictEqual(recue.pastille.texte, 'folio', 'pastille perdue');
+  assert.strictEqual(recue.pastille.texte, 'bandeau', 'pastille perdue');
   assert.strictEqual(recue.cadre.filet2_couleur, '#c00000', 'cadre perdu');
   assert.strictEqual(recue.quatrieme.interligne, 1.45, '4ème perdue');
 });
@@ -1074,8 +1074,8 @@ const bouton = (els, nom, geste) => {
 
 /** Les trois fournies, plus une personnalisée : de quoi exercer le séparateur. */
 const AVEC_PERSONNALISEE = () => [
-  { cle: 'folio', libelle: 'Folio', fournie: true },
-  { cle: 'blanche', libelle: 'Blanche', fournie: true },
+  { cle: 'bandeau', libelle: 'Bandeau', fournie: true },
+  { cle: 'filets', libelle: 'Filets', fournie: true },
   { cle: 'ma-collection', libelle: 'Ma collection', fournie: false },
 ];
 
@@ -1092,8 +1092,8 @@ test('le menu des maquettes range les personnalisées sous un séparateur', asyn
   }));
   assert.deepEqual(options, [
     { texte: 'Repartir d\'une maquette…', valeur: '', inerte: false },
-    { texte: 'Folio', valeur: 'folio', inerte: false },
-    { texte: 'Blanche', valeur: 'blanche', inerte: false },
+    { texte: 'Bandeau', valeur: 'bandeau', inerte: false },
+    { texte: 'Filets', valeur: 'filets', inerte: false },
     { texte: '──────────', valeur: '', inerte: true },
     { texte: 'Ma collection', valeur: 'ma-collection', inerte: false },
   ]);
@@ -1109,7 +1109,7 @@ test('enregistrer une maquette la fait paraître au menu', async () => {
   const { els } = await ouvre(maquette(), {
     maquette_enregistrer: ({ nom }) => { enregistrees.push(nom); return null; },
     maquettes_liste: () => [
-      { cle: 'folio', libelle: 'Folio', fournie: true },
+      { cle: 'bandeau', libelle: 'Bandeau', fournie: true },
       ...enregistrees.map((n) => ({ cle: 'x', libelle: n, fournie: false })),
     ],
   });
@@ -1133,11 +1133,11 @@ test('enregistrer une maquette la fait paraître au menu', async () => {
  */
 test('un refus d\'enregistrement se lit dans le dialogue', async () => {
   const { els } = await ouvre(maquette(), {
-    maquette_enregistrer: () => { throw new Error('« Folio » porte déjà ce nom.'); },
+    maquette_enregistrer: () => { throw new Error('« Bandeau » porte déjà ce nom.'); },
     maquettes_liste: AVEC_PERSONNALISEE,
   });
   await els.get('btMaquettes').declenche('click');
-  els.get('inMaquetteNom').value = 'Folio';
+  els.get('inMaquetteNom').value = 'Bandeau';
   await els.get('btMaquetteEnregistrer').declenche('click');
   assert.match(els.get('etatMaquettes').textContent, /porte déjà ce nom/);
 });
@@ -1151,8 +1151,8 @@ test('le dialogue n\'offre ni Renommer ni Effacer sur une fournie', async () => 
   const { els } = await ouvre(maquette(), { maquettes_liste: AVEC_PERSONNALISEE });
   await els.get('btMaquettes').declenche('click');
   assert.deepEqual(lignesMaquettes(els), [
-    { nom: 'Folio', gestes: ['Cloner'] },
-    { nom: 'Blanche', gestes: ['Cloner'] },
+    { nom: 'Bandeau', gestes: ['Cloner'] },
+    { nom: 'Filets', gestes: ['Cloner'] },
     { nom: 'Ma collection', gestes: ['Cloner', 'Renommer', 'Effacer'] },
   ]);
 });
@@ -1166,15 +1166,15 @@ test('cloner une fournie demande le clonage et rafraîchit la liste', async () =
   const { els } = await ouvre(maquette(), {
     maquette_cloner: ({ cle }) => { clones.push(cle); return null; },
     maquettes_liste: () => [
-      { cle: 'folio', libelle: 'Folio', fournie: true },
-      ...clones.map((c) => ({ cle: `${c}-copie`, libelle: 'Folio (copie)', fournie: false })),
+      { cle: 'bandeau', libelle: 'Bandeau', fournie: true },
+      ...clones.map((c) => ({ cle: `${c}-copie`, libelle: 'Bandeau (copie)', fournie: false })),
     ],
   });
   await els.get('btMaquettes').declenche('click');
-  await bouton(els, 'Folio', 'Cloner').declenche('click');
+  await bouton(els, 'Bandeau', 'Cloner').declenche('click');
 
-  assert.deepEqual(clones, ['folio']);
-  assert.deepEqual(lignesMaquettes(els).map((l) => l.nom), ['Folio', 'Folio (copie)']);
+  assert.deepEqual(clones, ['bandeau']);
+  assert.deepEqual(lignesMaquettes(els).map((l) => l.nom), ['Bandeau', 'Bandeau (copie)']);
 });
 
 /**
@@ -1229,6 +1229,6 @@ test('un refus de geste se lit dans le dialogue', async () => {
     maquettes_liste: AVEC_PERSONNALISEE,
   });
   await els.get('btMaquettes').declenche('click');
-  await bouton(els, 'Folio', 'Cloner').declenche('click');
+  await bouton(els, 'Bandeau', 'Cloner').declenche('click');
   assert.match(els.get('etatMaquettes').textContent, /maquette inconnue/);
 });

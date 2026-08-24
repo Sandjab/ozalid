@@ -320,11 +320,11 @@ pub fn traduit(r: &ReglagesAtelier) -> Result<(Couverture, TextesAtelier), Strin
             .ok_or_else(|| format!("maquette fournie « {cle} » illisible."))
     };
     let mut cv = match r.mode.as_str() {
-        "band" => fournie("folio")?,
+        "band" => fournie("bandeau")?,
         "overlay" => fournie("surimpression")?,
-        "typo" => fournie("blanche")?,
+        "typo" => fournie("filets")?,
         // Bloc sans mode : le bandeau est le défaut de l'atelier.
-        "" => fournie("folio")?,
+        "" => fournie("bandeau")?,
         autre => return Err(format!("mode de couverture inconnu : « {autre} ».")),
     };
 
@@ -709,7 +709,10 @@ couverture = "in/covers/LHC-Photo.png"
     fn un_bloc_incomplet_part_de_la_maquette_de_son_mode() {
         let m = traduit(&reglages("typo", &[])).unwrap().0;
         assert_eq!(m.mode, Mode::Typo);
-        assert!(m.cadre.actif, "le triple filet de la Blanche est perdu");
+        assert!(
+            m.cadre.actif,
+            "le triple filet de la maquette Filets est perdu"
+        );
         assert_eq!(m.titre.police, "Bodoni Moda");
     }
 

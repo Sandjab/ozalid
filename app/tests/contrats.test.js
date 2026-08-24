@@ -48,7 +48,7 @@ const invoke = async (cmd) => {
   if (cmd === 'polices_texte_liste') return ['Alegreya'];
   if (cmd === 'jetons_liste') return ['%TITRE%', '%AUTEUR%', '%GENRE%', '%EDITEUR%', '%COLLECTION%', '%MONOGRAMME%'];
   if (cmd === 'mains_liste') return ['Caveat'];
-  if (cmd === 'maquettes_liste') return [{ cle: 'folio', libelle: 'Folio' }];
+  if (cmd === 'maquettes_liste') return [{ cle: 'bandeau', libelle: 'Bandeau' }];
   if (cmd === 'recents_liste') return [];
   if (cmd === 'garde_modifications') return 'ignorer';
   if (cmd === 'interface_prete') return null;

@@ -384,7 +384,7 @@ une maquette ne peut donc pas les emporter. Le résumé de 4ème, lui, reconnaî
 jetons : une maquette peut porter un `%TITRE%, un %GENRE% de %AUTEUR%.` qui se résout
 pour chaque livre où on la charge.
 
-Les trois **fournies** — Folio, Blanche, Surimpression — vivent dans
+Les trois **fournies** — Bandeau, Filets, Surimpression — vivent dans
 `app/src-tauri/maquettes/` et sont incorporées au binaire par `include_bytes!` : il n'y a
 aucun chemin à résoudre sur le poste, aucun mode dégradé, aucun écart entre développement
 et livraison, et leur immuabilité est un fait plutôt qu'une règle applicative. Ce sont des
@@ -411,8 +411,8 @@ maquettes — une maquette avec deux photos pèse ce que pèsent les photos ; le
 se regarde et s'élague à la main.
 
 Toute maquette se **clone**, fournie comprise — c'est ainsi qu'on part d'une fournie pour
-en faire la sienne. Le clone se nomme tout seul (« Folio (copie) », puis
-« Folio (copie) 2 ») : un nom fabriqué par le code se suffixe, là où un nom saisi se fait
+en faire la sienne. Le clone se nomme tout seul (« Bandeau (copie) », puis
+« Bandeau (copie) 2 ») : un nom fabriqué par le code se suffixe, là où un nom saisi se fait
 refuser. Renommer et effacer ne valent que pour les personnalisées, et c'est le **Rust**
 qui le refuse — le dialogue qui n'offre pas ces boutons sur une fournie n'est qu'une
 politesse, et une commande s'appelle sans lui. Un effacement est sans reprise : le bouton

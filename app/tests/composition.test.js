@@ -87,7 +87,7 @@ function faux(providers, sur = {}) {
     if (cmd === 'jetons_liste') return ['%TITRE%', '%AUTEUR%', '%GENRE%', '%EDITEUR%', '%COLLECTION%', '%MONOGRAMME%'];
     if (cmd === 'mains_liste') return ['Caveat', 'Dancing Script'];
     if (cmd === 'maquettes_liste') {
-      return [{ cle: 'folio', libelle: 'Folio' }, { cle: 'blanche', libelle: 'Blanche' }];
+      return [{ cle: 'bandeau', libelle: 'Bandeau' }, { cle: 'filets', libelle: 'Filets' }];
     }
     if (cmd === 'couverture_apercu') return { image: 'data:image/png;base64,AAAA', reperes: null };
     if (cmd in sur) {
