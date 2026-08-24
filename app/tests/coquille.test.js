@@ -94,6 +94,14 @@ function atelier({
         'data:image/png;base64,UDM', 'data:image/png;base64,UDQ'];
       case 'envoi_page': return 'data:image/png;base64,R1JBTkQ=';
       case 'envoi_apercu': return 'data:image/png;base64,Q09ORklSTQ==';
+      // Ce que la génération rend, un exemplaire par ligne. Le dos y est un nombre :
+      // c'est le front qui l'écrit, et c'est ce qu'un test peut lui reprocher.
+      case 'envoyer': return envois.liste.map((e) => ({
+        dedicataire: e.dedicataire,
+        dossier: e.dedicataire,
+        package: { pages: 262, dos: 16.513 },
+        vignette: null,
+      }));
       case 'envoi_objet': return { image: 'data:image/png;base64,T0JK', ratio: 0.2 };
       case 'envoi_ajouter': {
         // La règle vit dans le Rust — `Envois::ajouter` : un envoi neuf naît comme le
@@ -573,6 +581,28 @@ test('un démarrage en échec laisse les onglets éteints, jamais indéterminés
     assert.equal(onglet.getAttribute('aria-selected'), 'false',
       `onglet ${cle} sans état annoncé`);
   }
+});
+
+/* ---------- la taille de la fenêtre ---------- */
+
+/**
+ * La seule mention de l'écran qui ne parle pas du livre.
+ *
+ * Elle est là pour qu'on puisse **dire** la fenêtre : une mise en page se juge à une
+ * taille, et « c'est coupé chez moi » sans le chiffre ne se reproduit pas. Elle ne
+ * dépend d'aucun projet — un écran d'accueil la porte comme une étape.
+ */
+test('l\'entête porte la taille de la fenêtre, et la suit', async () => {
+  const a = atelier();
+  const { els, redimensionner } = await charge({ invoke: a.invoke });
+
+  assert.equal(els.get('fenetreTaille').textContent, '1040 × 780',
+    'la taille de départ n\'est pas écrite : rien ne la dit avant le premier geste');
+
+  await redimensionner(1500, 950);
+
+  assert.equal(els.get('fenetreTaille').textContent, '1500 × 950',
+    'la mention ne suit pas la fenêtre : elle donnerait un chiffre faux, pire que rien');
 });
 
 /* ---------- le pied ---------- */
@@ -1500,6 +1530,34 @@ test('la page composée prend la place du canevas, et le bouton ramène', async 
   await els.get('btVoirPage').declenche('click');
   assert.equal(els.get('apercuEnvoi').hidden, true, 'rien ne referme la confirmation');
   assert.equal(els.get('canevas').hidden, false, 'le canevas ne revient pas');
+});
+
+/**
+ * Le dos du compte rendu s'écrit comme celui du pied.
+ *
+ * Deux écritures d'un même millimètre dans une même fenêtre — « 16,51 » au pied et
+ * « 16.51 » deux centimètres à droite — donnent à croire à deux mesures. C'est la
+ * langue de l'interface qui tranche, et `nb` la porte depuis le début.
+ */
+test('le compte rendu d\'un envoi écrit son dos à la française', async () => {
+  const a = atelier({
+    sur: {
+      envois: {
+        gabarit: '',
+        liste: [{ dedicataire: 'Léa', main: { mode: 'police', police: 'Caveat' },
+          place: PLACE_DEFAUT, contenu: 'À Léa.', image: null }],
+      },
+    },
+  });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  await allerAuxEnvois(els);
+
+  await els.get('btEnvoyer').declenche('click');
+  await new Promise((r) => setImmediate(r));
+
+  const rendu = els.get('resultatEnvois').textContent;
+  assert.ok(rendu.includes('dos 16,51 mm'), `dos écrit à l'anglaise : ${rendu}`);
 });
 
 /**

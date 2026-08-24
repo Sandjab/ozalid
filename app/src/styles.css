@@ -69,6 +69,16 @@ body {
   background: var(--fond);
 }
 
+/* Les quatre bandes, et le `min-width: 0` qui les empêche de pousser la fenêtre.
+   Sans lui, la colonne unique de la coquille prend pour plancher le contenu le plus
+   large de ses quatre rangées — un chemin de projet en chasse fixe, que rien n'oblige
+   à se couper —, et la fenêtre déborde de ce plancher au lieu de le faire céder. Le
+   défaut était latent : il n'a paru que le jour où l'entête a reçu une mention de plus,
+   et il aurait paru de même sur un chemin un peu plus long. C'est le pendant
+   horizontal du `min-height: 0` que `main` porte déjà, et de celui des bandes de
+   l'étape Envois. */
+#entete, #etapes, #contenu, #pied { min-width: 0; }
+
 #entete { grid-area: entete; }
 #etapes { grid-area: etapes; }
 #contenu { grid-area: contenu; }
@@ -416,6 +426,16 @@ button:active:not(:disabled) { background: var(--encre); border-color: var(--enc
 .note.alerte { color: var(--rouge); }
 
 .etat { font-size: .85rem; color: var(--gris); }
+
+/* La taille de la fenêtre : des chiffres qu'on lit pour les recopier, donc alignés et
+   à chasse fixe. Elle ne parle pas du livre — c'est la seule mention de l'entête dans
+   ce cas —, et elle reste donc discrète. */
+#fenetreTaille {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .75rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .etat.erreur { color: var(--rouge); white-space: pre-wrap; }
 
 .resultat {
@@ -1063,7 +1083,17 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
 
 .recents { margin-top: .8rem; display: grid; gap: .2rem; justify-items: start; }
 
+/* Un récent se lit par son **nom**, son répertoire dessous et en gris. Écrits d'un seul
+   tenant, les chemins d'un poste réel dépassaient les 46 rem de l'accueil et ouvraient
+   une barre de défilement horizontale sur toute la fenêtre — celle que la bande de
+   contenu tend en filet, et qui est un défaut de mise en page, pas un ascenseur qu'on
+   offre. Les tronquer par la fin n'aurait rien réglé : cinq projets d'un même répertoire
+   ont leurs cinquante premiers caractères en commun, et se seraient lus pareil.
+   Le nom ne se coupe pas — c'est lui qui distingue —, le répertoire si, et `title` donne
+   le chemin entier au survol. */
 .recents button {
+  display: grid;
+  max-width: 100%;
   background: transparent;
   border-color: transparent;
   color: var(--encre);
@@ -1071,6 +1101,15 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: .78rem;
   text-align: left;
+}
+
+.recents .nom { font-size: .85rem; }
+
+.recents .chemin {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: .72rem;
 }
 
 /* Le soulignement était déjà là ; le fond et le filet, eux, sont à redire — `button:hover`
@@ -1192,7 +1231,14 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
    `max-height` du canevas et celui de la confirmation se mesurent sur une hauteur
    automatique, c'est-à-dire sur rien. Même geste que le rail, deux bandes plus à
    gauche. */
-.envois .scene { position: relative; height: 100%; }
+.envois .scene {
+  position: relative;
+  height: 100%;
+  /* La page se centre dans l'établi. Elle y est bornée en hauteur depuis que le canevas
+     porte son rapport, et une fenêtre plus large que haute lui laisse du carton sous
+     elle : calée en tête comme la couverture, elle paraissait tomber du bord. */
+  align-items: center;
+}
 
 /* Le bouton se pose sur l'établi, en haut à droite, et non dans la rangée qui centre
    la page : au centre, sa largeur entre dans le calcul, et « Revenir au canevas » est
@@ -1261,6 +1307,29 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
 
 .envois .poignee.taille { right: -.35rem; bottom: -.35rem; cursor: nwse-resize; }
 .envois .poignee.angle { left: 50%; top: -1.4rem; margin-left: -.35rem; cursor: grab; }
+
+/* La bande des réglages est étroite — quatorze rem à la fenêtre minimale — et les 13 rem
+   que la colonne de formulaire réserve au libellé n'y laissent rien au champ : mesuré, le
+   select tronquait « Dancing Script » en « Dancir » et la zone du mot faisait quatre
+   caractères de large. Le libellé passe donc au-dessus, comme dans une ligne, et le champ
+   prend la bande.
+   La seconde colonne est pour la valeur d'un réglage à curseur, qui reste à côté de lui :
+   empiler « Échelle », le curseur et « 60 % » aurait coûté en hauteur ce qu'on vient de
+   gagner en largeur. */
+.envois .reglages label {
+  grid-template-columns: 1fr auto;
+  gap: .15rem .6rem;
+}
+
+.envois .reglages label > span:first-child { grid-column: 1 / -1; }
+
+/* Le compte rendu d'un envoi vit dans cette même bande, quand celui d'un package a toute
+   l'étape Livraison : la vignette posée à côté des chiffres n'y laissait au chemin que
+   trois caractères par ligne — « envo is/M o/ — 264 page s ». Elle passe dessous, et le
+   rembourrage du bloc se resserre : deux fois 1,2 rem sur quatorze, c'est un sixième de
+   la bande en marges. */
+.envois .reglages .package { grid-template-columns: 1fr; }
+.envois .reglages .resultat { padding: .8rem; }
 
 /* La liste : une ligne par personne, celle qu'on règle marquée. */
 .envois .dedicataires ul {

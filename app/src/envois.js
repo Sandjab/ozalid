@@ -468,8 +468,11 @@ function afficherResultatEnvois(resultats) {
   for (const r of resultats) {
     const bloc = h('div', undefined, 'package');
     bloc.append(h('h3', r.dedicataire || 'sans nom'));
+    // `nb` et non `toFixed` : le pied écrit « 16,51 mm » deux centimètres plus bas, et
+    // deux écritures d'un même millimètre dans une même fenêtre se lisent comme deux
+    // mesures.
     bloc.append(h('p', `envois/${r.dossier}/ — ${r.package.pages} pages, dos `
-      + `${r.package.dos.toFixed(2)} mm`, 'chemin'));
+      + `${nb(r.package.dos)} mm`, 'chemin'));
     if (r.vignette) {
       const img = h('img', undefined, 'vignette');
       img.src = r.vignette;

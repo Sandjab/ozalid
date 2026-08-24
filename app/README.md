@@ -66,7 +66,9 @@ n'a pas été pris tant que la diffusion reste confidentielle.
 ## L'écran
 
 Quatre bandes, et la fenêtre elle-même ne défile plus : une **entête** qui nomme le
-livre ouvert, son chemin et son état d'enregistrement ; une rangée de quatre
+livre ouvert, son chemin, son état d'enregistrement et, seule mention qui ne parle pas
+du livre, la taille de la zone d'affichage — une mise en page se juge à une taille, et
+« c'est coupé chez moi » sans le chiffre ne se reproduit pas ; une rangée de quatre
 **onglets** — Livre, Couverture, Livraison, Envois — dans l'ordre où le livre se
 fait ; l'**étape** courante, seule ; un **pied** où l'on choisit pour qui l'on
 regarde, et qui porte la **légende** de la dernière composition : les pages, les

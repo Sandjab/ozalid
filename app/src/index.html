@@ -18,6 +18,12 @@
   <!-- Le refus d'une saisie laisse le focus dans le champ refusé : sans `aria-live`,
        l'erreur s'écrirait à l'autre bout de l'écran sans que rien ne l'annonce. -->
   <p class="etat" id="alerte" aria-live="polite"></p>
+  <!-- La seule mention de l'entête qui ne parle pas du livre : la fenêtre elle-même.
+       Une mise en page se juge à une taille, et « c'est coupé chez moi » sans le
+       chiffre ne se reproduit pas. Elle est ici et non au pied parce que l'entête a
+       déjà un membre élastique — le chemin — qui absorbe ce qu'elle prend ; la légende
+       du pied, elle, tient sur une ligne à 900 px et n'a pas de place à donner. -->
+  <p class="etat" id="fenetreTaille" title="Zone d'affichage, hors barre de titre"></p>
 </header>
 
 <!-- Les onglets sont construits par app.js depuis la table ETAPES. La nav est écrite

@@ -299,6 +299,7 @@ async function charge({
   // Les écouteurs que l'application pose, retenus pour que les tests puissent les
   // actionner : le menu natif et la fermeture de fenêtre n'ont pas d'autre porte.
   const ecouteurs = {};
+  const ecouteursFenetre = {};
   const listenUtilise = listen ?? (async (nom, fn) => {
     ecouteurs[nom] = fn;
     return () => {};
@@ -315,7 +316,16 @@ async function charge({
     // Le menu natif et la fermeture de fenêtre passent par des événements : sans
     // `event.listen` dans le faux contexte, `app.js` lèverait au chargement et aucun
     // test ne s'exécuterait.
+    // La fenêtre a une taille et l'annonce quand elle change : l'entête l'affiche, et
+    // c'est le seul endroit de l'application qui lise autre chose que le projet.
+    // Les valeurs de départ sont celles de `tauri.conf.json`, pour que le premier
+    // affichage d'un test ressemble à un premier lancement.
     window: {
+      innerWidth: 1040,
+      innerHeight: 780,
+      addEventListener: (type, fn) => {
+        (ecouteursFenetre[type] ||= []).push(fn);
+      },
       __TAURI__: {
         core: { invoke },
         dialog: { open, save },
@@ -364,6 +374,12 @@ async function charge({
     menu: (id) => declencheEvenement('menu', { payload: id }),
     /** La fenêtre demande à se fermer. */
     fermeture: () => declencheEvenement('fermeture-demandee', {}),
+    /** La fenêtre est redimensionnée, et le dit comme le navigateur le dit. */
+    redimensionner: async (largeur, hauteur) => {
+      contexte.window.innerWidth = largeur;
+      contexte.window.innerHeight = hauteur;
+      for (const fn of ecouteursFenetre.resize ?? []) await fn();
+    },
   };
 }
 

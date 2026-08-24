@@ -70,8 +70,28 @@ test('sans projet, aucune rubrique n\'est offerte et les récents s\'affichent',
 
   assert.equal(els.get('accueil').hidden, false);
   assert.equal(els.get('cheminProjet').textContent, 'aucun projet ouvert');
-  assert.deepEqual(els.get('recents').textes('BUTTON'),
-    ['/livres/A.ozalid', '/livres/B.ozalid']);
+  // Le nom, puis le répertoire : `textContent` concatène les deux enfants du bouton.
+  assert.deepEqual(els.get('recents').textes('BUTTON'), ['A/livres', 'B/livres']);
+});
+
+/**
+ * Un récent se reconnaît par son nom, pas par son chemin.
+ *
+ * Écrits entiers et sur une ligne — un bouton ne coupe pas son libellé —, les chemins
+ * d'un poste réel poussaient la bande de contenu et ouvraient une barre de défilement
+ * horizontale sur toute la fenêtre. Et ils se ressemblent : cinq projets d'un même
+ * répertoire tiennent leurs cinquante premiers caractères en commun, si bien que les
+ * tronquer par la fin donnerait cinq boutons identiques.
+ */
+test('un récent se lit par son nom, son chemin dessous', async () => {
+  const a = atelier({ recents: ['/livres/tres/long/chemin/Les Heures creuses.ozalid'] });
+  const { els } = await charge({ invoke: a.invoke });
+
+  const bouton = els.get('recents').enfants.find((e) => e.tagName === 'BUTTON');
+  assert.deepEqual(bouton.enfants.map((e) => e.textContent),
+    ['Les Heures creuses', '/livres/tres/long/chemin']);
+  assert.equal(bouton.title, '/livres/tres/long/chemin/Les Heures creuses.ozalid',
+    'le chemin entier n\'est plus atteignable nulle part');
 });
 
 test('cliquer un récent ouvre ce projet-là', async () => {
@@ -328,12 +348,13 @@ test('l\'interface ne s\'annonce qu\'une fois ses écouteurs posés', async () =
  * précisément le jour où il devrait parler. Celui-ci part de l'écran — tout ce qui porte
  * `etat` ou `resultat` rend compte d'un geste, donc appartient au livre qui l'a produit.
  *
- * Deux échappent, et pour la raison inverse : `etatEnregistrement` décrit le projet
- * qu'on vient d'ouvrir, pas celui qu'on quitte, et `etatDiffusion` ne décrit aucun
+ * Trois échappent, et pour la raison inverse : `etatEnregistrement` décrit le projet
+ * qu'on vient d'ouvrir, pas celui qu'on quitte ; `etatDiffusion` ne décrit aucun
  * livre — l'adresse du modèle et sa clé appartiennent à la machine, et survivent à tous
- * les livres qu'on y ouvrira.
+ * les livres qu'on y ouvrira ; `fenetreTaille` ne décrit même pas la machine, mais la
+ * fenêtre, qui n'a pas changé de taille parce qu'on a changé de livre.
  */
-const DECRIT_LE_NOUVEAU = new Set(['etatEnregistrement', 'etatDiffusion']);
+const DECRIT_LE_NOUVEAU = new Set(['etatEnregistrement', 'etatDiffusion', 'fenetreTaille']);
 
 function canauxDeCompteRendu() {
   const html = fs.readFileSync(

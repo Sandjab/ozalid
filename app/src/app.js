@@ -805,8 +805,17 @@ async function afficherRecents() {
   if (liste.length) {
     box.append(h('p', 'Projets récents', 'note'));
     for (const c of liste) {
-      const b = h('button', c);
+      // Le nom d'abord, le répertoire dessous, et le chemin entier au survol : écrits
+      // d'un seul tenant, les chemins d'un poste réel poussaient la bande de contenu et
+      // ouvraient une barre horizontale sur toute la fenêtre. Les tronquer par la fin
+      // n'aurait rien réglé — cinq projets d'un même répertoire ont leurs cinquante
+      // premiers caractères en commun, et se seraient lus pareil.
+      const coupe = Math.max(c.lastIndexOf('/'), c.lastIndexOf('\\'));
+      const b = h('button');
       b.type = 'button';
+      b.title = c;
+      b.append(h('span', c.slice(coupe + 1).replace(/\.ozalid$/, ''), 'nom'));
+      b.append(h('span', c.slice(0, Math.max(coupe, 0)), 'chemin'));
       b.addEventListener('click', () => ouvrirChemin(c));
       box.append(b);
     }
@@ -1277,6 +1286,20 @@ for (const id of ['inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inEditeur',
   'inDedicace', 'inChapitres']) {
   $(id).addEventListener('change', majLivre);
 }
+/**
+ * La taille de la fenêtre, écrite dans l'entête.
+ *
+ * Elle ne sert pas à faire le livre : elle sert à en parler. Une mise en page se juge à
+ * une taille, et un défaut décrit sans elle ne se reproduit pas — le canevas tenait à
+ * 1040 px et débordait à 1500, et rien à l'écran ne disait laquelle des deux on
+ * regardait.
+ */
+function majTailleFenetre() {
+  $('fenetreTaille').textContent = `${window.innerWidth} × ${window.innerHeight}`;
+}
+window.addEventListener('resize', majTailleFenetre);
+majTailleFenetre();
+
 chargerProviders()
   .then(afficherAucunProjet)
   .catch((e) => {
