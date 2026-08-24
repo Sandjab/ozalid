@@ -139,6 +139,24 @@ const COUTURE: f64 = 0.2;
 /// où le reprendre.
 const JEU_PLI: f64 = 1.0;
 
+/// La boîte de ligne dans laquelle le dos centre ses textes : celle qui épouse la
+/// capitale — le réglage par défaut de Typst, rétabli ici.
+///
+/// Le préambule des faces la ramène à 1em (`top-edge: 0.75em`, `bottom-edge: -0.25em`)
+/// pour que le « leading » de Typst et le « line-height » du CSS soient la même
+/// grandeur. Sur un paragraphe, c'est l'interligne qui compte et le réglage est juste ;
+/// sur le dos, c'est un centrage, et cette boîte-là n'est pas symétrique autour des
+/// lettres : sa ligne de base est à 0,25em du bas quand des capitales ont leur milieu à
+/// ~0,36em. Centrée sur l'axe de la tranche, elle pousse donc les lettres vers leur
+/// sommet — 8 % de l'épaisseur du dos, relevé au pixel sur un titre en Libre
+/// Baskerville.
+///
+/// Posée aux **deux** endroits qui parlent du dos, [`bloc_dos`] et [`source_mesures`] :
+/// un élément couché en travers du dos y occupe sa hauteur de ligne en guise de
+/// longueur, et une mesure prise dans une autre boîte que la composition poserait la
+/// prise de l'aperçu à côté de son texte.
+const BOITE_DOS: &str = "#set text(top-edge: \"cap-height\", bottom-edge: \"baseline\")\n";
+
 /// Les éléments que le dos compose réellement, avec leur texte.
 ///
 /// Un élément éteint, ou dont le texte est vide, ne laisse pas de trou sur le dos :
@@ -230,9 +248,12 @@ pub fn source_mesures(livre: &Livre, cv: &Couverture, format: (f64, f64)) -> Str
             )
         })
         .collect();
+    // Cette page ne mesure que des textes de dos : elle prend la boîte de ligne du dos,
+    // et non celle du corps de texte. C'est ce qui fait qu'un élément couché en travers
+    // est mesuré dans la boîte où il se composera.
     format!(
         "#set page(width: 1000mm, height: 20mm, margin: 0mm)\n\
-         #set text(lang: \"fr\", top-edge: 0.75em, bottom-edge: -0.25em)\n\
+         #set text(lang: \"fr\")\n{BOITE_DOS}\
          #context [\n  #metadata(({})) <mesures>\n]\n",
         champs.join(", ")
     )
@@ -429,7 +450,7 @@ fn bloc_dos(
     s.push_str(&format!(
         "#place(center + horizon, rotate(-90deg, reflow: true, \
          block(width: {}, height: {}, inset: (x: {}))[\n\
-         #set align(horizon)\n\
+         #set align(horizon)\n{BOITE_DOS}\
          #grid(columns: (auto, 1fr, auto, 1fr, auto), align: horizon,\n  \
          [{}], [], [{}], [], [{}])\n]))\n",
         mm(fh),
@@ -1180,6 +1201,40 @@ mod tests {
         let seul = source_dos(&livre(), &cv, g.format, g.dos, None);
         assert_eq!(grille(&seul), grille(&planche));
         assert!(seul.contains("Les Heures creuses"), "{seul}");
+    }
+
+    /// Le dos centre ses textes sur leur capitale, et non sur la boîte de ligne du corps.
+    ///
+    /// Le préambule des faces ramène la boîte de ligne à 1em — `top-edge: 0.75em`,
+    /// `bottom-edge: -0.25em` — pour que le « leading » de Typst et le « line-height »
+    /// du CSS soient la même grandeur. Sur un paragraphe, c'est l'interligne qui compte
+    /// et le réglage est juste ; sur le dos, c'est un centrage. Cette boîte-là n'est pas
+    /// symétrique autour des lettres : la ligne de base y est à 0,25em du bas quand des
+    /// capitales ont leur milieu à ~0,36em. La centrer pousse les lettres vers leur
+    /// sommet — 8 % de l'épaisseur du dos, relevé au pixel sur un titre en Libre
+    /// Baskerville, et le dos paraît mal collé.
+    ///
+    /// Les trois sources qui composent ou mesurent le dos posent la même boîte, et c'est
+    /// ce qui les tient d'accord : un élément couché en travers du dos y occupe sa
+    /// hauteur de ligne en guise de longueur, et une mesure prise dans une autre boîte
+    /// que la composition poserait la prise de l'aperçu à côté de son texte.
+    #[test]
+    fn le_dos_centre_ses_textes_sur_leur_capitale() {
+        let g = gabarit("lulu", 244);
+        let mut cv = maquettes::fournie("bandeau");
+        // Un élément couché : c'est celui dont la mesure dépend de la boîte de ligne.
+        cv.dos.collection.actif = true;
+        cv.dos.collection.sens = 90;
+        for (quoi, s) in [
+            ("planche", source(&livre(), &cv, &g, None, None).unwrap()),
+            ("dos seul", source_dos(&livre(), &cv, g.format, g.dos, None)),
+            ("mesures", source_mesures(&livre(), &cv, g.format)),
+        ] {
+            assert!(
+                s.contains(BOITE_DOS.trim()),
+                "{quoi} : le dos centre sur la boîte du corps de texte\n{s}"
+            );
+        }
     }
 
     /// Position absolue de chaque image sur la planche : abscisse de la zone de planche,
