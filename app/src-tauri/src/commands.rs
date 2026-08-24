@@ -1380,9 +1380,6 @@ pub fn envoi_generer(
         .unwrap_or_default();
     let mut garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_mut().ok_or_else(aucun_projet)?;
-    let crate::envoi::Main::Diffusion { gabarit } = &o.projet.meta.envois.main else {
-        return Err("la main de ce livre n'est pas une image générée.".into());
-    };
     let e = o
         .projet
         .meta
@@ -1390,6 +1387,13 @@ pub fn envoi_generer(
         .liste
         .get(index)
         .ok_or("envoi introuvable : la liste a changé.")?;
+    // La main appartient à l'exemplaire depuis la v4 : c'est celle de **cet** envoi qui
+    // décide, et non plus celle du livre. Le gabarit, lui, est resté au livre — c'est le
+    // style d'écriture du tirage, pas le mot d'une personne.
+    if !matches!(e.main, crate::envoi::Main::Diffusion) {
+        return Err("la main de cet envoi n'est pas une image générée.".into());
+    }
+    let gabarit = &o.projet.meta.envois.gabarit;
 
     let octets = crate::diffusion::genere(
         &acces,
