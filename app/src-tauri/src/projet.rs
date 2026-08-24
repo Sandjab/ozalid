@@ -84,6 +84,10 @@ pub struct Livre {
     #[serde(default)]
     pub copyright: String,
     /// Le prix et la mention légale : des champs **libres**, qui citent les clés.
+    ///
+    /// Ils naissent vides — le pied de la 4ème saute les lignes vides —, mais gardent
+    /// leur générique en défaut de lecture : un `.ozalid` d'avant la v3 tenait ces deux
+    /// textes dans la maquette, et les lui rendre vides effacerait un prix écrit.
     #[serde(default = "prix_defaut")]
     pub prix: String,
     #[serde(default = "mention_defaut")]
@@ -151,6 +155,10 @@ impl Livre {
     /// Un livre à remplir : tous les champs vides, sauf le genre, dont le défaut
     /// vaut mieux qu'un blanc — et c'est le même défaut que celui d'un `projet.toml`
     /// qui ne le porte pas.
+    ///
+    /// Le prix, la mention et la dédicace font exception dans l'autre sens : eux
+    /// naissent vides, parce qu'un générique y composerait une ligne que personne n'a
+    /// choisie. Voir `le_prix_la_mention_et_la_dedicace_naissent_vides`.
     pub fn vide() -> Self {
         Self {
             titre: "Titre".into(),
@@ -161,8 +169,8 @@ impl Livre {
             collection: collection_defaut(),
             monogramme: monogramme_defaut(),
             copyright: copyright_defaut(),
-            prix: prix_defaut(),
-            mention: mention_defaut(),
+            prix: String::new(),
+            mention: String::new(),
             dedicace: String::new(),
             chapitres: None,
         }
@@ -1142,18 +1150,24 @@ mode = "image"
         assert_eq!(l.editeur, "Editeur");
         assert_eq!(l.collection, "Collection");
         assert_eq!(l.monogramme, "Monogramme");
-        assert_eq!(l.prix, "Prix");
-        assert_eq!(l.mention, "Mention");
     }
 
-    /// La dédicace fait exception et naît vide : elle est le seul champ sans
-    /// interrupteur, et `interieur.rs` lui compose une belle page et sa blanche dès
-    /// qu'elle n'est pas vide. Deux pages de plus sur tout projet neuf, donc un dos plus
-    /// épais, que rien à l'écran n'attribuerait à un défaut que personne n'a choisi.
+    /// Trois champs naissent vides, et pour la même raison : vides, ils ne composent
+    /// rien, et un générique y coûterait une ligne que personne n'a choisie.
+    ///
+    /// La dédicace est le seul champ sans interrupteur : `interieur.rs` lui compose une
+    /// belle page et sa blanche dès qu'elle n'est pas vide — deux pages de plus sur tout
+    /// projet neuf, donc un dos plus épais, que rien à l'écran n'expliquerait. Le prix et
+    /// la mention s'impriment au pied de la 4ème, qui saute les lignes vides : un livre
+    /// neuf n'a ni prix ni dépôt légal, et « Prix » imprimé sous le résumé se lit comme
+    /// un oubli.
     #[test]
-    fn la_dedicace_est_la_seule_a_naitre_vide() {
-        assert!(Livre::vide().dedicace.is_empty());
-        assert_eq!(Livre::vide().dedicace(), None);
+    fn le_prix_la_mention_et_la_dedicace_naissent_vides() {
+        let l = Livre::vide();
+        assert!(l.prix.is_empty());
+        assert!(l.mention.is_empty());
+        assert!(l.dedicace.is_empty());
+        assert_eq!(l.dedicace(), None);
     }
 
     /// Le copyright cite l'auteur et porte l'année de création — figée, pas un jeton :

@@ -67,7 +67,9 @@ pub fn lire_livre_toml(contenu: &str) -> Result<(Livre, Designations), String> {
         // « Genre » remplacerait une devinette plausible par un mot à remplir.
         genre: s.genre.unwrap_or_else(|| "roman".into()),
         // Un `livre.toml` de la chaîne Python ne porte aucune de ces cinq désignations :
-        // elles prennent leurs génériques, comme la dédicace juste en dessous.
+        // elles prennent ce qu'un projet neuf leur donne — un générique à remplacer pour
+        // les trois premières, rien pour le prix et la mention, comme la dédicace juste
+        // en dessous. Importer n'est pas plus renseigné que créer sur ces champs-là.
         editeur: v.editeur,
         collection: v.collection,
         monogramme: v.monogramme,
