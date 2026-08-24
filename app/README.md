@@ -91,14 +91,36 @@ pas un — elle est une conséquence.
 Les deux bandes du haut tiennent chacune sur **une ligne** : le chemin du `.ozalid` à
 côté du titre, tronqué s'il le faut et entier au survol ; l'état d'une étape à côté de
 son nom. Empilées, elles prenaient 176 px à toutes les étapes pour dire six choses
-courtes — et c'était la Couverture qui les payait, en aperçu. Les Envois ont leur étape : la main du
-livre, l'accès au modèle et la liste des dédicataires débordaient la Livraison de
-quatre défilements — elle ne garde que les destinataires et leurs packages. Ce qui
+courtes — et c'était la Couverture qui les payait, en aperçu. Les Envois ont leur étape :
+les mains, les mots et la liste des dédicataires débordaient la Livraison de quatre
+défilements — elle ne garde que les destinataires et leurs packages. Ce qui
 ne tient pas se règle par la mise en page ; le panneau de réglages de la couverture
 garde son propre ascenseur — sa longueur est irréductible. Une étape qui déborde
 tombe, elle, dans le filet de la bande de contenu : c'est le cas de la Livraison dès
 le deuxième compte rendu de génération, et la barre qui paraît alors est un défaut
 de mise en page, pas un ascenseur qu'on offre.
+
+L'étape **Envois** n'est pas une liste mais **quatre bandes**, qui se lisent de gauche
+à droite comme la question se pose : *qui* — les dédicataires, et la police personnelle
+de l'auteur, qui appartient au livre ; *quelle page* — un rail de toutes les pages de
+l'intérieur, où cliquer une vignette déplace l'envoi, seul moyen d'en changer, et c'est
+pourquoi il n'y a pas de champ « page » ; *à quoi ça ressemble* — le canevas, la page en
+fond et l'envoi par-dessus, qu'on glisse, redimensionne et incline à la souris ; *avec
+quels réglages* — la main de **cet exemplaire-là**, son mot ou son image, l'échelle et
+l'inclinaison. Seul le rail défile : un livre a deux cents pages, et cette hauteur-là est
+irréductible.
+
+Ce que le canevas montre vient de Typst, fond **et** objet : ce qu'on déplace est ce qui
+s'imprimera, même police, même corps, mêmes coupures de lignes. « Voir la page » prend
+la place du canevas et y pose la page composée par la chaîne qui part à l'impression —
+c'est une confirmation, et c'est le va-et-vient d'une image à l'autre qui la rend utile :
+rien ne doit bouger. Le fond, lui, est rendu **sans envoi** : un `foreground` ne
+réordonne rien, la page ne dépend donc d'aucun dédicataire, et la même image sert à
+tous — ce qui permet aussi de glisser l'objet sans rappeler Typst.
+
+Changer de destinataire au pied change la pagination : le rail et le canevas se
+refont. Sans quoi l'on viserait la page 264 d'un intérieur qui n'en fait plus que 190,
+et seul le refus à la génération le dirait — une fois le mot écrit.
 
 Les quatre onglets se traversent aux flèches, et une seule tabulation suffit à sortir
 de la bande : c'est le pattern `tablist`, tenu en entier.
@@ -222,7 +244,7 @@ résultats. Tout le reste est testable sans fenêtre.
 | `maquettes` | Le format `.maquette`, les fournies embarquées, les personnalisées du poste, et le slug |
 | `typst` | Invocation du sidecar : mesurer la pagination, compiler, rendre un aperçu |
 | `interieur` | Source Typst de l'intérieur, police du livre, et convergence gouttière/parité |
-| `envoi` | L'envoi autographe : la main du livre, ses envois, et les noms qu'ils prennent sur le disque |
+| `envoi` | L'envoi autographe : la main de chaque exemplaire, son mot, sa place sur la page, et les noms qu'ils prennent sur le disque |
 | `police` | Ce qu'un fichier de police déclare : sa famille, et les caractères qu'il porte vraiment |
 | `diffusion` | Demander une image à un modèle : le prompt, le contrat, et la clé qui ne remonte jamais |
 | `epreuve` | Source Typst de l'épreuve de relecture : A4, numéros de ligne, marge d'annotation |
@@ -268,6 +290,19 @@ projets écrits ensuite. Un prestataire ou un papier que la table ne porte plus 
 **élagué à l'ouverture** plutôt que de faire refuser le projet : le manuscrit et la
 maquette sont intacts, et la liste se refait en trois clics.
 
+La version **est à 4**, et elle a bougé une fois pour une raison que la règle ci-dessus
+n'a pas : un champ ne s'est pas ajouté, il s'est **déplacé**. La main appartenait au
+livre, `[envois.main]` ; elle appartient désormais à chaque exemplaire,
+`[envois.liste.main]` — c'est tout l'objet du chantier, écrire à la main pour l'une et
+composer pour l'autre. Un binaire d'avant lisant un fichier d'après ne trouverait plus
+la main du livre et ne saurait pas lire celle des envois : serde l'ignorerait, et **tous
+les envois s'écriraient dans la main par défaut**, sans un mot. Ce n'est pas un fichier
+illisible, c'est un livre faux — et c'est exactement ce que la version sert à empêcher :
+`projet.rs` refuse un projet plus récent que lui, en le nommant. La migration, elle, fait
+descendre l'ancienne main dans chaque envoi et remonter le gabarit sur `[envois]` ; un
+envoi qui porte déjà la sienne n'est pas touché, une migration rejouée n'écrase donc
+aucun travail.
+
 Chaque destinataire y porte en outre **ce que sa dernière composition a mesuré** —
 pages, gouttière, blanche, dos. Une par destinataire, parce que le même manuscrit ne
 fait pas le même nombre de pages en poche et en grand format, et dans le fichier, parce
@@ -279,6 +314,17 @@ Rust, au moment du geste : le livre (`modifier_livre` — une dédicace prend un
 page et sa blanche), la police (`modifier_interieur`), le texte (`remplacer_texte`), le
 papier et le relevé (`destinataire_regler`). Grossièrement et sans rien comparer :
 recomposer pour rien coûte une composition, en rater une imprime un mauvais dos.
+
+Un envoi ne figure pas dans cette liste, et c'est un second invariant : **un envoi ne
+crée aucune page**, sur n'importe laquelle. Il se pose en `foreground`, qui ne réordonne
+rien : l'exemplaire de chacun a le nombre de pages du tirage, donc le même dos et la même
+planche. Ce n'est pas une intention mais une mesure : le test
+`un_envoi_ne_cree_aucune_page_ou_qu_il_se_pose` compose pour de vrai, sur quatre pages
+visées — la première, la page de titre, une page du corps, la dernière — et dans les
+deux formes, texte et image, puis compare les paginations. La page visée, en revanche,
+appartient à **une** pagination : elle n'existe pas forcément chez le prestataire
+suivant. La génération refuse alors en nommant la personne, la page et le compte :
+« Mo : envoi placé page 264, l'intérieur n'en fait que 190. »
 
 `deja_compose`, à côté de la liste, dit que ce livre a été composé au moins une fois. Il
 n'est jamais repris, parce que c'est de l'histoire et non un état : lui seul distingue un
@@ -423,6 +469,7 @@ cargo run --example maquette -- <projet.ozalid> lulu <sortie>
 cargo run --example packager -- <projet.ozalid> <sortie> lulu tbe-110x170 bookvault-127x203
 cargo run --example epreuve -- <projet.ozalid> <epreuve.pdf>
 cargo run --example ebook -- <projet.ozalid> <sortie>
+cargo run --example canevas -- <projet.ozalid> lulu
 ```
 
 `packager` traverse la chaîne entière sans interface : intérieur composé, pagination
@@ -436,6 +483,10 @@ regarder après toute modification du moteur de couverture.
 `epreuve` tire l'épreuve de relecture sans interface. Elle se regarde de la même
 façon : les numéros de ligne repartent-ils de 1 à chaque page, la marge d'annotation
 est-elle libre, un chapitre commence-t-il bien en tête de page.
+
+`canevas` exerce les trois rendus de l'étape Envois — le rail, la page en grand,
+l'objet — sans fenêtre, et dit ce que chacun coûte : c'est le seul moyen de voir bouger
+le prix d'une composition par page avant de le payer à l'écran.
 
 `ebook` écrit le PDF et l'EPUB sans interface, et l'un et l'autre se regardent. Le
 PDF est le livre qu'on ne reliera pas : la couverture ouvre-t-elle le fichier, les
