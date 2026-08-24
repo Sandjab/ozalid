@@ -1433,18 +1433,166 @@ pub fn police_retirer(atelier: State<Atelier>) -> Result<ProjetVue, String> {
     vue_modifiee(o)
 }
 
-/// La page de titre d'un envoi, telle qu'elle sera imprimée.
+/* ---------- ce que le canevas de placement regarde ---------- */
+
+/// 120 px de large sur une page de 127 mm : de quoi reconnaître une page dans un rail.
+const VIGNETTE_PPI: u32 = 24;
+/// 750 px sur la même page : de quoi placer un envoi à la souris.
+const PAGE_PPI: u32 = 150;
+/// L'objet est agrandi par le canevas, et une signature pixelisée sous la souris ferait
+/// douter du rendu.
+const OBJET_PPI: u32 = 300;
+
+/// La source de l'intérieur **sans envoi**, et le répertoire où elle est écrite.
 ///
-/// La source est celle de l'intérieur **privée de ses chapitres** : la page de titre ne
-/// dépend pas du corps, et composer trois cents pages pour en regarder une seule ferait
-/// de l'aperçu quelque chose qu'on n'ouvre jamais. La gouttière prise est la première
-/// tranche du gabarit — elle ne déplace que la marge intérieure, et cet aperçu n'est
-/// pas ce qui part à l'imprimeur : le PDF l'est.
+/// Sans envoi parce qu'un `foreground` ne réordonne rien : la page de fond ne dépend
+/// d'aucun dédicataire, et la même série de rendus sert à tous les exemplaires. C'est
+/// aussi ce qui permet de glisser l'objet sans rappeler Typst — le fond ne bouge pas.
+///
+/// Le répertoire est nommé par l'empreinte de la source. Une composition qui change
+/// change l'empreinte, donc le répertoire : il n'y a pas d'invalidation à écrire,
+/// seulement un nom à calculer. Ce qui reste dort dans le temporaire du système, qui
+/// est fait pour cela.
+fn source_de_fond(o: &Ouvert) -> Result<(PathBuf, PathBuf), String> {
+    let (pr, _, d) = vise(o)?;
+    let int = &o.projet.meta.interieur;
+    int.verifie()?;
+    let livre = &o.projet.meta.livre;
+    let chapitres = manuscrit::decoupe(&o.projet.texte, livre.chapitres)?;
+    // La mesure du tirage, et non un réglage d'aperçu : les pages que le canevas montre
+    // doivent être celles que le dédicataire recevra, numéros compris.
+    let mesure = d
+        .compose
+        .as_ref()
+        .ok_or("intérieur non composé : le placement a besoin des pages du tirage.")?;
+    let reglage = Reglage {
+        gouttiere: mesure.gouttiere,
+        blanche: mesure.blanche,
+    };
+    let src = interieur::source(livre, int, pr, &reglage, &chapitres, None);
+    let dossier = std::env::temp_dir()
+        .join("ozalid-pages")
+        .join(empreinte(&src));
+    std::fs::create_dir_all(&dossier)
+        .map_err(|e| format!("répertoire inutilisable ({}) : {e}", dossier.display()))?;
+    let chemin = dossier.join("fond.typ");
+    ecrire(&chemin, &src)?;
+    Ok((chemin, dossier))
+}
+
+/// Une empreinte courte et stable d'une source, pour nommer son répertoire de rendus.
+///
+/// `DefaultHasher` suffit : ce n'est pas un contrôle d'intégrité, seulement un nom qui
+/// change quand la source change. Une collision coûterait des vignettes périmées, pas un
+/// mauvais tirage.
+fn empreinte(s: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    s.hash(&mut h);
+    format!("{:016x}", h.finish())
+}
+
+/// Toutes les pages de l'intérieur en vignettes, pour le destinataire visé.
+///
+/// Aucun cache : les 190 pages du livre témoin coûtent six dixièmes de seconde, et
+/// l'interface ne demande cette série qu'à l'ouverture de l'étape. Un cache achèterait
+/// ce dixième-là au prix d'une invalidation à tenir juste.
+#[tauri::command]
+pub fn envoi_vignettes(atelier: State<Atelier>) -> Result<Vec<String>, String> {
+    let garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_ref().ok_or_else(aucun_projet)?;
+    let (src, dossier) = source_de_fond(o)?;
+    let pages = typst()?.apercus(&src, &dossier.join("v{p}.png"), VIGNETTE_PPI)?;
+    pages.iter().map(|p| donnee_png(p)).collect()
+}
+
+/// Une page de l'intérieur, en grand, pour le canevas de placement.
+#[tauri::command]
+pub fn envoi_page(page: u32, atelier: State<Atelier>) -> Result<String, String> {
+    let garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_ref().ok_or_else(aucun_projet)?;
+    let (src, dossier) = source_de_fond(o)?;
+    let png = dossier.join(format!("grand-{page}.png"));
+    typst()?.apercu(&src, &png, page, PAGE_PPI)?;
+    donnee_png(&png)
+}
+
+/// L'objet d'un envoi, tel que le canevas le manipule.
+#[derive(Serialize)]
+pub struct Objet {
+    /// Le PNG, fond transparent, prêt à poser dans une balise `img`.
+    pub image: String,
+    /// Hauteur sur largeur : le canevas en a besoin pour dessiner ses prises avant que
+    /// l'image ne soit chargée.
+    pub ratio: f64,
+}
+
+/// L'objet d'un envoi, rendu seul sur fond transparent, avec son rapport.
+///
+/// Le rendre par Typst plutôt que de l'imiter en CSS fait que ce qu'on déplace **est**
+/// ce qui s'imprimera : même police, même corps, mêmes coupures de lignes. La largeur
+/// de rendu est celle que l'objet occupera sur la page — c'est elle qui décide des
+/// coupures, et rendre à une autre largeur donnerait un rapport qui n'est pas celui du
+/// tirage.
+#[tauri::command]
+pub fn envoi_objet(index: usize, atelier: State<Atelier>) -> Result<Objet, String> {
+    let garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_ref().ok_or_else(aucun_projet)?;
+    let envois = &o.projet.meta.envois;
+    envois.verifie()?;
+    let e = envois
+        .liste
+        .get(index)
+        .ok_or("envoi introuvable : la liste a changé.")?;
+    let (pr, _, _) = vise(o)?;
+
+    let dossier = std::env::temp_dir().join("ozalid-objet");
+    std::fs::create_dir_all(&dossier)
+        .map_err(|err| format!("répertoire inutilisable ({}) : {err}", dossier.display()))?;
+    let src = dossier.join("objet.typ");
+    let t = package::trace(&o.projet, e, &dossier)?;
+    ecrire(
+        &src,
+        &interieur::source_objet(&t, pr.format.0 * e.place.taille),
+    )?;
+    let png = dossier.join("objet.png");
+    // L'écriture de l'auteur vit dans le `.ozalid` : sans ce dépliage, l'objet
+    // composerait dans la police de repli, et le canevas montrerait autre chose que ce
+    // qui s'imprimera.
+    let typst = typst()?;
+    let typst = match package::ecrire_polices(&o.projet, &dossier)? {
+        Some(d) => typst.avec_polices(d),
+        None => typst,
+    };
+    typst.apercu(&src, &png, 1, OBJET_PPI)?;
+    // `dimensions` rend un `Option` : un PNG que Typst vient d'écrire et qu'on ne sait
+    // pas mesurer est une anomalie, pas un cas ordinaire — elle se dit plutôt que de
+    // rendre un rapport inventé, qui déformerait l'objet sous la souris.
+    let octets = std::fs::read(&png).map_err(|e| format!("objet illisible : {e}"))?;
+    let (l, h) =
+        crate::image::dimensions(&octets).ok_or("l'objet rendu n'est pas une image mesurable.")?;
+    Ok(Objet {
+        image: donnee_png(&png)?,
+        ratio: h as f64 / l as f64,
+    })
+}
+
+/// La page d'un envoi, telle qu'elle sera imprimée.
+///
+/// La source est celle de l'intérieur **entier**, et non plus privée de ses chapitres.
+/// Le raccourci tenait tant que l'envoi se posait sur la page de titre, qui ne dépend
+/// pas du corps ; depuis la v4 il vise n'importe quelle page, et la page 37 n'existe pas
+/// dans un intérieur sans corps. Composer le livre complet coûte deux dixièmes de
+/// seconde sur un manuscrit de 190 pages — moins que la surprise d'un aperçu qui ne
+/// montre pas la bonne page.
+///
+/// C'est la **vérité** du canevas : celui-ci compose la page en fond et l'objet
+/// séparément, puis les superpose en CSS ; ici les deux passent par Typst en une fois.
 #[tauri::command]
 pub fn envoi_apercu(index: usize, atelier: State<Atelier>) -> Result<String, String> {
     let garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_ref().ok_or_else(aucun_projet)?;
-    let (pr, _, _) = vise(o)?;
+    let (pr, _, d) = vise(o)?;
     let envois = &o.projet.meta.envois;
     envois.verifie()?;
     let e = envois
@@ -1454,6 +1602,14 @@ pub fn envoi_apercu(index: usize, atelier: State<Atelier>) -> Result<String, Str
 
     let int = &o.projet.meta.interieur;
     int.verifie()?;
+    let livre = &o.projet.meta.livre;
+    let chapitres = manuscrit::decoupe(&o.projet.texte, livre.chapitres)?;
+    // La mesure du tirage, et non un réglage d'aperçu : l'aperçu montre la page que le
+    // dédicataire recevra, il doit donc être composé comme elle.
+    let mesure = d
+        .compose
+        .as_ref()
+        .ok_or("intérieur non composé : l'aperçu a besoin des pages du tirage.")?;
     let dossier = sorties_racine(o)?.join("envois");
     std::fs::create_dir_all(&dossier)
         .map_err(|err| format!("répertoire inutilisable ({}) : {err}", dossier.display()))?;
@@ -1461,14 +1617,14 @@ pub fn envoi_apercu(index: usize, atelier: State<Atelier>) -> Result<String, Str
     ecrire(
         &src,
         &interieur::source(
-            &o.projet.meta.livre,
+            livre,
             int,
             pr,
             &Reglage {
-                gouttiere: pr.gouttieres[0].2,
-                blanche: false,
+                gouttiere: mesure.gouttiere,
+                blanche: mesure.blanche,
             },
-            &[],
+            &chapitres,
             Some(package::trace(&o.projet, e, &dossier)?),
         ),
     )?;
@@ -1480,7 +1636,7 @@ pub fn envoi_apercu(index: usize, atelier: State<Atelier>) -> Result<String, Str
         Some(d) => typst.avec_polices(d),
         None => typst,
     };
-    typst.apercu(&src, &png, 3, 110)?;
+    typst.apercu(&src, &png, e.place.page, PAGE_PPI)?;
     donnee_png(&png)
 }
 

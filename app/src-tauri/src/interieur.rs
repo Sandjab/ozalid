@@ -364,6 +364,34 @@ fn foreground(envoi: Option<Trace>, largeur_mm: f64) -> String {
     )
 }
 
+/// La source d'un envoi rendu **seul**, sur fond transparent, à hauteur automatique.
+///
+/// C'est ce que le canevas de placement manipule. Le rendre par Typst plutôt que de
+/// l'imiter en CSS fait que ce qu'on déplace **est** ce qui s'imprimera — même police,
+/// même corps, même coupure de lignes. La page en fond ne bouge pas, un `foreground` ne
+/// réordonnant rien : glisser, redimensionner et incliner ne sont plus alors que des
+/// `transform`, et Typst n'est rappelé que quand le mot ou la main changent.
+///
+/// `fill: none` donne le fond transparent, `height: auto` laisse la hauteur suivre le
+/// texte. La largeur est celle que l'objet occupera sur la page : c'est elle qui décide
+/// des coupures de lignes, et la rendre à une autre largeur donnerait un objet dont le
+/// rapport ne serait pas celui du rendu.
+pub fn source_objet(t: &Trace, largeur_mm: f64) -> String {
+    let quoi = match t.quoi {
+        Quoi::Texte { police, texte } => format!(
+            r#"#set par(justify: false, first-line-indent: 0pt, leading: 0.9em)
+#set text(font: "{police}", size: {corps:.3}mm, hyphenate: false, lang: "fr")
+{mot}
+"#,
+            corps = largeur_mm * CORPS_SUR_LARGEUR,
+            // La main est validée en amont par `Envois::verifie` : pas d'échappement.
+            mot = echappe(texte).replace('\n', r" \ "),
+        ),
+        Quoi::Image { fichier } => format!("#image(\"{fichier}\", width: 100%)\n"),
+    };
+    format!("#set page(width: {largeur_mm}mm, height: auto, margin: 0pt, fill: none)\n{quoi}")
+}
+
 /// Source Typst de l'intérieur du livre, tel qu'il part à l'impression.
 pub fn source(
     livre: &Livre,
@@ -1451,6 +1479,44 @@ mod tests {
             "la valeur n'a pas remplacé le jeton"
         );
         assert!(src.contains("Les Heures creuses"));
+    }
+
+    /// L'objet rendu seul et l'envoi composé sur la page doivent employer **le même
+    /// corps**.
+    ///
+    /// C'est toute la promesse du canevas : ce qu'on déplace à la souris est ce qui
+    /// s'imprimera. Deux corps différents donneraient un objet dont les coupures de
+    /// lignes, donc le rapport hauteur sur largeur, ne seraient pas ceux du rendu — et
+    /// l'écart ne se verrait qu'après tirage.
+    #[test]
+    fn l_objet_du_canevas_et_l_envoi_compose_ont_le_meme_corps() {
+        let pr = provider("kdp-5x8").expect("gabarit kdp-5x8");
+        let place = Place {
+            taille: 0.55,
+            ..*PLACE
+        };
+        let t = Trace {
+            quoi: Quoi::Texte {
+                police: "Caveat",
+                texte: "À Léa,",
+            },
+            place: &place,
+        };
+        let sur_la_page = corps_de(&source(
+            &livre(),
+            &Interieur::default(),
+            pr,
+            &Reglage {
+                gouttiere: pr.gouttieres[0].2,
+                blanche: false,
+            },
+            &chapitres(),
+            Some(t),
+        ));
+        // La largeur passée à l'objet est celle qu'il occupera sur la page : c'est le
+        // contrat que `envoi_objet` honore côté commandes.
+        let seul = corps_de(&source_objet(&t, pr.format.0 * place.taille));
+        assert_eq!(seul, sur_la_page, "le canevas ne montrera pas le rendu");
     }
 
     /* ---------- le témoin de l'invariant, composé pour de vrai ---------- */
