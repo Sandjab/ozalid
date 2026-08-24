@@ -58,6 +58,14 @@ function maquette(mode = 'bandeau') {
     voile_opacite: 0.55,
     quatrieme: {
       fond: 'herite', couleur: '#fcf0d8', texte: '', style: style('Spectral', 3, '#191917'),
+      // La tête naît éteinte, comme le Rust la sert à une maquette d'avant elle.
+      tete: {
+        align: 'centre',
+        auteur_visible: false, auteur: style('Archivo', 2.6, '#191917'), titre_ecart: 2.5,
+        titre_visible: false, titre: style('Spectral', 3.4, '#191917'), filet_ecart: 2.5,
+        filet_visible: false, filet: { couleur: '#191917', epaisseur: 0.3, largeur: 12 },
+        ecart: 6,
+      },
       interligne: 1.45, align: 'gauche', pad_x: 10, top: 12,
       pied_actif: true, mention: '', collection: '', prix: '',
       style_pied: style('Archivo', 2.4, '#191917'), pied_y: 4,

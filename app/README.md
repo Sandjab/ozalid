@@ -91,6 +91,15 @@ rien, et le dit : le repli d'un navigateur est muet, comme celui de Typst, et un
 échantillon rendu dans l'écriture de l'interface montrerait une police que le livre
 n'aura pas.
 
+La **4ème** porte, au-dessus de son texte de présentation, une *tête* : l'auteur, le
+titre et un filet de séparation. Chacun s'allume seul — une collection met l'auteur et le
+filet sans répéter le titre, une autre le titre seul — et chacun porte son style entier,
+police, graisse, corps, couleur, interlettrage et casse. L'auteur et le titre composés
+sont ceux du **livre** : une maquette dit où et comment l'identité paraît, jamais ce qui
+est écrit. Les trois naissent éteints, y compris dans les maquettes fournies : sans cela,
+tout projet déjà réglé aurait vu son identité paraître sur sa 4ème sans que personne l'ait
+demandé, et une couverture qui change toute seule se découvre au tirage.
+
 L'étape **Intérieur** a existé, entre Livre et Couverture, et elle ne portait que deux
 champs et deux boutons. La police et l'épreuve ont rejoint le Livre — la première parce
 qu'elle est un attribut du livre au même titre que le genre, la seconde parce qu'elle

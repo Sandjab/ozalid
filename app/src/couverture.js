@@ -185,6 +185,34 @@ const SCHEMA = [
   },
   { ...style('quatrieme.style', '4ème — style du texte', { casse: false }), face: 'quatre' },
   {
+    // La tête de la 4ème : l'auteur, le titre et un filet, au-dessus du texte. Trois
+    // interrupteurs et non un seul — une collection met l'auteur et le filet sans
+    // répéter le titre, une autre le titre seul.
+    //
+    // Ce que ce groupe ne porte pas : le texte de l'auteur et du titre. Ils viennent du
+    // livre, comme sur la 1ère, et une maquette ne dit jamais ce qui est écrit.
+    titre: '4ème — tête',
+    face: 'quatre',
+    champs: [
+      { chemin: 'quatrieme.tete.auteur_visible', libelle: 'Afficher l\'auteur', type: 'case' },
+      { chemin: 'quatrieme.tete.titre_visible', libelle: 'Afficher le titre', type: 'case' },
+      { chemin: 'quatrieme.tete.filet_visible', libelle: 'Afficher le filet', type: 'case' },
+      {
+        chemin: 'quatrieme.tete.align', libelle: 'Alignement de la tête', type: 'liste', options: [
+          ['gauche', 'Gauche'], ['centre', 'Centre'], ['droite', 'Droite'],
+        ],
+      },
+      { chemin: 'quatrieme.tete.titre_ecart', libelle: 'Écart auteur → titre', type: 'nombre', min: 0, max: 20, pas: 0.5, unite: '% larg.' },
+      { chemin: 'quatrieme.tete.filet_ecart', libelle: 'Écart titre → filet', type: 'nombre', min: 0, max: 20, pas: 0.5, unite: '% larg.' },
+      { chemin: 'quatrieme.tete.ecart', libelle: 'Écart tête → texte', type: 'nombre', min: 0, max: 30, pas: 0.5, unite: '% larg.' },
+      { chemin: 'quatrieme.tete.filet.largeur', libelle: 'Largeur du filet', type: 'nombre', min: 1, max: 100, pas: 0.5, unite: '% larg.' },
+      { chemin: 'quatrieme.tete.filet.epaisseur', libelle: 'Épaisseur du filet', type: 'nombre', min: 0.05, max: 3, pas: 0.05, unite: '% larg.' },
+      { chemin: 'quatrieme.tete.filet.couleur', libelle: 'Couleur du filet', type: 'couleur' },
+    ],
+  },
+  { ...style('quatrieme.tete.auteur', '4ème — auteur'), face: 'quatre' },
+  { ...style('quatrieme.tete.titre', '4ème — titre'), face: 'quatre' },
+  {
     // La 4ème a son image, son cadrage et son voile, distincts de ceux de la 1ère :
     // les deux faces ne montrent pas la même chose et ne se recadrent pas ensemble.
     // Offerts sans condition, comme la zone ISBN : le fond qui les emploie se change
@@ -999,10 +1027,13 @@ function poserPrises() {
     poser(pi, z.x, z.y, z.l, z.h);
   }
 
-  // Le bloc de la 4ème n'existe que s'il porte du texte : une prise posée sur du vide
-  // déplacerait un réglage dont rien à l'écran ne montrerait l'effet.
+  // Le bloc de la 4ème n'existe que s'il porte quelque chose : une prise posée sur du
+  // vide déplacerait un réglage dont rien à l'écran ne montrerait l'effet. Sa tête
+  // compte autant que son texte — une 4ème réglée sur son seul titre se déplace aussi.
   const pb = $('priseBloc');
-  pb.hidden = face === 'quatre' && !valeurSaisie('quatrieme.texte').trim();
+  const teteVide = !['auteur_visible', 'titre_visible', 'filet_visible']
+    .some((c) => valeurSaisie(`quatrieme.tete.${c}`));
+  pb.hidden = face === 'quatre' && teteVide && !valeurSaisie('quatrieme.texte').trim();
   if (!pb.hidden) {
     const pad = valeurSaisie(r.pad) / 100;
     poser(pb, pad, hauteurBloc(cv), 1 - 2 * pad);

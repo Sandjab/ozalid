@@ -361,10 +361,131 @@ pub struct Pastille {
     pub dy: f64,
 }
 
+/// Un filet de séparation : une ligne, sa couleur et son épaisseur.
+///
+/// Largeur et épaisseur en % de la largeur de couverture, comme tout le reste de la
+/// maquette — c'est ce qui la rend portable d'un format à l'autre.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Filet {
+    pub couleur: String,
+    pub epaisseur: f64,
+    pub largeur: f64,
+}
+
+impl Default for Filet {
+    fn default() -> Self {
+        Self {
+            couleur: "#191917".into(),
+            epaisseur: 0.3,
+            largeur: 12.0,
+        }
+    }
+}
+
+/// La tête de la 4ème : l'auteur, le titre et un filet, dans cet ordre, au-dessus du
+/// texte de présentation.
+///
+/// Trois interrupteurs et non un seul : une collection met l'auteur et le filet sans
+/// répéter le titre, une autre le titre seul. Chacun porte son style entier — la police,
+/// la graisse et la couleur y sont, comme partout ailleurs dans la maquette.
+///
+/// L'identité, elle, n'est pas ici : l'auteur et le titre composés sont **ceux du
+/// livre**. Une maquette dit où et comment ça paraît, jamais ce qui est écrit.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TeteQuatre {
+    /// L'alignement de la tête, distinct de celui du texte : une tête centrée au-dessus
+    /// d'un résumé justifié est la mise en page la plus courante.
+    #[serde(default = "align_centre")]
+    pub align: Align,
+    #[serde(default)]
+    pub auteur_visible: bool,
+    #[serde(default = "auteur_quatre_defaut")]
+    pub auteur: Style,
+    /// Écart auteur → titre, % de largeur.
+    #[serde(default = "ecart_tete_defaut")]
+    pub titre_ecart: f64,
+    #[serde(default)]
+    pub titre_visible: bool,
+    #[serde(default = "titre_quatre_defaut")]
+    pub titre: Style,
+    /// Écart titre → filet, % de largeur.
+    #[serde(default = "ecart_tete_defaut")]
+    pub filet_ecart: f64,
+    #[serde(default)]
+    pub filet_visible: bool,
+    #[serde(default)]
+    pub filet: Filet,
+    /// Écart tête → texte, % de largeur.
+    #[serde(default = "ecart_texte_defaut")]
+    pub ecart: f64,
+}
+
+fn align_centre() -> Align {
+    Align::Centre
+}
+
+fn ecart_tete_defaut() -> f64 {
+    2.5
+}
+
+fn ecart_texte_defaut() -> f64 {
+    6.0
+}
+
+/// Les deux styles de la tête reprennent l'exemple qui l'a demandée : l'auteur en
+/// linéale grasse, le titre en capitales espacées. Ils ne composent rien tant que leur
+/// interrupteur est éteint — ce ne sont que des valeurs de départ à retoucher.
+fn auteur_quatre_defaut() -> Style {
+    Style {
+        police: "Archivo".into(),
+        graisse: 700,
+        italique: false,
+        taille: 2.6,
+        couleur: "#191917".into(),
+        tracking: 6.0,
+        casse: Casse::Capitales,
+    }
+}
+
+fn titre_quatre_defaut() -> Style {
+    Style {
+        police: "Spectral".into(),
+        graisse: 400,
+        italique: false,
+        taille: 3.4,
+        couleur: "#191917".into(),
+        tracking: 14.0,
+        casse: Casse::Capitales,
+    }
+}
+
+impl Default for TeteQuatre {
+    fn default() -> Self {
+        Self {
+            align: align_centre(),
+            auteur_visible: false,
+            auteur: auteur_quatre_defaut(),
+            titre_ecart: ecart_tete_defaut(),
+            titre_visible: false,
+            titre: titre_quatre_defaut(),
+            filet_ecart: ecart_tete_defaut(),
+            filet_visible: false,
+            filet: Filet::default(),
+            ecart: ecart_texte_defaut(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Quatrieme {
     pub fond: FondQuatre,
     pub couleur: String,
+    /// La tête de la 4ème — auteur, titre, filet —, au-dessus du texte.
+    ///
+    /// Absente des maquettes et des projets écrits avant elle : ils reprennent une tête
+    /// éteinte plutôt que d'être refusés, et leur 4ème ne change pas.
+    #[serde(default)]
+    pub tete: TeteQuatre,
     pub texte: String,
     pub style: Style,
     pub interligne: f64,
@@ -1090,6 +1211,50 @@ pub fn photo_quatre<'a>(
     }
 }
 
+/// La tête de la 4ème : auteur, titre, filet, dans cet ordre et chacun s'il est allumé.
+///
+/// Rend une chaîne vide quand les trois sont éteints — c'est ce qui laisse la 4ème
+/// d'une maquette d'avant composer exactement comme avant.
+///
+/// L'auteur et le titre viennent du livre. Aucune substitution de jetons : ce sont les
+/// clés elles-mêmes, comme sur la 1ère, et un `%TITRE%` n'aurait rien à y résoudre.
+fn bloc_tete_quatre(livre: &Livre, t: &TeteQuatre, fw: f64) -> String {
+    let mut s = String::new();
+    let ecart = |v: f64| format!("#v({})\n", mm(v / 100.0 * fw));
+    if t.auteur_visible {
+        s.push_str(&format!("#{}\n", t.auteur.applique(fw, &livre.auteur)));
+    }
+    if t.titre_visible {
+        if !s.is_empty() {
+            s.push_str(&ecart(t.titre_ecart));
+        }
+        s.push_str(&format!("#{}\n", t.titre.applique(fw, &livre.titre)));
+    }
+    if t.filet_visible {
+        if !s.is_empty() {
+            s.push_str(&ecart(t.filet_ecart));
+        }
+        // Le filet est centré dans le bloc quel que soit l'alignement de la tête : une
+        // ligne de 12 % de large collée au fer d'un titre centré se lirait comme un
+        // défaut. C'est le seul élément de la tête qui ne suive pas l'alignement.
+        s.push_str(&format!(
+            "#align(center, line(length: {}, stroke: {} + {}))\n",
+            mm(t.filet.largeur / 100.0 * fw),
+            mm(t.filet.epaisseur / 100.0 * fw),
+            couleur(&t.filet.couleur),
+        ));
+    }
+    if s.is_empty() {
+        return s;
+    }
+    // L'alignement et l'interligne de la tête sont posés une fois, en ouverture du
+    // bloc : le texte qui suit remet les siens.
+    format!(
+        "#set align({})\n#set par(leading: 0.2em, spacing: 0em)\n{s}",
+        t.align.typst()
+    )
+}
+
 /// Corps de la 4ème de couverture, dans la boîte donnée.
 ///
 /// `pano` n'est requis que pour le prolongement : il porte la largeur de la planche,
@@ -1129,18 +1294,30 @@ pub fn corps_quatre(
     // Le seul texte que la maquette porte encore, et le seul endroit où la substitution
     // la sert : une 4ème générique se résout pour chaque livre où on la charge.
     let resume = crate::gabarit::substituer(&q.texte, livre);
-    if !resume.trim().is_empty() {
+    let tete = bloc_tete_quatre(livre, &q.tete, fw);
+    // Un seul bloc pour la tête et le texte : ils se suivent sur la page, et deux
+    // placements séparés auraient demandé deux hauteurs à tenir d'accord à la main.
+    // C'est aussi ce qui fait que `top` reste le seul point d'ancrage — celui que la
+    // prise de l'aperçu déplace.
+    if !tete.is_empty() || !resume.trim().is_empty() {
+        let mut corps = tete;
+        if !resume.trim().is_empty() {
+            if !corps.is_empty() {
+                corps.push_str(&format!("#v({})\n", mm(q.tete.ecart / 100.0 * fw)));
+            }
+            corps.push_str(&format!(
+                "#set align({})\n#set par(leading: {}em, spacing: {}em, justify: false)\n#{}\n",
+                q.align.typst(),
+                q.interligne - 1.0,
+                q.interligne - 1.0,
+                q.style.applique(fw, &resume),
+            ));
+        }
         c.push_str(&format!(
-            "#place(top + left, dx: {}, dy: {}, block(width: {})[\n\
-             #set align({})\n#set par(leading: {}em, spacing: {}em, justify: false)\n\
-             #{}\n])\n",
+            "#place(top + left, dx: {}, dy: {}, block(width: {})[\n{corps}])\n",
             mm(pad),
             mm(q.top / 100.0 * fw),
             mm(fw - 2.0 * pad),
-            q.align.typst(),
-            q.interligne - 1.0,
-            q.interligne - 1.0,
-            q.style.applique(fw, &resume),
         ));
     }
 
@@ -1618,6 +1795,108 @@ mod tests {
             assert!(!une.contains(jeton), "{jeton} a traversé la 1ère");
             assert!(!quatre.contains(jeton), "{jeton} a traversé la 4ème");
         }
+    }
+
+    /// **Non-régression de la tête.** Une maquette écrite avant elle compose sa 4ème
+    /// comme avant : ni auteur, ni titre, ni filet. Les trois naissent éteints, sans
+    /// quoi tout projet existant verrait son identité paraître sur sa 4ème sans que
+    /// personne l'ait demandé — et une couverture qui change toute seule se découvre
+    /// au tirage.
+    #[test]
+    fn une_tete_de_quatrieme_eteinte_ne_compose_rien() {
+        let cv = maquettes::fournie("blanche");
+        let s = source_quatre(&livre(), &cv, FORMAT, None, None, None).unwrap();
+        assert!(
+            !s.contains("Ivan Pjig"),
+            "auteur composé sans être allumé : {s}"
+        );
+        assert!(
+            !s.contains("Les Heures creuses"),
+            "titre composé sans être allumé : {s}"
+        );
+        assert!(
+            !s.contains("line(length:"),
+            "filet composé sans être allumé : {s}"
+        );
+    }
+
+    /// Chacun s'allume seul : une collection met l'auteur et le filet sans le titre, une
+    /// autre le titre seul. Rien ici ne doit privilégier une mise en page.
+    #[test]
+    fn chaque_element_de_la_tete_s_allume_seul() {
+        let compose = |auteur, titre, filet| {
+            let mut cv = maquettes::fournie("blanche");
+            cv.quatrieme.tete.auteur_visible = auteur;
+            cv.quatrieme.tete.titre_visible = titre;
+            cv.quatrieme.tete.filet_visible = filet;
+            source_quatre(&livre(), &cv, FORMAT, None, None, None).unwrap()
+        };
+
+        let a = compose(true, false, false);
+        assert!(a.contains("Ivan Pjig"), "{a}");
+        assert!(!a.contains("Les Heures creuses"), "{a}");
+        assert!(!a.contains("line(length:"), "{a}");
+
+        let t = compose(false, true, false);
+        assert!(!t.contains("Ivan Pjig"), "{t}");
+        assert!(t.contains("Les Heures creuses"), "{t}");
+
+        let f = compose(false, false, true);
+        assert!(!f.contains("Ivan Pjig"), "{f}");
+        assert!(f.contains("line(length:"), "{f}");
+    }
+
+    /// L'auteur et le titre de la tête viennent du **livre**, jamais de la maquette :
+    /// charger une maquette ne change pas ce qui s'imprime comme identité. C'est la même
+    /// règle que sur la 1ère, et c'est celle qui fait tenir tout le reste.
+    #[test]
+    fn la_tete_de_quatrieme_prend_l_identite_du_livre() {
+        let mut l = livre();
+        l.auteur = "Ivan Pjig".into();
+        l.titre = "Les Heures creuses".into();
+        let mut cv = maquettes::fournie("blanche");
+        cv.quatrieme.tete.auteur_visible = true;
+        cv.quatrieme.tete.titre_visible = true;
+        cv.quatrieme.tete.auteur.couleur = "#c00000".into();
+
+        let s = source_quatre(&l, &cv, FORMAT, None, None, None).unwrap();
+        assert!(s.contains("Ivan Pjig"), "{s}");
+        assert!(s.contains("Les Heures creuses"), "{s}");
+        // La couleur demandée est bien celle qui compose l'auteur.
+        assert!(s.contains("#c00000"), "{s}");
+    }
+
+    /// L'ordre est celui de la page : auteur, titre, filet, puis le texte. Il est tenu
+    /// par la composition et non par l'ordre où les réglages sont écrits.
+    #[test]
+    fn la_tete_se_compose_avant_le_texte() {
+        let mut cv = maquettes::fournie("blanche");
+        cv.quatrieme.tete.auteur_visible = true;
+        cv.quatrieme.tete.titre_visible = true;
+        cv.quatrieme.tete.filet_visible = true;
+        cv.quatrieme.texte = "Le texte de présentation.".into();
+
+        let s = source_quatre(&livre(), &cv, FORMAT, None, None, None).unwrap();
+        let ou = |quoi: &str| {
+            s.find(quoi)
+                .unwrap_or_else(|| panic!("{quoi} absent : {s}"))
+        };
+        assert!(ou("Ivan Pjig") < ou("Les Heures creuses"), "{s}");
+        assert!(ou("Les Heures creuses") < ou("line(length:"), "{s}");
+        assert!(ou("line(length:") < ou("Le texte de présentation."), "{s}");
+    }
+
+    /// Le texte de présentation n'est plus la condition d'existence du bloc : une 4ème
+    /// qui ne porte qu'un titre et un filet se compose. Sans cela, une couverture réglée
+    /// sur sa seule tête resterait vide sans rien dire.
+    #[test]
+    fn une_tete_sans_texte_se_compose_quand_meme() {
+        let mut cv = maquettes::fournie("blanche");
+        cv.quatrieme.texte = String::new();
+        cv.quatrieme.tete.titre_visible = true;
+
+        let s = source_quatre(&livre(), &cv, FORMAT, None, None, None).unwrap();
+        assert!(s.contains("Les Heures creuses"), "{s}");
     }
 
     /// Le résumé de 4ème est le seul texte que la maquette porte encore, et c'est le
