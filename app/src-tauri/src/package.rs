@@ -164,8 +164,8 @@ fn dossiers_d_envoi(envois: &[crate::envoi::Envoi]) -> Vec<String> {
     pris
 }
 
-/// Ce qu'un envoi dépose sur la page de titre, l'image écrite au passage à côté de la
-/// source qui la nommera.
+/// Ce qu'un envoi dépose sur sa page, et où il s'y pose : l'image est écrite au passage
+/// à côté de la source qui la nommera.
 ///
 /// Écrire l'image ici, et non dans un balayage préalable, garantit qu'aucune image ne
 /// se retrouve dans le répertoire d'un autre dédicataire : elle est déposée là où sa
@@ -180,14 +180,14 @@ pub fn trace<'a>(
     } else {
         &e.dedicataire
     };
-    match &projet.meta.envois.main {
-        crate::envoi::Main::Police { police } => Ok(interieur::Trace::Texte {
+    let quoi = match &e.main {
+        crate::envoi::Main::Police { police } => interieur::Quoi::Texte {
             police,
             texte: &e.contenu,
-        }),
+        },
         // Générée ou écrite à la main, une image est une image : elle a été acceptée,
         // elle est dans l'archive, et composer ne rappelle jamais le réseau.
-        crate::envoi::Main::Image | crate::envoi::Main::Diffusion { .. } => {
+        crate::envoi::Main::Image | crate::envoi::Main::Diffusion => {
             let fichier = e
                 .image
                 .as_deref()
@@ -197,9 +197,38 @@ pub fn trace<'a>(
             })?;
             std::fs::write(dossier.join(fichier), octets)
                 .map_err(|err| format!("{fichier} : écriture impossible : {err}"))?;
-            Ok(interieur::Trace::Image { fichier })
+            interieur::Quoi::Image { fichier }
         }
+    };
+    Ok(interieur::Trace {
+        quoi,
+        place: &e.place,
+    })
+}
+
+/// Refuse un envoi placé sur une page que l'intérieur de ce prestataire n'a pas.
+///
+/// Le même manuscrit ne fait pas le même nombre de pages en poche et en grand format.
+/// Pour les liminaires — faux-titre, blanche, titre, copyright, dédicace — les pages
+/// coïncident d'un format à l'autre, et c'est là qu'un envoi va dans les faits.
+/// Ailleurs, on refuse en disant quoi faire, le chiffre mesuré compris : c'est la
+/// convention du dos non publié.
+fn verifie_pages(liste: &[crate::envoi::Envoi], pages: u32) -> Result<(), String> {
+    for (i, e) in liste.iter().enumerate() {
+        if e.place.page >= 1 && e.place.page <= pages {
+            continue;
+        }
+        let qui = if e.dedicataire.trim().is_empty() {
+            format!("envoi {}", i + 1)
+        } else {
+            e.dedicataire.clone()
+        };
+        return Err(format!(
+            "{qui} : envoi placé page {}, l'intérieur n'en fait que {pages}.",
+            e.place.page
+        ));
     }
+    Ok(())
 }
 
 /// Compose un package par envoi, tous chez le même prestataire.
@@ -226,6 +255,11 @@ pub fn assembler_envois(
     // compose la planche. Les envois n'en reprennent que le réglage et les fichiers.
     let reference = racine.join(".reference");
     let base = assembler(projet, pr, papier, releve, &reference, typst)?;
+
+    // Le compte de pages n'existe qu'après la convergence : le contrôle ne peut pas
+    // avoir lieu plus tôt, et refuser ici coûte une composition de moins qu'un tirage
+    // faux.
+    verifie_pages(&envois.liste, base.pages)?;
 
     // La police de l'auteur n'entre en scène qu'ici : le package de référence ne porte
     // aucun envoi, donc aucune écriture manuscrite. Elle est dépliée une fois pour tous
@@ -356,17 +390,17 @@ mod tests {
             crate::envoi::Envoi {
                 dedicataire: "Marie/Léa".into(),
                 contenu: "A.".into(),
-                image: None,
+                ..Default::default()
             },
             crate::envoi::Envoi {
                 dedicataire: "Marie-Léa".into(),
                 contenu: "B.".into(),
-                image: None,
+                ..Default::default()
             },
             crate::envoi::Envoi {
                 dedicataire: "..".into(),
                 contenu: "C.".into(),
-                image: None,
+                ..Default::default()
             },
         ];
         assert_eq!(
@@ -377,11 +411,11 @@ mod tests {
 
     fn projet_en_images(image: Option<&str>) -> Projet {
         let mut p = Projet::nouveau(crate::projet::Livre::vide(), "## 01\n\nA.\n".into());
-        p.meta.envois.main = crate::envoi::Main::Image;
         p.meta.envois.liste = vec![crate::envoi::Envoi {
             dedicataire: "Léa".into(),
-            contenu: String::new(),
+            main: crate::envoi::Main::Image,
             image: image.map(str::to_string),
+            ..Default::default()
         }];
         if let Some(n) = image {
             p.images_envois.insert(n.into(), b"\x89PNG".to_vec());
@@ -398,8 +432,8 @@ mod tests {
         let t = trace(&p, &p.meta.envois.liste[0], dir.path()).unwrap();
 
         assert!(matches!(
-            t,
-            interieur::Trace::Image {
+            t.quoi,
+            interieur::Quoi::Image {
                 fichier: "Léa.png"
             }
         ));
@@ -416,14 +450,13 @@ mod tests {
     #[test]
     fn une_image_generee_et_acceptee_compose_comme_une_autre() {
         let mut p = projet_en_images(Some("Léa.png"));
-        p.meta.envois.main = crate::envoi::Main::Diffusion {
-            gabarit: "une aquarelle, mention « {envoi} »".into(),
-        };
+        p.meta.envois.gabarit = "une aquarelle, mention « {envoi} »".into();
+        p.meta.envois.liste[0].main = crate::envoi::Main::Diffusion;
         let dir = tempfile::tempdir().unwrap();
         let t = trace(&p, &p.meta.envois.liste[0], dir.path()).unwrap();
         assert!(matches!(
-            t,
-            interieur::Trace::Image {
+            t.quoi,
+            interieur::Quoi::Image {
                 fichier: "Léa.png"
             }
         ));
@@ -455,5 +488,59 @@ mod tests {
             nom(pr, "interieur", "typ"),
             "interieur-bookvault-127x203.typ"
         );
+    }
+
+    /// Le même manuscrit ne fait pas le même nombre de pages en poche et en grand
+    /// format : une page choisie à l'œil chez l'un peut n'exister chez l'autre. Rogner
+    /// sur la dernière page enverrait à l'impression un exemplaire que personne n'a
+    /// voulu ; le refus nomme la personne, la page et le compte, comme le fait déjà le
+    /// dos non publié.
+    #[test]
+    fn une_page_hors_bornes_fait_refuser_la_generation() {
+        let err = verifie_pages(
+            &[
+                crate::envoi::Envoi {
+                    dedicataire: "Léa".into(),
+                    place: crate::envoi::Place {
+                        page: 3,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                crate::envoi::Envoi {
+                    dedicataire: "Marc".into(),
+                    place: crate::envoi::Place {
+                        page: 210,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            ],
+            198,
+        )
+        .unwrap_err();
+        assert!(err.contains("Marc"), "{err}");
+        assert!(err.contains("210"), "{err}");
+        assert!(err.contains("198"), "{err}");
+        assert!(!err.contains("Léa"), "Léa n'est pas en cause : {err}");
+    }
+
+    /// Page 0 n'existe pas : les pages de Typst comptent à partir de 1, et un zéro
+    /// venu d'un TOML écrit à la main ne doit pas composer un envoi invisible.
+    #[test]
+    fn la_page_zero_est_refusee() {
+        let err = verifie_pages(
+            &[crate::envoi::Envoi {
+                dedicataire: "Léa".into(),
+                place: crate::envoi::Place {
+                    page: 0,
+                    ..Default::default()
+                },
+                ..Default::default()
+            }],
+            198,
+        )
+        .unwrap_err();
+        assert!(err.contains("Léa"), "{err}");
     }
 }
