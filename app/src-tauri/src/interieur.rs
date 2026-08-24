@@ -204,9 +204,15 @@ fn assemble(
           costs: (orphan: 100%, widow: 100%))
 #set par(justify: true, leading: {lead}em, spacing: {lead}em, first-line-indent: 1.2em)
 
-// Le blanc de respiration : une ligne sautée, sans marque. Faible au sens de Typst,
+// Le blanc de respiration : `n` lignes sautées, sans marque. Faible au sens de Typst,
 // donc supprimé à une frontière de page — le registre passe avant la coupure.
-#let blanc = v(1em + {lead}em * 2, weak: true)
+//
+// La hauteur est exacte, pas approchée : `top-edge` et `bottom-edge` ci-dessus posent
+// la ligne à 1em pile, l'avance d'une ligne à la suivante vaut donc 1em + leading. Le
+// blanc doit en plus couvrir l'espacement de paragraphe qu'il remplace — Typst fusionne
+// deux espacements faibles en gardant le plus grand —, d'où le terme supplémentaire.
+// À n = 1 : 1em + 2·leading, la valeur relevée sur PDF le 22/08.
+#let blanc(n) = v(n * 1em + (n + 1) * {lead}em, weak: true)
 
 "#,
         // Ces trois-là sont cités, non composés : la ligne de commentaire et la chaîne
@@ -551,7 +557,7 @@ fn blocs_typst(blocs: &[Bloc]) -> String {
             // Le blanc n'a pas de marque, donc rien à centrer : il est tout entier
             // dans l'espace. Sa hauteur est définie une fois au préambule, là où
             // l'interligne est connue — une ligne de texte laissée vide.
-            Bloc::Blanc => s.push_str("#blanc\n\n"),
+            Bloc::Blanc(n) => s.push_str(&format!("#blanc({n})\n\n")),
         }
     }
     s
@@ -597,7 +603,7 @@ mod tests {
             titre: "Un".into(),
             blocs: vec![
                 Bloc::Paragraphe("Avant.".into()),
-                Bloc::Blanc,
+                Bloc::Blanc(1),
                 Bloc::Paragraphe("Après.".into()),
             ],
         }]
@@ -610,7 +616,7 @@ mod tests {
     fn le_blanc_de_respiration_ne_compose_aucune_marque() {
         let s = blocs_typst(&[
             Bloc::Paragraphe("Avant.".into()),
-            Bloc::Blanc,
+            Bloc::Blanc(1),
             Bloc::Paragraphe("Après.".into()),
         ]);
         assert!(s.contains("#blanc"), "{s}");
@@ -621,10 +627,13 @@ mod tests {
     /// C'est ce qui protège le registre — sans `weak`, la page suivante s'ouvrirait sur
     /// un trou et ses lignes ne seraient plus en regard de celles d'en face.
     ///
-    /// Sa hauteur vaut une ligne, relevé sur PDF le 22/08 : Typst fusionne deux
-    /// espacements faibles adjacents en gardant le plus grand, donc `1em + lead * 2`
-    /// laisse exactement une ligne vide là où l'espace de paragraphe seul n'en laisse
-    /// aucune.
+    /// Sa hauteur vaut `n` lignes, relevé sur PDF : Typst fusionne deux espacements
+    /// faibles adjacents en gardant le plus grand, d'où le terme qui couvre l'espacement
+    /// de paragraphe remplacé. Mesuré à 10 pt, `leading` et `spacing` à 0,65em, en
+    /// lisant `here().position().y` après le blanc : n = 1 → 57 pt, n = 2 → 73,5 pt,
+    /// n = 3 → 90 pt, soit 16,5 pt — une avance de ligne — par ligne demandée, et 90 pt
+    /// aussi pour trois vraies lignes de texte à la place du blanc. À n = 1, la valeur
+    /// est celle de l'ancienne formule `1em + lead * 2` : aucun manuscrit ne bouge.
     #[test]
     fn le_blanc_de_respiration_est_un_espace_faible() {
         let pr = provider("bod").unwrap();
@@ -640,8 +649,22 @@ mod tests {
             &pieces_avec_blanc(),
             None,
         );
-        assert!(s.contains("#let blanc = v("), "{s}");
+        assert!(s.contains("#let blanc(n) = v("), "{s}");
         assert!(s.contains("weak: true"), "{s}");
+    }
+
+    /// Un blanc de plusieurs lignes se compose en **un** espacement, jamais en plusieurs
+    /// marques à la file : Typst fusionne deux espacements faibles adjacents en gardant
+    /// le plus grand, et trois `#blanc(1)` n'auraient sauté qu'une ligne.
+    #[test]
+    fn un_blanc_de_trois_lignes_ne_compose_qu_un_espacement() {
+        let s = blocs_typst(&[
+            Bloc::Paragraphe("Avant.".into()),
+            Bloc::Blanc(3),
+            Bloc::Paragraphe("Après.".into()),
+        ]);
+        assert!(s.contains("#blanc(3)"), "{s}");
+        assert_eq!(s.matches("#blanc(").count(), 1, "{s}");
     }
 
     /// Une composition déjà stable ne doit pas être recomposée : une reprise inutile

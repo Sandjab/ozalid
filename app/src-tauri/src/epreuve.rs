@@ -43,7 +43,7 @@ pub fn source(livre: &Livre, int: &Interieur, pieces: &[Piece], corps_pt: f64) -
         .flat_map(|c| &c.blocs)
         .filter_map(|b| match b {
             Bloc::Paragraphe(p) => Some(p.split_whitespace().count()),
-            Bloc::Scene | Bloc::Blanc => None,
+            Bloc::Scene | Bloc::Blanc(_) => None,
         })
         .sum();
 
@@ -150,10 +150,19 @@ pub fn source(livre: &Livre, int: &Interieur, pieces: &[Piece], corps_pt: f64) -
                 // lignes et compose déjà l'astérisme en gris de service : un filet de
                 // la même famille, plus clair, dit la coupure au relecteur sans rien
                 // promettre de la page imprimée.
-                Bloc::Blanc => s.push_str(
-                    "#v(3mm)\n#align(center)[#line(length: 12mm, \
-                     stroke: 0.4pt + rgb(\"#c0c0c0\"))]\n#v(3mm)\n\n",
-                ),
+                //
+                // Un filet par ligne sautée : le relecteur voit ce que l'auteur a écrit,
+                // et le nombre est la seule chose que ce blanc dit. Un filet unique
+                // rendrait trois `___` identiques à un seul sur l'épreuve qu'on relit
+                // pour corriger — la hauteur, elle, reste celle du service.
+                Bloc::Blanc(n) => {
+                    for _ in 0..*n {
+                        s.push_str(
+                            "#v(3mm)\n#align(center)[#line(length: 12mm, \
+                             stroke: 0.4pt + rgb(\"#c0c0c0\"))]\n#v(3mm)\n\n",
+                        );
+                    }
+                }
             }
         }
     }
@@ -211,7 +220,7 @@ mod tests {
             titre: "Un".into(),
             blocs: vec![
                 Bloc::Paragraphe("Avant.".into()),
-                Bloc::Blanc,
+                Bloc::Blanc(1),
                 Bloc::Paragraphe("Après.".into()),
             ],
         }]

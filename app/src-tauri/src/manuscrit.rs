@@ -1,8 +1,8 @@
 //! Manuscrit Markdown → chapitres → source Typst.
 //!
 //! Le format admis est celui du projet, et lui seul : titre en `# `, chapitres en
-//! `## NN - Titre`, coupures `---` (marquée) et `___` (muette), emphase `*…*` et
-//! `**…**`. Tout le reste est **refusé** avec son numéro de ligne plutôt que composé
+//! `## NN - Titre`, coupures `---` (marquée) et `___` (muette, autant de lignes que de
+//! marques qui se suivent), emphase `*…*` et `**…**`. Tout le reste est **refusé** avec son numéro de ligne plutôt que composé
 //! de travers : une liste ou un lien silencieusement aplati donnerait un livre imprimé
 //! faux, découvert après tirage.
 //!
@@ -19,11 +19,16 @@
 /// Le blanc de respiration est la même coupure, muette : l'auteur sépare deux passages
 /// sans vouloir que la page l'annonce. Les deux suivent les mêmes règles de position ;
 /// seul le rendu les distingue.
+///
+/// Le blanc porte son nombre de lignes : des `___` qui se suivent creusent d'autant,
+/// et c'est la seule façon d'aérer une page. Un nombre plutôt que des blocs répétés
+/// parce que Typst fusionne deux espacements faibles adjacents en gardant le plus
+/// grand — deux blancs à la file n'auraient sauté qu'une ligne.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Bloc {
     Paragraphe(String),
     Scene,
-    Blanc,
+    Blanc(u32),
 }
 
 /// Marque de rupture de scène : trois astérisques espacées.
@@ -79,7 +84,7 @@ impl Bloc {
     /// commun tient ici : elles ne valent qu'entre deux passages, et n'importe quelle
     /// règle de position les traite ensemble.
     fn est_rupture(&self) -> bool {
-        matches!(self, Bloc::Scene | Bloc::Blanc)
+        matches!(self, Bloc::Scene | Bloc::Blanc(_))
     }
 }
 
@@ -298,10 +303,15 @@ fn mot_cle(titre: &str) -> Option<(Sorte, &'static str)> {
 /// `___` est la jumelle de `---` dans le Markdown standard : un manuscrit ouvert dans
 /// n'importe quel éditeur y montre déjà une ligne, et aucune faute de frappe ne
 /// transforme l'une en l'autre.
+///
+/// C'est aussi pourquoi la ligne vide, elle, ne coupe rien : le manuscrit de travail en
+/// porte 2792, une entre chaque paragraphe comme tout Markdown. Lui donner un sens
+/// aérerait le livre entier ; et trois lignes vides au lieu de deux ne se voient dans
+/// aucun éditeur, quand trois `___` se lisent et se comptent.
 fn rupture(t: &str) -> Option<Bloc> {
     match t {
         "---" => Some(Bloc::Scene),
-        "___" => Some(Bloc::Blanc),
+        "___" => Some(Bloc::Blanc(1)),
         _ => None,
     }
 }
@@ -398,11 +408,18 @@ pub fn decoupe(md: &str, attendu: Option<u32>) -> Result<Vec<Piece>, String> {
         } else if let Some(rupture) = rupture(t) {
             // Hors chapitre, la rupture appartient aux liminaires : rien à garder. Dans
             // un chapitre, elle n'est gardée qu'à la suite d'un paragraphe : ni en tête
-            // de chapitre, ni après une rupture déjà posée (deux marques consécutives ne
-            // séparent qu'une fois, quelles qu'elles soient).
+            // de chapitre, ni après une rupture déjà posée — deux marques différentes ne
+            // séparent qu'une fois, et c'est la première qui vaut.
+            //
+            // Un blanc qui suit un blanc fait exception : il creuse la coupure d'une
+            // ligne de plus. C'est la seule façon d'aérer une page, et elle se compte
+            // dans la source. Le cumul s'arrête au premier paragraphe : sans quoi les
+            // blancs d'un chapitre entier s'additionneraient de proche en proche.
             if let Some(courant) = pieces.last_mut() {
-                if matches!(courant.blocs.last(), Some(Bloc::Paragraphe(_))) {
-                    courant.blocs.push(rupture);
+                match (courant.blocs.last_mut(), &rupture) {
+                    (Some(Bloc::Blanc(n)), Bloc::Blanc(_)) => *n += 1,
+                    (Some(Bloc::Paragraphe(_)), _) => courant.blocs.push(rupture),
+                    _ => {}
                 }
             }
         } else if t.starts_with("# ") || t.is_empty() {
@@ -645,7 +662,7 @@ mod tests {
             ch[0].blocs,
             vec![
                 Bloc::Paragraphe("Avant.".into()),
-                Bloc::Blanc,
+                Bloc::Blanc(1),
                 Bloc::Paragraphe("Après.".into()),
             ]
         );
@@ -672,16 +689,18 @@ mod tests {
         assert_eq!(ch[0].blocs, vec![Bloc::Paragraphe("Texte.".into())]);
     }
 
-    /// Deux coupures consécutives ne séparent qu'une fois, et c'est la première qui
-    /// vaut — quelles que soient les deux marques. L'auteur qui hésite et laisse les
-    /// deux ne creuse pas sa page pour autant, et la règle se retient sans exception :
-    /// c'est l'ordre d'écriture qui tranche, pas une priorité entre marques.
+    /// Deux coupures **de marques différentes** ne séparent qu'une fois, et c'est la
+    /// première qui vaut. L'auteur qui hésite et laisse les deux ne creuse pas sa page
+    /// pour autant, et la règle se retient sans exception : c'est l'ordre d'écriture qui
+    /// tranche, pas une priorité entre marques.
+    ///
+    /// Les `___` entre eux font exception, et c'est tout l'objet du blanc de plusieurs
+    /// lignes : voir `des_blancs_consecutifs_creusent_d_autant_de_lignes`.
     #[test]
-    fn deux_coupures_consecutives_ne_separent_qu_une_fois() {
+    fn deux_coupures_de_marques_differentes_ne_separent_qu_une_fois() {
         for (md, attendu) in [
-            ("## 01 - Un\n\nA.\n\n___\n\n___\n\nB.\n", Bloc::Blanc),
             ("## 01 - Un\n\nA.\n\n---\n\n___\n\nB.\n", Bloc::Scene),
-            ("## 01 - Un\n\nA.\n\n___\n\n---\n\nB.\n", Bloc::Blanc),
+            ("## 01 - Un\n\nA.\n\n___\n\n---\n\nB.\n", Bloc::Blanc(1)),
         ] {
             let ch = decoupe(md, None).unwrap();
             assert_eq!(
@@ -694,6 +713,65 @@ mod tests {
                 "{md}"
             );
         }
+    }
+
+    /// Des `___` qui se suivent creusent d'autant de lignes : c'est la seule façon
+    /// d'aérer une page, et elle est **visible dans la source**.
+    ///
+    /// La ligne vide, elle, ne dira jamais rien : le manuscrit de travail en porte 2792
+    /// — une entre chaque paragraphe, comme tout Markdown —, et leur donner un sens
+    /// poserait un blanc entre tous les paragraphes du livre. Trois lignes vides au lieu
+    /// de deux ne se voient d'ailleurs dans aucun éditeur et ne survivent pas au premier
+    /// reformatage ; trois `___` se lisent et se comptent.
+    #[test]
+    fn des_blancs_consecutifs_creusent_d_autant_de_lignes() {
+        for (md, lignes) in [
+            ("## 01 - Un\n\nA.\n\n___\n\nB.\n", 1),
+            ("## 01 - Un\n\nA.\n\n___\n___\n\nB.\n", 2),
+            ("## 01 - Un\n\nA.\n\n___\n\n___\n\n___\n\nB.\n", 3),
+        ] {
+            let ch = decoupe(md, None).unwrap();
+            assert_eq!(
+                ch[0].blocs,
+                vec![
+                    Bloc::Paragraphe("A.".into()),
+                    Bloc::Blanc(lignes),
+                    Bloc::Paragraphe("B.".into()),
+                ],
+                "{md}"
+            );
+        }
+    }
+
+    /// Le cumul ne franchit pas un passage : deux blancs séparés par du texte sont deux
+    /// coupures d'une ligne, et non une de deux. Sans quoi un chapitre entier aéré
+    /// verrait ses blancs s'additionner de proche en proche.
+    #[test]
+    fn un_paragraphe_entre_deux_blancs_rompt_le_cumul() {
+        let ch = decoupe("## 01 - Un\n\nA.\n\n___\n\nB.\n\n___\n\nC.\n", None).unwrap();
+        assert_eq!(
+            ch[0].blocs,
+            vec![
+                Bloc::Paragraphe("A.".into()),
+                Bloc::Blanc(1),
+                Bloc::Paragraphe("B.".into()),
+                Bloc::Blanc(1),
+                Bloc::Paragraphe("C.".into()),
+            ]
+        );
+    }
+
+    /// Un blanc de plusieurs lignes en fin de chapitre s'élague entier : il ne sépare
+    /// pas davantage qu'un blanc d'une ligne, et le chapitre suivant commence sur sa
+    /// propre page.
+    #[test]
+    fn un_blanc_de_plusieurs_lignes_en_fin_de_chapitre_ne_laisse_rien() {
+        let ch = decoupe(
+            "## 01 - Un\n\nTexte.\n\n___\n___\n___\n\n## 02 - Deux\n\nTexte.\n",
+            None,
+        )
+        .unwrap();
+        assert_eq!(ch[0].blocs, vec![Bloc::Paragraphe("Texte.".into())]);
     }
 
     /// Un `___` avant le premier chapitre appartient aux liminaires du manuscrit, que

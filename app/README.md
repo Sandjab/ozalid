@@ -544,6 +544,12 @@ tout ce qui se voit se vérifie dans l'application.
 - **Le manuscrit n'admet qu'un sous-ensemble de Markdown.** Tout le reste est
   refusé avec son numéro de ligne — un aplatissement silencieux donnerait un
   livre faux, découvert après tirage.
+- **Les coupures s'écrivent, elles ne se devinent pas.** `---` marque une rupture de
+  scène, `___` un blanc muet — et des `___` qui se suivent creusent d'autant de lignes,
+  la seule façon d'aérer une page. La ligne vide, elle, ne coupe rien : un manuscrit en
+  porte une entre chaque paragraphe, comme tout Markdown, et lui donner un sens aérerait
+  le livre entier. Trois lignes vides au lieu de deux ne se voient d'ailleurs dans aucun
+  éditeur et ne survivent pas au premier reformatage.
 - **Un saut de page de traitement de texte (U+000C) traverse la composition sans
   broncher.** Typst le compose sans une erreur ; le XML, lui, ne sait pas
   l'écrire, et la liseuse n'ouvre alors pas le chapitre. La génération de l'EPUB

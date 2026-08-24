@@ -143,7 +143,11 @@ fn blocs_xhtml(blocs: &[Bloc]) -> String {
             Bloc::Scene => s.push_str(&format!("<p class=\"scene\">{SCENE_XHTML}</p>\n")),
             // L'espace insécable n'est pas une précaution de style : les liseuses
             // suppriment les paragraphes vides, et le blanc s'en irait avec.
-            Bloc::Blanc => s.push_str("<p class=\"blanc\">\u{a0}</p>\n"),
+            Bloc::Blanc(n) => {
+                for _ in 0..*n {
+                    s.push_str("<p class=\"blanc\">\u{a0}</p>\n");
+                }
+            }
         }
     }
     s
@@ -826,7 +830,7 @@ mod tests {
     fn le_blanc_de_respiration_survit_aux_liseuses() {
         let x = blocs_xhtml(&[
             Bloc::Paragraphe("Avant.".into()),
-            Bloc::Blanc,
+            Bloc::Blanc(1),
             Bloc::Paragraphe("Après.".into()),
         ]);
         assert!(x.contains("<p class=\"blanc\">\u{a0}</p>"), "{x}");
