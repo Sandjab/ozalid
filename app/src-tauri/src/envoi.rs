@@ -160,6 +160,27 @@ impl Envois {
     }
 }
 
+impl Envois {
+    /// Ajoute un envoi, qui naît comme le précédent.
+    ///
+    /// Même main, même placement que le dernier de la liste. Sans cette règle, vingt
+    /// dédicataires demanderaient vingt fois le même réglage, et la ressemblance des
+    /// exemplaires d'un même tirage — acquise tant que la main appartenait au livre — se
+    /// paierait à chaque ligne.
+    ///
+    /// Le mot et l'image ne s'héritent pas : ce sont eux qui distinguent un exemplaire,
+    /// et hériter le mot enverrait à Marc celui de Léa.
+    pub fn ajouter(&mut self, dedicataire: String) {
+        let modele = self.liste.last();
+        self.liste.push(Envoi {
+            dedicataire,
+            main: modele.map(|e| e.main.clone()).unwrap_or_default(),
+            place: modele.map(|e| e.place).unwrap_or_default(),
+            ..Default::default()
+        });
+    }
+}
+
 /// Comment nommer un envoi dans un message d'erreur.
 ///
 /// Le rang plutôt que rien quand la ligne est anonyme : « main inconnue » tout court
@@ -390,6 +411,46 @@ mod tests {
         let err = e.verifie().unwrap_err();
         assert!(err.contains("Ma Main"), "{err}");
         assert!(err.contains(MAINS[0]), "{err}");
+    }
+
+    /// Un envoi neuf naît comme le précédent : même main, même placement.
+    ///
+    /// Sans cette règle, vingt dédicataires demanderaient vingt fois le même réglage.
+    /// C'est ce qui rend les exemplaires d'un tirage semblables entre eux depuis que la
+    /// main a quitté le livre.
+    #[test]
+    fn un_envoi_neuf_nait_comme_le_precedent() {
+        let mut e = Envois::default();
+        e.ajouter("Léa".into());
+        e.liste[0].main = Main::Image;
+        e.liste[0].place = Place {
+            page: 37,
+            x: 0.3,
+            y: 0.4,
+            taille: 0.5,
+            angle: -6.0,
+        };
+        e.liste[0].contenu = "Pour Léa.".into();
+        e.liste[0].image = Some("Lea.jpg".into());
+
+        e.ajouter("Marc".into());
+        assert_eq!(e.liste[1].main, Main::Image, "la main ne s'est pas héritée");
+        assert_eq!(e.liste[1].place, e.liste[0].place, "le placement non plus");
+        // Le mot et l'image distinguent un exemplaire : les hériter enverrait à Marc
+        // celui de Léa.
+        assert_eq!(e.liste[1].contenu, "", "Marc a reçu le mot de Léa");
+        assert_eq!(e.liste[1].image, None, "Marc a reçu l'image de Léa");
+        assert_eq!(e.liste[1].dedicataire, "Marc");
+    }
+
+    /// Le premier envoi d'un livre n'a personne de qui hériter : il prend les défauts,
+    /// qui sont ceux d'un livre neuf.
+    #[test]
+    fn le_premier_envoi_prend_les_defauts() {
+        let mut e = Envois::default();
+        e.ajouter("Léa".into());
+        assert_eq!(e.liste[0].main, Main::default());
+        assert_eq!(e.liste[0].place, Place::default());
     }
 
     /// Un placement s'exprime en fractions de page et non en millimètres : c'est ce

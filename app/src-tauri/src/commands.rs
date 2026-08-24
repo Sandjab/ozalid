@@ -1248,18 +1248,72 @@ pub struct ResultatEnvoi {
     pub vignette: Option<String>,
 }
 
-/// Remplace la liste des envois et la main du livre.
+/// Remplace un envoi par lui-même modifié : sa main, son mot, son placement.
 ///
-/// Comme `livre_modifier`, la commande reçoit **l'objet entier** : ce que le front
-/// n'envoie pas est effacé. C'est le même piège que la dédicace, et il se garde du
-/// même côté.
+/// Un envoi et non la liste entière, contrairement à `envois_modifier` qui l'a
+/// précédée : celle-ci recevait l'objet entier, si bien que ce que le front n'envoyait
+/// pas était effacé — une main omise revenait au défaut, et vingt exemplaires
+/// changeaient d'écriture sans que personne ne l'ait demandé. Ici le rang désigne, et
+/// le reste ne bouge pas.
 #[tauri::command]
-pub fn envois_modifier(
-    envois: crate::envoi::Envois,
+pub fn envoi_regler(
+    index: usize,
+    envoi: crate::envoi::Envoi,
     atelier: State<Atelier>,
 ) -> Result<ProjetVue, String> {
     let mut garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_mut().ok_or_else(aucun_projet)?;
+    let mut envois = o.projet.meta.envois.clone();
+    *envois
+        .liste
+        .get_mut(index)
+        .ok_or("envoi introuvable : la liste a changé.")? = envoi;
+    o.projet.regler_envois(envois)?;
+    vue_modifiee(o)
+}
+
+/// Ajoute un envoi, qui naît comme le précédent.
+///
+/// La règle vit dans `Envois::ajouter`, avec le modèle : c'est une propriété du livre,
+/// et non de la façon dont l'interface la demande.
+#[tauri::command]
+pub fn envoi_ajouter(dedicataire: String, atelier: State<Atelier>) -> Result<ProjetVue, String> {
+    let mut garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_mut().ok_or_else(aucun_projet)?;
+    let mut envois = o.projet.meta.envois.clone();
+    envois.ajouter(dedicataire);
+    o.projet.regler_envois(envois)?;
+    vue_modifiee(o)
+}
+
+/// Retire un envoi.
+///
+/// Son image s'en va avec lui : c'est `regler_envois` qui élague ce que plus aucun
+/// envoi ne nomme, sans quoi l'archive garderait le mot manuscrit d'une personne à qui
+/// l'on n'envoie plus rien.
+#[tauri::command]
+pub fn envoi_retirer(index: usize, atelier: State<Atelier>) -> Result<ProjetVue, String> {
+    let mut garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_mut().ok_or_else(aucun_projet)?;
+    let mut envois = o.projet.meta.envois.clone();
+    if index >= envois.liste.len() {
+        return Err("envoi introuvable : la liste a changé.".into());
+    }
+    envois.liste.remove(index);
+    o.projet.regler_envois(envois)?;
+    vue_modifiee(o)
+}
+
+/// Le gabarit de diffusion, partagé par tous les envois du livre.
+///
+/// Au livre et non à l'envoi : c'est le style d'écriture du tirage, dans lequel le mot
+/// de chacun s'insère. Le réécrire pour chaque personne n'aurait pas d'usage.
+#[tauri::command]
+pub fn envois_gabarit(gabarit: String, atelier: State<Atelier>) -> Result<ProjetVue, String> {
+    let mut garde = atelier.ouvert.lock().unwrap();
+    let o = garde.as_mut().ok_or_else(aucun_projet)?;
+    let mut envois = o.projet.meta.envois.clone();
+    envois.gabarit = gabarit;
     o.projet.regler_envois(envois)?;
     vue_modifiee(o)
 }
