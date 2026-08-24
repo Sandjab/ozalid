@@ -119,6 +119,54 @@ impl Typst {
         .map(|_| ())
     }
 
+    /// Rend **toutes** les pages en PNG, en une seule invocation, et rend leurs chemins
+    /// dans l'ordre des pages.
+    ///
+    /// `motif` porte le `{p}` que Typst substitue par le numéro de page. Appeler
+    /// `apercu` page à page coûterait une composition complète par page — 190 fois pour
+    /// un livre ordinaire, là où l'invocation unique compose une fois et rasterise en
+    /// parallèle.
+    ///
+    /// Les chemins sont **relus dans le répertoire** plutôt que fabriqués : Typst décide
+    /// seul du remplissage du numéro, et deviner « 1 » quand il écrit « 001 » rendrait
+    /// une liste de fichiers absents. Le tri est numérique et non alphabétique — sans
+    /// lui, la page 10 se rangerait entre la 1 et la 2, et le rail de vignettes
+    /// montrerait le livre dans le désordre.
+    pub fn apercus(&self, source: &Path, motif: &Path, ppi: u32) -> Result<Vec<PathBuf>, String> {
+        let nom = motif
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| format!("motif illisible : {}", motif.display()))?;
+        let (prefixe, suffixe) = nom
+            .split_once("{p}")
+            .ok_or_else(|| format!("motif sans « {{p}} » : {}", motif.display()))?;
+        let dossier = motif
+            .parent()
+            .ok_or_else(|| format!("motif sans répertoire : {}", motif.display()))?;
+
+        self.lance(&[
+            "compile",
+            "--format",
+            "png",
+            "--ppi",
+            &ppi.to_string(),
+            &chemin(source)?,
+            &chemin(motif)?,
+        ])?;
+
+        let mut pages: Vec<(u32, PathBuf)> = std::fs::read_dir(dossier)
+            .map_err(|e| format!("vignettes illisibles ({}) : {e}", dossier.display()))?
+            .filter_map(Result::ok)
+            .filter_map(|e| {
+                let f = e.file_name().into_string().ok()?;
+                let n = f.strip_prefix(prefixe)?.strip_suffix(suffixe)?;
+                Some((n.parse().ok()?, e.path()))
+            })
+            .collect();
+        pages.sort_by_key(|(n, _)| *n);
+        Ok(pages.into_iter().map(|(_, c)| c).collect())
+    }
+
     /// Rend `(stdout, stderr)` d'une invocation réussie : Typst peut réussir en
     /// avertissant — la substitution de police, notamment — et une application
     /// graphique n'a pas de console où ce `stderr` se lirait tout seul.
@@ -231,5 +279,45 @@ warning: unknown font family: plume fantome
             .map(|p| p.display().to_string())
             .collect();
         assert_eq!(p, vec!["/a/fonts", "/b/fonts"]);
+    }
+
+    /// Une invocation, N fichiers, et dans l'ordre des pages.
+    ///
+    /// L'ordre est le point : Typst nomme ses sorties sans remplissage, si bien que
+    /// l'ordre alphabétique rangerait la page 10 entre la 1 et la 2 — et le rail de
+    /// vignettes montrerait le livre dans le désordre, ce qui ne se voit qu'à partir de
+    /// dix pages.
+    #[test]
+    #[ignore = "lance le sidecar Typst : cargo test -- --ignored"]
+    fn toutes_les_pages_sortent_en_une_invocation_et_dans_l_ordre() {
+        let t = Typst::new("typst");
+        let d = tempfile::tempdir().expect("répertoire de travail");
+        let src = d.path().join("douze.typ");
+        let corps: String = (1..=12).map(|n| format!("p{n} #pagebreak()\n")).collect();
+        std::fs::write(&src, corps).expect("source non écrite");
+
+        let pages = t
+            .apercus(&src, &d.path().join("v{p}.png"), 20)
+            .expect("rendu refusé");
+        assert_eq!(pages.len(), 13, "{pages:?}");
+        assert!(pages.iter().all(|p| p.exists()), "{pages:?}");
+        let numeros: Vec<String> = pages
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(numeros[0], "v1.png");
+        assert_eq!(numeros[1], "v2.png", "la page 10 s'est glissée avant la 2");
+        assert_eq!(numeros[9], "v10.png");
+    }
+
+    /// Un motif sans `{p}` ferait écrire toutes les pages dans le même fichier : le
+    /// refus est ici, où l'on sait encore quoi dire, plutôt que dans une liste vide.
+    #[test]
+    fn un_motif_sans_jeton_de_page_est_refuse() {
+        let t = Typst::new("typst");
+        let err = t
+            .apercus(Path::new("/tmp/x.typ"), Path::new("/tmp/v.png"), 20)
+            .unwrap_err();
+        assert!(err.contains("{p}"), "{err}");
     }
 }
