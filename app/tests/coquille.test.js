@@ -184,6 +184,19 @@ const faireComposer = async (els) => {
   await new Promise((r) => setImmediate(r));
 };
 
+/**
+ * Aller à l'étape Envois, comme on y va : par son onglet.
+ *
+ * C'est l'arrivée qui rend le rail, la page et l'objet — pas l'ouverture du projet :
+ * ils coûtent une composition, et la payer à qui vient regarder une couverture serait
+ * le prix de ce qu'il n'a pas demandé. Les rendus partent sans être attendus ; un tour
+ * de boucle pour qu'ils aboutissent, comme pour la composition.
+ */
+const allerAuxEnvois = async (els) => {
+  await els.get('onglet-envois').declenche('click');
+  await new Promise((r) => setImmediate(r));
+};
+
 const ETAPES = ['livre', 'couverture', 'livraison', 'envois'];
 const montree = (els) =>
   ETAPES.filter((c) => els.get(`etape${c[0].toUpperCase()}${c.slice(1)}`).hidden === false);
@@ -1248,6 +1261,73 @@ test('les réglages suivent la main de l\'exemplaire ouvert', async () => {
   const choix = a.appels.findLast(([c]) => c === 'envoi_image_choisir');
   assert.ok(choix, 'aucun envoi_image_choisir : le bouton n\'a pas d\'écouteur');
   assert.deepEqual(choix[1], { index: 0, chemin: '/photos/mot.png' });
+});
+
+/**
+ * Cliquer une vignette déplace l'envoi sur cette page.
+ *
+ * C'est le **seul** moyen d'en changer — il n'y a pas de champ « page » —, et c'est
+ * pourquoi il se garde : sans écouteur, le rail serait une frise décorative et l'envoi
+ * resterait à jamais sur sa page de titre.
+ */
+test('cliquer une vignette déplace l\'envoi sur cette page', async () => {
+  const a = atelier({
+    sur: {
+      envois: {
+        gabarit: '',
+        liste: [{ dedicataire: 'Léa', main: { mode: 'police', police: 'Caveat' },
+          place: PLACE_DEFAUT, contenu: 'À Léa.', image: null }],
+      },
+    },
+  });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  await allerAuxEnvois(els);
+
+  const vignettes = [...els.get('vignettes').children];
+  assert.equal(vignettes.length, 4, 'le rail ne montre pas les pages rendues');
+  assert.equal(vignettes[2].attrs['aria-current'], 'true',
+    'la page visée n\'est pas marquée : on ne saurait pas où est l\'envoi');
+
+  await vignettes[0].declenche('click');
+
+  const regle = a.appels.findLast(([c]) => c === 'envoi_regler');
+  assert.equal(regle[1].envoi.place.page, 1, 'la vignette n\'a pas déplacé l\'envoi');
+  // Le reste du placement ne bouge pas : changer de page n'est pas repartir de zéro.
+  assert.equal(regle[1].envoi.place.taille, PLACE_DEFAUT.taille);
+  assert.equal(regle[1].envoi.place.angle, PLACE_DEFAUT.angle);
+  const page = a.appels.findLast(([c]) => c === 'envoi_page');
+  assert.deepEqual(page[1], { page: 1 }, 'le canevas montre encore l\'ancienne page');
+});
+
+/**
+ * Une recomposition change les pages : les vignettes d'avant montreraient un livre qui
+ * n'existe plus, et l'on placerait un envoi page 40 d'une pagination périmée.
+ */
+test('recomposer refait le rail', async () => {
+  const a = atelier({
+    composition: { pages: 100, gouttiere: 20, blanche: false, dos: 7 },
+    sur: {
+      envois: {
+        gabarit: '',
+        liste: [{ dedicataire: 'Léa', main: { mode: 'police', police: 'Caveat' },
+          place: PLACE_DEFAUT, contenu: 'À Léa.', image: null }],
+      },
+    },
+  });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  await allerAuxEnvois(els);
+  const avant = a.appels.filter(([c]) => c === 'envoi_vignettes').length;
+  assert.ok(avant > 0, 'le rail ne s\'est jamais rendu');
+
+  // Recomposer depuis le Livre, puis revenir : c'est le chemin réel, et c'est en
+  // revenant que le rail doit se refaire.
+  await faireComposer(els);
+  await allerAuxEnvois(els);
+
+  assert.ok(a.appels.filter(([c]) => c === 'envoi_vignettes').length > avant,
+    'le rail garde les vignettes d\'avant la recomposition');
 });
 
 /* ---------- l'image générée ---------- */

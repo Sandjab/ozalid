@@ -86,6 +86,17 @@ function afficherEnvois() {
 function choisir(i) {
   choisi = i;
   afficherEnvois();
+  ouvrirCanevas();
+}
+
+/**
+ * Rend ce que les trois bandes de droite montrent : le rail, la page, l'objet.
+ *
+ * Appelé en arrivant à l'étape et à chaque changement de dédicataire, jamais à
+ * l'ouverture du projet : rendre les pages coûte une composition, et la payer à qui
+ * vient regarder une couverture serait le prix de ce qu'il n'a pas demandé.
+ */
+function ouvrirCanevas() {
   majVignettes();
   majPage();
   majObjet();

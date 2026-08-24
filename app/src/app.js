@@ -206,6 +206,11 @@ function allerA(cle) {
   if (!projet) return;
   etape = cle;
   majEtapes();
+  // Le rail et le canevas ne se rendent qu'en arrivant aux Envois, et pas à l'ouverture
+  // du projet : ils coûtent une composition, et la payer à qui vient regarder une
+  // couverture serait le prix de ce qu'il n'a pas demandé. C'est le même arbitrage que
+  // la composition elle-même, qui attend son consentement.
+  if (cle === 'envois') ouvrirCanevas();
 }
 
 /**
@@ -1042,6 +1047,10 @@ async function majInterieur() {
  */
 async function composer() {
   majPied();
+  // Les vignettes du rail montrent l'intérieur qu'on s'apprête à recomposer : les
+  // garder ferait placer un envoi sur les pages d'un livre qui n'existe plus, et rien
+  // à l'écran ne dirait laquelle des deux paginations on regarde.
+  oublierPages();
   try {
     const c = await invoke('composer');
     // Le dos sort de la pagination qu'on vient de mesurer, et c'est le projet qui le
