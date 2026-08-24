@@ -752,9 +752,18 @@ function oublierLesSorties() {
   // eux : le Rust l'a oubliée en posant l'autre projet, et laisser « Retenir » allumé
   // proposerait de figer, dans le livre B, une image demandée pour le livre A.
   candidat = null;
+  choisi = 0;
   $('envois').replaceChildren();
   $('apercuEnvoi').removeAttribute('src');
   $('apercuEnvoi').hidden = true;
+  // Le canevas et son rail sont ceux d'un livre qui n'est plus ouvert : les laisser
+  // montrerait les pages du livre A pendant qu'on règle un envoi du livre B, et rien à
+  // l'écran ne dirait laquelle des deux paginations on regarde.
+  oublierPages();
+  $('vignettes').replaceChildren();
+  $('fondPage').removeAttribute('src');
+  $('fondPage').hidden = true;
+  $('objet').hidden = true;
   // L'entête par-dessus les canaux qu'`oublierLaComposition` vient d'éteindre : une
   // saisie refusée y est écrite au nom du livre qu'on quitte, et elle y resterait seule
   // à parler de lui.
@@ -1185,8 +1194,34 @@ $('btAjouterEnvoi').addEventListener('click', () => {
   const qui = $('inDedicataire').value.trim();
   if (qui === '') return undefined;
   $('inDedicataire').value = '';
-  return envoisModifier([...projet.envois.liste, { dedicataire: qui, contenu: '' }]);
+  // Le neuf s'ouvre aussitôt : il naît en fin de liste, et l'y laisser fermé obligerait
+  // à le chercher parmi vingt pour lui écrire son mot.
+  return tente(async () => {
+    afficherProjet(await invoke('envoi_ajouter', { dedicataire: qui }));
+    choisir(projet.envois.liste.length - 1);
+  });
 });
+$('btRetirerEnvoi').addEventListener('click', () => tente(async () => {
+  afficherProjet(await invoke('envoi_retirer', { index: choisi }));
+  choisir(choisi);
+}));
+$('inMot').addEventListener('change', () => reglerEnvoi({ contenu: $('inMot').value })
+  .then(majObjet));
+// L'échelle et l'inclinaison se saisissent aussi au clavier : la poignée et le champ
+// disent la même valeur, comme sur la couverture. `input` et non `change` — un curseur
+// qu'on tire doit montrer ce qu'il fait.
+$('inTaille').addEventListener('input', () => {
+  $('vTaille').textContent = `${$('inTaille').value} %`;
+  return reglerPlace({ taille: Number($('inTaille').value) / 100 }).then(majObjet);
+});
+$('inAngle').addEventListener('input', () => {
+  $('vAngle').textContent = `${$('inAngle').value}°`;
+  return reglerPlace({ angle: Number($('inAngle').value) });
+});
+$('btImageEnvoi').addEventListener('click', () => choisirImageEnvoi(choisi));
+$('btGenerer').addEventListener('click', () => genererEnvoi(choisi));
+$('btAccepter').addEventListener('click', () => accepterEnvoi(choisi));
+$('btVoirPage').addEventListener('click', () => apercuEnvoi(choisi));
 // La police de l'auteur est copiée dans le `.ozalid`, comme le manuscrit et les photos :
 // le chemin d'où elle vient n'a plus à exister pour que les envois se composent.
 $('btPolice').addEventListener('click', async () => {
@@ -1202,31 +1237,25 @@ $('btPoliceRetirer').addEventListener('click', () => tente(async () =>
 // Le gabarit appartient au livre, l'accès au modèle à la machine : deux commandes, et
 // la clé ne redescend jamais — le champ reste vide, et « inchangée » le dit.
 $('inGabarit').addEventListener('change', () => tente(async () =>
-  afficherProjet(await invoke('envois_modifier', {
-    envois: {
-      main: { mode: 'diffusion', gabarit: $('inGabarit').value },
-      liste: projet.envois.liste,
-    },
-  }))));
+  afficherProjet(await invoke('envois_gabarit', { gabarit: $('inGabarit').value }))));
 $('btDiffusionRegler').addEventListener('click', () => reglerDiffusion(
   $('inDiffusionCle').value === '' ? null : $('inDiffusionCle').value));
 $('btDiffusionOublier').addEventListener('click', () => reglerDiffusion(''));
-// La main appartient au livre : la changer réécrit tous ses envois d'un coup.
-$('inMain').addEventListener('change', () => tente(async () => {
+// La main appartient à l'exemplaire depuis la v4 : la changer ne touche que lui, et
+// c'est tout l'objet du chantier — écrire à la main pour l'une, composer pour l'autre.
+$('inMain').addEventListener('change', () => {
   const choix = $('inMain').value;
-  // Chaque forme emporte ce qu'elle réclame : une police son nom, une image générée son
-  // gabarit. L'envoyer sans lui laisserait le Rust refuser une main dont il ne saurait
-  // pas quoi demander au modèle.
-  const main = { mode: choix.startsWith('police:') ? 'police' : choix };
-  if (main.mode === 'police') main.police = choix.slice('police:'.length);
-  if (main.mode === 'diffusion') main.gabarit = projet.envois.main.gabarit ?? '';
-  afficherProjet(await invoke('envois_modifier', {
-    envois: { main, liste: projet.envois.liste },
-  }));
-}));
+  // Une police emporte son nom ; les deux formes en image n'emportent rien — le gabarit
+  // est au livre, et il a sa propre commande.
+  const main = choix.startsWith('police:')
+    ? { mode: 'police', police: choix.slice('police:'.length) }
+    : { mode: choix };
+  return reglerEnvoi({ main }).then(majObjet);
+});
 construireEtapes();
 construireFaces();
 cablerPrises();
+cablerPlacement();
 for (const id of ['inTitre', 'inTitrePage', 'inAuteur', 'inGenre', 'inEditeur',
   'inCollection', 'inMonogramme', 'inCopyright', 'inPrix', 'inMention',
   'inDedicace', 'inChapitres']) {

@@ -38,10 +38,16 @@ function projet(sur = {}) {
     images: [],
     interieur: { police: 'EB Garamond' },
     livraison: { destinataires: [dest(LULU)], courant: LULU.cle },
-    envois: { main: { mode: 'police', police: 'Caveat' }, liste: [] },
+    envois: { gabarit: '', liste: [] },
     ...sur,
   };
 }
+
+/**
+ * Le placement d'un envoi neuf, tel que `Place::default()` le pose côté Rust : la page
+ * de titre, au bas. Le faux le reprend pour que l'écran montre les mêmes chiffres.
+ */
+const PLACE_DEFAUT = { page: 3, x: 0.5, y: 0.8, taille: 0.6, angle: 0 };
 
 /**
  * Le Rust de façade. Il tient la liste des destinataires pour de vrai : depuis le lot 3,
@@ -64,7 +70,11 @@ function atelier({
       destinataires: livraison.destinataires.map(({ compose, ...d }) => d),
     };
   };
-  const vue = () => projet({ livraison, ...sur });
+  // Les envois sont tenus pour de vrai, comme les destinataires : depuis que la main
+  // appartient à l'exemplaire, un faux qui rendrait toujours la même liste ne montrerait
+  // jamais qu'un envoi neuf hérite du précédent.
+  let envois = sur.envois ?? { gabarit: '', liste: [] };
+  const vue = () => projet({ livraison, ...sur, envois });
   const invoke = async (cmd, args) => {
     appels.push([cmd, args]);
     switch (cmd) {
@@ -78,6 +88,35 @@ function atelier({
       case 'diffusion_lire': return acces;
       case 'diffusion_regler': return { url: args.url, cle_posee: args.cle !== '' };
       case 'envoi_generer': return 'data:image/png;base64,QUJD';
+      // Les trois rendus du canevas. Muets : ce qui compte dans un test de coquille,
+      // c'est quelle page est demandée, jamais ce que Typst en fait.
+      case 'envoi_vignettes': return ['data:image/png;base64,UDE', 'data:image/png;base64,UDI',
+        'data:image/png;base64,UDM', 'data:image/png;base64,UDQ'];
+      case 'envoi_page': return 'data:image/png;base64,R1JBTkQ=';
+      case 'envoi_objet': return { image: 'data:image/png;base64,T0JK', ratio: 0.2 };
+      case 'envoi_ajouter': {
+        // La règle vit dans le Rust — `Envois::ajouter` : un envoi neuf naît comme le
+        // précédent, main et placement compris, mais sans son mot ni son image.
+        const modele = envois.liste[envois.liste.length - 1];
+        envois = { ...envois, liste: [...envois.liste, {
+          dedicataire: args.dedicataire,
+          main: modele?.main ?? { mode: 'police', police: 'Caveat' },
+          place: modele?.place ?? PLACE_DEFAUT,
+          contenu: '',
+          image: null,
+        }] };
+        return vue();
+      }
+      case 'envoi_regler':
+        envois = { ...envois,
+          liste: envois.liste.map((e, i) => (i === args.index ? args.envoi : e)) };
+        return vue();
+      case 'envoi_retirer':
+        envois = { ...envois, liste: envois.liste.filter((_, i) => i !== args.index) };
+        return vue();
+      case 'envois_gabarit':
+        envois = { ...envois, gabarit: args.gabarit };
+        return vue();
       case 'maquettes_liste': return [];
       case 'recents_liste': return recents;
       case 'garde_modifications': return 'ignorer';
@@ -952,24 +991,38 @@ test('modifier un autre champ n\'efface pas la dédicace', async () => {
 });
 
 /**
- * `envois_modifier` remplace l'objet entier : un envoi ajouté sans la main du livre
- * ramènerait la main au défaut, et tous les exemplaires changeraient d'écriture sans
- * qu'on l'ait demandé. Même piège que la dédicace, même garde.
+ * Ajouter n'envoie plus que le nom : la liste entière ne voyage plus, et la règle du
+ * neuf — il naît comme le précédent — vit dans le Rust, où elle se teste.
+ *
+ * Ce que l'écran doit faire, lui, c'est **ouvrir** le neuf : il naît en fin de liste, et
+ * l'y laisser fermé obligerait à le chercher parmi vingt pour lui écrire son mot.
  */
-test('ajouter un envoi conserve la main du livre', async () => {
+test('un envoi ajouté s\'ouvre aussitôt', async () => {
   const a = atelier({
-    sur: { envois: { main: { mode: 'police', police: 'Dancing Script' }, liste: [] } },
+    sur: {
+      envois: {
+        gabarit: '',
+        liste: [{ dedicataire: 'Léa', main: { mode: 'image' }, place: PLACE_DEFAUT,
+          contenu: '', image: 'Léa.png' }],
+      },
+    },
   });
   const { els } = await charge({ invoke: a.invoke });
   await els.get('btNouveau').declenche('click');
 
-  els.get('inDedicataire').value = 'Léa';
+  els.get('inDedicataire').value = 'Marc';
   await els.get('btAjouterEnvoi').declenche('click');
 
-  const envoi = a.appels.findLast(([c]) => c === 'envois_modifier');
-  assert.ok(envoi, 'aucun envois_modifier : le bouton n\'a pas d\'écouteur');
-  assert.equal(envoi[1].envois.main.police, 'Dancing Script');
-  assert.equal(envoi[1].envois.liste[0].dedicataire, 'Léa');
+  const envoi = a.appels.findLast(([c]) => c === 'envoi_ajouter');
+  assert.ok(envoi, 'aucun envoi_ajouter : le bouton n\'a pas d\'écouteur');
+  assert.deepEqual(envoi[1], { dedicataire: 'Marc' });
+
+  const lignes = [...els.get('envois').children];
+  assert.deepEqual(lignes.map((l) => l.textContent), ['Léa', 'Marc']);
+  assert.equal(lignes[1].attrs['aria-selected'], 'true',
+    'le neuf n\'est pas ouvert : il faudrait aller le chercher dans la liste');
+  // Il a hérité la main de Léa : le menu montre donc l'image, pas une police.
+  assert.equal(els.get('inMain').value, 'image');
 });
 
 /**
@@ -981,8 +1034,9 @@ test('le bouton des envois s\'allume dès qu\'un mot est écrit', async () => {
   const avec = atelier({
     sur: {
       envois: {
-        main: { mode: 'police', police: 'Caveat' },
-        liste: [{ dedicataire: 'Léa', contenu: 'À Léa.' }],
+        gabarit: '',
+        liste: [{ dedicataire: 'Léa', main: { mode: 'police', police: 'Caveat' },
+          place: PLACE_DEFAUT, contenu: 'À Léa.', image: null }],
       },
     },
   });
@@ -999,18 +1053,35 @@ test('le bouton des envois s\'allume dès qu\'un mot est écrit', async () => {
 });
 
 /**
- * Le menu des mains doit montrer celle qui compose. Rempli une fois au démarrage, il se
- * posait sur la première écriture de la liste pendant que le livre en composait une
- * autre — et le premier réglage de l'écran l'aurait imposée à tous les exemplaires.
+ * Le menu des mains montre celle de l'exemplaire ouvert, et change avec lui.
+ *
+ * Rempli une fois au démarrage, il se posait sur la première écriture de la liste
+ * pendant que le livre en composait une autre — et le premier réglage de l'écran
+ * l'aurait imposée. Depuis que la main appartient à l'exemplaire, le piège est pire :
+ * changer de dédicataire sans que le menu suive ferait réécrire la main de Marc avec
+ * celle de Léa au premier passage sur le menu.
  */
-test('le menu des mains se pose sur la main du livre', async () => {
+test('le menu des mains suit l\'exemplaire ouvert', async () => {
   const a = atelier({
-    sur: { envois: { main: { mode: 'police', police: 'Dancing Script' }, liste: [] } },
+    sur: {
+      envois: {
+        gabarit: '',
+        liste: [
+          { dedicataire: 'Léa', main: { mode: 'police', police: 'Dancing Script' },
+            place: PLACE_DEFAUT, contenu: 'À Léa.', image: null },
+          { dedicataire: 'Marc', main: { mode: 'image' },
+            place: PLACE_DEFAUT, contenu: '', image: 'Marc.png' },
+        ],
+      },
+    },
   });
   const { els } = await charge({ invoke: a.invoke });
   await els.get('btNouveau').declenche('click');
-
   assert.equal(els.get('inMain').value, 'police:Dancing Script');
+
+  await [...els.get('envois').children][1].declenche('click');
+  assert.equal(els.get('inMain').value, 'image',
+    'le menu montre encore la main du dédicataire précédent');
 });
 
 /**
@@ -1022,9 +1093,10 @@ test('la police personnelle s\'ajoute aux mains de la maison', async () => {
   const a = atelier({
     sur: {
       envois: {
-        main: { mode: 'police', police: 'Ma Main' },
+        gabarit: '',
         personnelle: 'Ma Main',
-        liste: [],
+        liste: [{ dedicataire: 'Léa', main: { mode: 'police', police: 'Ma Main' },
+          place: PLACE_DEFAUT, contenu: 'À Léa.', image: null }],
       },
     },
   });
@@ -1045,7 +1117,12 @@ test('la police personnelle s\'ajoute aux mains de la maison', async () => {
  * pas, après un livre qui en portait une.
  */
 test('le retrait de police s\'éteint avec le livre qui portait la police', async () => {
-  const avec = { main: { mode: 'police', police: 'Ma Main' }, personnelle: 'Ma Main', liste: [] };
+  const avec = {
+    gabarit: '',
+    personnelle: 'Ma Main',
+    liste: [{ dedicataire: 'Léa', main: { mode: 'police', police: 'Ma Main' },
+      place: PLACE_DEFAUT, contenu: 'À Léa.', image: null }],
+  };
   const a = atelier({ sur: { envois: avec } });
   const { els, contexte } = await charge({ invoke: a.invoke });
   await els.get('btNouveau').declenche('click');
@@ -1081,59 +1158,93 @@ test('choisir une police envoie son chemin, et l\'annuler n\'envoie rien', async
 /**
  * La main est une forme autant qu'une écriture : le menu porte les deux, et le mode
  * choisi doit repartir tel quel. Envoyer une police là où l'on a choisi une image ferait
- * composer un texte vide sur toutes les pages de titre.
+ * composer un texte vide sur la page de l'exemplaire.
+ *
+ * Et il ne part que sur **cet** exemplaire : c'est tout l'objet du chantier — écrire à
+ * la main pour l'une et faire composer pour l'autre. Le voisin ne doit pas bouger.
  */
-test('choisir l\'image comme main envoie le mode, pas une police', async () => {
-  const a = atelier();
+test('changer la main ne touche que l\'exemplaire ouvert', async () => {
+  const a = atelier({
+    sur: {
+      envois: {
+        gabarit: '',
+        liste: [
+          { dedicataire: 'Léa', main: { mode: 'police', police: 'Caveat' },
+            place: PLACE_DEFAUT, contenu: 'À Léa.', image: null },
+          { dedicataire: 'Marc', main: { mode: 'police', police: 'Caveat' },
+            place: PLACE_DEFAUT, contenu: 'À Marc.', image: null },
+        ],
+      },
+    },
+  });
   const { els } = await charge({ invoke: a.invoke });
   await els.get('btNouveau').declenche('click');
 
   els.get('inMain').value = 'image';
   await els.get('inMain').declenche('change');
 
-  const envoi = a.appels.findLast(([c]) => c === 'envois_modifier');
-  assert.deepEqual(envoi[1].envois.main, { mode: 'image' });
+  const envoi = a.appels.findLast(([c]) => c === 'envoi_regler');
+  assert.ok(envoi, 'aucun envoi_regler : le menu n\'a pas d\'écouteur');
+  assert.equal(envoi[1].index, 0, 'la main est partie sur le mauvais exemplaire');
+  assert.deepEqual(envoi[1].envoi.main, { mode: 'image' });
+  // Le mot de Léa la suit : c'est l'envoi entier qui repart, seule sa main a changé.
+  assert.equal(envoi[1].envoi.contenu, 'À Léa.');
+
+  await [...els.get('envois').children][1].declenche('click');
+  assert.equal(els.get('inMain').value, 'police:Caveat',
+    'Marc a changé de main alors qu\'on réglait Léa');
 });
 
 /**
- * Chaque forme emporte ce que le Rust lui réclame. Le mode seul suffit à l'image écrite
- * à la main ; l'image générée, elle, réclame son gabarit, et la commande refuse une main
- * qui n'en porte pas — trouvé à l'écran, invisible ici tant que le faux Rust acceptait
- * tout ce qu'on lui envoyait.
+ * Une image générée n'emporte plus son gabarit : celui-ci est au livre, partagé, et il a
+ * sa propre commande. L'envoyer dans la main ferait réécrire le prompt du tirage entier
+ * à chaque exemplaire qu'on passe en images.
  */
-test('choisir l\'image générée envoie aussi le gabarit', async () => {
-  const a = atelier();
+test('choisir l\'image générée n\'emporte pas le gabarit', async () => {
+  const a = atelier({
+    sur: {
+      envois: {
+        gabarit: 'une aquarelle, mention « {envoi} »',
+        liste: [{ dedicataire: 'Léa', main: { mode: 'police', police: 'Caveat' },
+          place: PLACE_DEFAUT, contenu: 'À Léa.', image: null }],
+      },
+    },
+  });
   const { els } = await charge({ invoke: a.invoke });
   await els.get('btNouveau').declenche('click');
 
   els.get('inMain').value = 'diffusion';
   await els.get('inMain').declenche('change');
 
-  const envoi = a.appels.findLast(([c]) => c === 'envois_modifier');
-  assert.deepEqual(envoi[1].envois.main, { mode: 'diffusion', gabarit: '' });
+  const envoi = a.appels.findLast(([c]) => c === 'envoi_regler');
+  assert.deepEqual(envoi[1].envoi.main, { mode: 'diffusion' });
+  assert.equal(els.get('inGabarit').value, 'une aquarelle, mention « {envoi} »',
+    'le gabarit du livre a été perdu en changeant de main');
 });
 
 /**
- * Sous une main en images, la ligne d'un envoi ne porte plus de texte à écrire mais une
- * image à choisir. Laisser le champ de texte donnerait à croire qu'on peut encore y
- * écrire, alors que rien de ce qu'on y taperait ne serait imprimé.
+ * Les réglages suivent la main de l'exemplaire ouvert : sous une main en images, il n'y
+ * a pas de mot à écrire mais une image à choisir. Laisser le champ de texte donnerait à
+ * croire qu'on peut encore y écrire, alors que rien de ce qu'on y taperait ne serait
+ * imprimé.
  */
-test('la ligne d\'un envoi suit la main du livre', async () => {
+test('les réglages suivent la main de l\'exemplaire ouvert', async () => {
   const en_images = {
-    main: { mode: 'image' },
-    liste: [{ dedicataire: 'Léa', contenu: '', image: 'Léa.png' }],
+    gabarit: '',
+    liste: [{ dedicataire: 'Léa', main: { mode: 'image' }, place: PLACE_DEFAUT,
+      contenu: '', image: 'Léa.png' }],
   };
   const a = atelier({ sur: { envois: en_images } });
   const { els } = await charge({ invoke: a.invoke, open: async () => '/photos/mot.png' });
   await els.get('btNouveau').declenche('click');
 
-  const ligne = els.get('envois').enfants[0];
-  const tags = ligne.enfants.map((c) => c.tagName);
-  assert.ok(!tags.includes('TEXTAREA'), 'un champ de texte sous une main en images');
-  assert.equal(els.get('envoi-image-0').textContent, 'Image : Léa.png',
+  assert.equal(els.get('champMot').hidden, true, 'un champ de texte sous une main en images');
+  assert.equal(els.get('champImage').hidden, false, 'rien pour choisir l\'image');
+  assert.equal(els.get('champDiffusion').hidden, true);
+  assert.equal(els.get('btImageEnvoi').textContent, 'Image : Léa.png',
     'le nom de l\'image dans l\'archive n\'est pas montré');
 
-  await els.get('envoi-image-0').declenche('click');
+  await els.get('btImageEnvoi').declenche('click');
   const choix = a.appels.findLast(([c]) => c === 'envoi_image_choisir');
   assert.ok(choix, 'aucun envoi_image_choisir : le bouton n\'a pas d\'écouteur');
   assert.deepEqual(choix[1], { index: 0, chemin: '/photos/mot.png' });
@@ -1142,15 +1253,17 @@ test('la ligne d\'un envoi suit la main du livre', async () => {
 /* ---------- l'image générée ---------- */
 
 const EN_DIFFUSION = {
-  main: { mode: 'diffusion', gabarit: 'une aquarelle, mention « {envoi} »' },
-  liste: [{ dedicataire: 'Léa', contenu: 'À Léa', image: null }],
+  gabarit: 'une aquarelle, mention « {envoi} »',
+  liste: [{ dedicataire: 'Léa', main: { mode: 'diffusion' }, place: PLACE_DEFAUT,
+    contenu: 'À Léa', image: null }],
 };
 
 /**
- * Le gabarit appartient au livre : il part avec la main, dans le même objet. L'envoyer
- * sans lui ramènerait la main au défaut — tous les exemplaires changeraient de forme.
+ * Le gabarit appartient au livre et a sa propre commande : c'est le style d'écriture du
+ * tirage, dans lequel le mot de chacun s'insère, et le faire voyager avec la main d'un
+ * exemplaire le ferait réécrire à chaque personne.
  */
-test('le gabarit part avec la main du livre', async () => {
+test('le gabarit a sa commande, et ne passe pas par un envoi', async () => {
   const a = atelier({ sur: { envois: EN_DIFFUSION } });
   const { els } = await charge({ invoke: a.invoke });
   await els.get('btNouveau').declenche('click');
@@ -1159,9 +1272,11 @@ test('le gabarit part avec la main du livre', async () => {
   els.get('inGabarit').value = 'une gravure, mention « {envoi} »';
   await els.get('inGabarit').declenche('change');
 
-  const envoi = a.appels.findLast(([c]) => c === 'envois_modifier');
-  assert.deepEqual(envoi[1].envois.main,
-    { mode: 'diffusion', gabarit: 'une gravure, mention « {envoi} »' });
+  const envoi = a.appels.findLast(([c]) => c === 'envois_gabarit');
+  assert.ok(envoi, 'aucun envois_gabarit : le champ n\'a pas d\'écouteur');
+  assert.deepEqual(envoi[1], { gabarit: 'une gravure, mention « {envoi} »' });
+  assert.ok(!a.noms().includes('envoi_regler'),
+    'le gabarit est passé par un envoi : il serait réécrit pour chaque personne');
 });
 
 /**
@@ -1206,16 +1321,16 @@ test('retenir une image s\'allume quand le modèle a répondu', async () => {
   const a = atelier({ sur: { envois: EN_DIFFUSION } });
   const { els } = await charge({ invoke: a.invoke });
   await els.get('btNouveau').declenche('click');
-  assert.equal(els.get('envoi-accepter-0').disabled, true);
+  assert.equal(els.get('btAccepter').disabled, true);
 
-  await els.get('envoi-generer-0').declenche('click');
+  await els.get('btGenerer').declenche('click');
 
   assert.equal(els.get('apercuEnvoi').src, 'data:image/png;base64,QUJD',
     'l\'image proposée n\'est pas montrée');
-  assert.equal(els.get('envoi-accepter-0').disabled, false,
+  assert.equal(els.get('btAccepter').disabled, false,
     'le modèle a répondu et rien ne permet de retenir son image');
 
-  await els.get('envoi-accepter-0').declenche('click');
+  await els.get('btAccepter').declenche('click');
   const accepte = a.appels.findLast(([c]) => c === 'envoi_accepter');
   assert.deepEqual(accepte[1], { index: 0 });
 });
@@ -1229,10 +1344,10 @@ test('une image proposée ne survit pas au livre suivant', async () => {
   const a = atelier({ sur: { envois: EN_DIFFUSION } });
   const { els } = await charge({ invoke: a.invoke });
   await els.get('btNouveau').declenche('click');
-  await els.get('envoi-generer-0').declenche('click');
+  await els.get('btGenerer').declenche('click');
 
   await els.get('btNouveau').declenche('click');
 
-  assert.equal(els.get('envoi-accepter-0').disabled, true,
+  assert.equal(els.get('btAccepter').disabled, true,
     'le livre suivant hérite de l\'image proposée pour le précédent');
 });

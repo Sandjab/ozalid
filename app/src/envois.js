@@ -1,8 +1,12 @@
 'use strict';
 
 /**
- * L'étape Envois : la main du livre, l'accès au modèle, la liste des dédicataires
- * et leurs exemplaires.
+ * L'étape Envois : la liste des dédicataires, et l'exemplaire qu'on règle.
+ *
+ * Quatre bandes qui ne parlent que d'une personne à la fois — la liste dit qui, le
+ * rail dit quelle page, le canevas montre, la colonne de droite règle. C'est ce qui
+ * distingue cette étape de la liste-formulaire qu'elle remplace : vingt lignes portant
+ * chacune leur `textarea` ne se lisaient plus.
  *
  * Même partage que `couverture.js` et `livraison.js` : ce fichier ne pose aucun
  * écouteur et ne lit pas le DOM au chargement. Il définit, `app.js` branche — c'est
@@ -10,9 +14,23 @@
  * l'ordre de chargement.
  */
 
-/** D'où vient l'écriture des envois de ce livre : `police`, `image` ou `diffusion`. */
+/**
+ * Le rang du dédicataire dont on règle l'exemplaire.
+ *
+ * Le rang plutôt que l'objet : la liste se refait à chaque retour du projet, et un
+ * objet retenu serait celui d'avant — on réglerait un exemplaire en croyant en régler
+ * un autre.
+ */
+let choisi = 0;
+
+/** L'envoi qu'on règle, ou `null` quand la liste est vide. */
+function envoi() {
+  return projet.envois.liste[choisi] ?? null;
+}
+
+/** D'où vient l'écriture de l'exemplaire ouvert : `police`, `image` ou `diffusion`. */
 function main() {
-  return projet.envois.main.mode;
+  return envoi()?.main.mode ?? 'police';
 }
 
 /**
@@ -37,6 +55,137 @@ function afficherDiffusion(acces) {
     : 'aucune clé : la génération sera refusée';
 }
 
+/* ---------- la liste ---------- */
+
+/**
+ * La liste des dédicataires : un nom par ligne, celui qu'on règle marqué.
+ *
+ * Un envoi sans nom porte son rang plutôt que rien : trois lignes vides se
+ * confondraient, et l'on réglerait l'exemplaire d'un autre.
+ */
+function afficherEnvois() {
+  const liste = projet.envois.liste;
+  // Un retrait peut avoir laissé le rang au-delà de la liste : le ramener plutôt que
+  // d'ouvrir un exemplaire qui n'existe plus.
+  choisi = Math.min(choisi, Math.max(0, liste.length - 1));
+
+  const box = $('envois');
+  box.textContent = '';
+  for (const [i, e] of liste.entries()) {
+    const li = h('li', e.dedicataire || `envoi ${i + 1}`);
+    li.setAttribute('role', 'option');
+    li.setAttribute('aria-selected', String(i === choisi));
+    li.addEventListener('click', () => choisir(i));
+    box.append(li);
+  }
+  afficherReglages();
+  $('btEnvoyer').disabled = liste.length === 0;
+}
+
+/** Ouvre l'exemplaire d'un autre dédicataire : les trois autres bandes le suivent. */
+function choisir(i) {
+  choisi = i;
+  afficherEnvois();
+  majVignettes();
+  majPage();
+  majObjet();
+}
+
+/* ---------- les réglages de l'exemplaire ouvert ---------- */
+
+/**
+ * Ce que la main réclame, et rien d'autre.
+ *
+ * Un champ grisé sous une main en images donnerait à croire qu'on peut y écrire ; c'est
+ * pourquoi les trois formes ne se montrent pas ensemble.
+ */
+function afficherReglages() {
+  const e = envoi();
+  for (const id of ['inMain', 'inMot', 'inTaille', 'inAngle', 'btVoirPage',
+    'btRetirerEnvoi']) {
+    $(id).disabled = !e;
+  }
+  $('champImage').hidden = !e || main() !== 'image';
+  $('champDiffusion').hidden = !e || main() !== 'diffusion';
+  $('champMot').hidden = !!e && main() !== 'police';
+  // Ce qui appartient au livre se pose **avant** la sortie : un livre sans dédicataire a
+  // quand même sa police personnelle, et la laisser dans l'état du livre précédent
+  // offrirait de retirer une écriture que celui-ci ne porte pas.
+  afficherLivre();
+  if (!e) return;
+
+  afficherMain();
+  $('inMot').value = e.contenu;
+  $('btImageEnvoi').textContent = e.image ? `Image : ${e.image}` : 'Choisir une image…';
+  $('btAccepter').textContent = e.image ? `Retenue : ${e.image}` : 'Retenir';
+  // « Retenir » est éteint tant que rien n'a été généré pour cette ligne : c'est le
+  // geste qui fige l'image dans le `.ozalid`, et il n'a pas d'objet avant qu'on ait
+  // regardé. Un modèle de diffusion rend rarement une écriture lisible du premier coup.
+  $('btAccepter').disabled = candidat !== choisi;
+
+  const taille = Math.round(e.place.taille * 100);
+  $('inTaille').value = taille;
+  $('vTaille').textContent = `${taille} %`;
+  const angle = Math.round(e.place.angle);
+  $('inAngle').value = angle;
+  $('vAngle').textContent = `${angle}°`;
+}
+
+/**
+ * Le choix de la main : les trois écritures de la maison, et celle de l'auteur.
+ *
+ * Le `select` est refait à chaque projet plutôt que rempli une fois au démarrage : la
+ * police personnelle appartient au livre ouvert, elle entre et sort avec lui. Sa valeur
+ * est reposée depuis l'envoi — sans quoi le menu montrerait la première main pendant
+ * que l'exemplaire en compose une autre, et le premier réglage de l'écran l'imposerait.
+ */
+function afficherMain() {
+  const sel = $('inMain');
+  const perso = projet.envois.personnelle;
+  const e = envoi();
+  sel.replaceChildren();
+  // Les écritures et les formes dans une seule liste, préfixées : la question posée est
+  // « d'où vient l'écriture », et elle n'a qu'une réponse à la fois. Sans préfixe, une
+  // police qui s'appellerait « image » désignerait l'autre forme.
+  for (const m of mains) sel.append(new Option(m, `police:${m}`));
+  if (perso) sel.append(new Option(`${perso} (votre police)`, `police:${perso}`));
+  sel.append(new Option('Image écrite à la main', 'image'));
+  sel.append(new Option('Image générée', 'diffusion'));
+  sel.value = e.main.mode === 'police' ? `police:${e.main.police}` : e.main.mode;
+}
+
+/**
+ * Ce qui appartient au livre et non à l'exemplaire : l'écriture de l'auteur, et le
+ * gabarit partagé des envois générés.
+ *
+ * À part du reste des réglages, parce qu'un livre sans dédicataire les porte quand
+ * même : les poser dans `afficherMain`, qui n'a de sens qu'avec un envoi ouvert, les
+ * laissait dans l'état du livre précédent.
+ */
+function afficherLivre() {
+  const perso = projet.envois.personnelle;
+  $('inGabarit').value = projet.envois.gabarit ?? '';
+  $('etatPolice').textContent = perso
+    ? `Police personnelle embarquée : ${perso}.`
+    : 'Aucune police personnelle : les envois s\'écrivent dans une main de la maison.';
+  $('btPoliceRetirer').disabled = !perso;
+}
+
+/** Remplace l'envoi ouvert par lui-même modifié. */
+function reglerEnvoi(sur) {
+  const e = envoi();
+  if (!e) return Promise.resolve();
+  return tente(async () => afficherProjet(
+    await invoke('envoi_regler', { index: choisi, envoi: { ...e, ...sur } })));
+}
+
+/** Déplace l'envoi ouvert, sans repasser par le reste de ses réglages. */
+function reglerPlace(sur) {
+  const e = envoi();
+  if (!e) return Promise.resolve();
+  return reglerEnvoi({ place: { ...e.place, ...sur } });
+}
+
 /**
  * Choisit l'image écrite à la main d'un envoi.
  *
@@ -50,136 +199,12 @@ async function choisirImageEnvoi(index) {
     filters: [{ name: 'Mot écrit à la main', extensions: ['jpg', 'jpeg', 'png'] }],
   });
   if (!chemin) return;
-  await tente(async () =>
-    afficherProjet(await invoke('envoi_image_choisir', { index, chemin })));
+  await tente(async () => afficherProjet(await invoke('envoi_image_choisir', { index, chemin })));
+  await majObjet();
 }
 
 /**
- * Le choix de la main : les trois écritures de la maison, et celle de l'auteur.
- *
- * Le `select` est refait à chaque projet plutôt que rempli une fois au démarrage : la
- * police personnelle appartient au livre ouvert, elle entre et sort avec lui. Sa valeur
- * est reposée depuis le projet — sans quoi le menu montrerait la première main pendant
- * que le livre en compose une autre, et le premier réglage de l'écran l'imposerait.
- */
-function afficherMain() {
-  const sel = $('inMain');
-  const perso = projet.envois.personnelle;
-  sel.replaceChildren();
-  // Les écritures et les formes dans une seule liste, préfixées : la question posée est
-  // « d'où vient l'écriture », et elle n'a qu'une réponse à la fois. Sans préfixe, une
-  // police qui s'appellerait « image » désignerait l'autre forme.
-  for (const m of mains) sel.append(new Option(m, `police:${m}`));
-  if (perso) sel.append(new Option(`${perso} (votre police)`, `police:${perso}`));
-  sel.append(new Option('Image écrite à la main', 'image'));
-  sel.append(new Option('Image générée', 'diffusion'));
-  sel.value = main() === 'police' ? `police:${projet.envois.main.police}` : main();
-
-  // Le gabarit appartient au livre : il se relit du projet, comme la maquette.
-  $('diffusion').hidden = main() !== 'diffusion';
-  $('inGabarit').value = projet.envois.main.gabarit ?? '';
-  $('etatPolice').textContent = perso
-    ? `Police personnelle embarquée : ${perso}.`
-    : 'Aucune police personnelle : les envois s\'écrivent dans une main de la maison.';
-  $('btPoliceRetirer').disabled = !perso;
-}
-
-/**
- * La liste des envois : un dédicataire, son mot, et de quoi le voir ou le retirer.
- *
- * Le mot est un `textarea` : un envoi tient en deux ou trois lignes, et un `input` en
- * cacherait la fin — or c'est précisément ce qui sera imprimé.
- */
-function afficherEnvois() {
-  afficherMain();
-  const box = $('envois');
-  box.textContent = '';
-  for (const [i, e] of projet.envois.liste.entries()) {
-    const ligne = h('div', undefined, 'destinataire');
-
-    const qui = document.createElement('input');
-    qui.type = 'text';
-    qui.value = e.dedicataire;
-    qui.setAttribute('aria-label', `Dédicataire ${i + 1}`);
-    qui.addEventListener('change', () => reglerEnvoi(i, { dedicataire: qui.value }));
-
-    // Le mot change de nature avec la main : un texte à composer, une image à choisir,
-    // ou ce qu'on demande au modèle. La ligne ne porte que ce que la main réclame — un
-    // champ grisé sous une main en images donnerait à croire qu'on peut y écrire.
-    const mot = main() === 'image' ? imageEnvoi(i, e) : motEnvoi(i, e);
-
-    const voir = h('button', 'Voir la page');
-    voir.type = 'button';
-    voir.addEventListener('click', () => apercuEnvoi(i));
-
-    const retirer = h('button', 'Retirer');
-    retirer.type = 'button';
-    retirer.addEventListener('click', () => envoisModifier(
-      projet.envois.liste.filter((_, n) => n !== i)));
-
-    ligne.append(qui, mot);
-    // Deux gestes, et deux seulement : demander une image, et la retenir. C'est le
-    // second qui la fait entrer dans le livre — avant lui, rien n'est figé, et l'on peut
-    // regénérer autant qu'il faut. Un modèle de diffusion rend rarement une écriture
-    // lisible du premier coup.
-    if (main() === 'diffusion') ligne.append(...gestesDeDiffusion(i, e));
-    ligne.append(voir, retirer);
-    box.append(ligne);
-  }
-  $('btEnvoyer').disabled = projet.envois.liste.length === 0;
-}
-
-/**
- * Le mot d'un envoi, en toutes lettres.
- *
- * Un `textarea` : un envoi tient en deux ou trois lignes, et un `input` en cacherait la
- * fin — or c'est précisément ce qui sera imprimé.
- */
-function motEnvoi(i, e) {
-  const mot = document.createElement('textarea');
-  mot.rows = 2;
-  mot.value = e.contenu;
-  mot.setAttribute('aria-label', `Mot pour ${e.dedicataire || 'ce dédicataire'}`);
-  mot.addEventListener('change', () => reglerEnvoi(i, { contenu: mot.value }));
-  return mot;
-}
-
-/**
- * L'image d'un envoi : le bouton qui la choisit, et le nom qu'elle porte dans l'archive.
- *
- * Ce nom-là et pas celui du fichier d'origine : c'est celui que la source Typst écrit,
- * et le seul qui dise laquelle des images est partie avec quel exemplaire.
- */
-function imageEnvoi(i, e) {
-  const bt = h('button', e.image ? `Image : ${e.image}` : 'Choisir une image…');
-  bt.type = 'button';
-  bt.id = `envoi-image-${i}`;
-  bt.addEventListener('click', () => choisirImageEnvoi(i));
-  return bt;
-}
-
-/**
- * Demander une image au modèle, puis la retenir.
- *
- * « Retenir » est éteint tant que rien n'a été généré dans cette ligne : c'est le geste
- * qui fige l'image dans le `.ozalid`, et il n'a pas d'objet avant qu'on ait regardé.
- */
-function gestesDeDiffusion(i, e) {
-  const generer = h('button', 'Générer');
-  generer.type = 'button';
-  generer.id = `envoi-generer-${i}`;
-  generer.addEventListener('click', () => genererEnvoi(i));
-
-  const accepter = h('button', e.image ? `Retenue : ${e.image}` : 'Retenir');
-  accepter.type = 'button';
-  accepter.id = `envoi-accepter-${i}`;
-  accepter.disabled = candidat !== i;
-  accepter.addEventListener('click', () => accepterEnvoi(i));
-  return [generer, accepter];
-}
-
-/**
- * Demande l'image, et la montre sans la garder.
+ * Demande l'image au modèle, et la montre sans la garder.
  *
  * Le Rust la tient de côté jusqu'à ce qu'on la retienne : l'archive n'a pas à conserver
  * la suite des essais, et un livre fermé entre-temps les laisse là où ils étaient.
@@ -208,40 +233,157 @@ async function accepterEnvoi(i) {
     candidat = null;
     afficherProjet(vue);
   });
+  await majObjet();
 }
 
-/** Remplace un envoi par lui-même modifié. */
-function reglerEnvoi(i, sur) {
-  return envoisModifier(
-    projet.envois.liste.map((e, n) => (n === i ? { ...e, ...sur } : e)));
-}
+/* ---------- le canevas ---------- */
 
 /**
- * Envoie la liste **et la main** : la commande remplace l'objet entier, et une main
- * omise reviendrait au défaut — tous les exemplaires changeraient d'écriture sans que
- * personne ne l'ait demandé.
- */
-async function envoisModifier(liste) {
-  await tente(async () => afficherProjet(await invoke('envois_modifier', {
-    envois: { main: projet.envois.main, liste },
-  })));
-}
-
-/**
- * La page de titre de cet envoi, telle qu'elle sera imprimée.
+ * Les vignettes de toutes les pages, gardées en mémoire.
  *
- * C'est la seule façon de voir qu'un mot déborde : le compte de pages, lui, ne bougera
- * pas — c'est tout l'objet du `#place`, et c'est aussi ce qui rend un débordement
- * silencieux.
+ * Rendues en une invocation : 190 pages coûtent six dixièmes de seconde, et la page de
+ * fond ne dépend d'aucun envoi — les redemander à chaque changement de dédicataire
+ * ferait payer ce prix vingt fois pour des images identiques.
+ */
+let pages = null;
+
+/** Les vignettes de l'intérieur sont périmées : la prochaine ouverture les refera. */
+function oublierPages() {
+  pages = null;
+}
+
+/**
+ * Le rail : toutes les pages, la page visée marquée.
+ *
+ * Cliquer une vignette déplace l'envoi sur cette page — c'est le seul moyen d'en
+ * changer, et c'est pourquoi il n'y a pas de champ « page ».
+ */
+async function majVignettes() {
+  const ol = $('vignettes');
+  if (!envoi()) {
+    ol.textContent = '';
+    return;
+  }
+  if (!pages) {
+    $('etatEnvois').className = 'etat';
+    $('etatEnvois').textContent = 'rendu des pages…';
+    try {
+      pages = await invoke('envoi_vignettes');
+      $('etatEnvois').textContent = '';
+    } catch (e) {
+      $('etatEnvois').textContent = String(e);
+      $('etatEnvois').className = 'etat erreur';
+      return;
+    }
+  }
+  const visee = envoi()?.place.page ?? 0;
+  ol.textContent = '';
+  for (const [i, src] of pages.entries()) {
+    const n = i + 1;
+    const li = h('li');
+    li.setAttribute('aria-current', String(n === visee));
+    const img = h('img');
+    img.src = src;
+    img.alt = `Page ${n}`;
+    li.addEventListener('click', async () => {
+      await reglerPlace({ page: n });
+      await majPage();
+      afficherEnvois();
+      marquerVignette(n);
+    });
+    li.append(img);
+    ol.append(li);
+  }
+}
+
+/** Déplace le liseré sans refaire le rail : deux cents images ne se reposent pas. */
+function marquerVignette(n) {
+  // `children` et non la propriété du faux DOM : c'est l'API du navigateur qui compte,
+  // et `couverture.js` la parcourt déjà ainsi pour ses onglets de face.
+  [...$('vignettes').children].forEach((li, i) => {
+    li.setAttribute('aria-current', String(i + 1 === n));
+  });
+}
+
+/**
+ * La page de fond du canevas : celle que l'envoi vise, rendue **sans envoi**.
+ *
+ * Sans envoi parce qu'un `foreground` ne réordonne rien : la page ne dépend d'aucun
+ * dédicataire, et la même image sert à tous. C'est aussi ce qui permet de glisser
+ * l'objet sans rappeler Typst — le fond ne bouge pas.
+ */
+async function majPage() {
+  const e = envoi();
+  const img = $('fondPage');
+  if (!e) {
+    img.hidden = true;
+    return;
+  }
+  await tente(async () => {
+    img.src = await invoke('envoi_page', { page: e.place.page });
+    img.alt = `Page ${e.place.page} de l'intérieur`;
+    img.hidden = false;
+  });
+}
+
+/**
+ * L'objet manipulé : l'envoi rendu par Typst, sur fond transparent.
+ *
+ * Rendu par Typst et non imité en CSS : ce qu'on déplace **est** ce qui s'imprimera —
+ * même police, même corps, mêmes coupures de lignes. Typst n'est rappelé qu'ici, quand
+ * le mot ou la main changent ; glisser, redimensionner et incliner ne sont ensuite que
+ * des `transform`.
+ */
+async function majObjet() {
+  const e = envoi();
+  const bloc = $('objet');
+  if (!e) {
+    bloc.hidden = true;
+    return;
+  }
+  await tente(async () => {
+    const o = await invoke('envoi_objet', { index: choisi });
+    $('objetImage').src = o.image;
+    $('objetImage').alt = `Envoi pour ${e.dedicataire || 'ce dédicataire'}`;
+    bloc.hidden = false;
+    poserObjet();
+  });
+}
+
+/**
+ * Pose l'objet à sa place sur le canevas.
+ *
+ * En pourcentages du canevas et non en pixels : c'est la forme que le Rust reçoit, et
+ * c'est ce qui fait qu'un canevas plus petit montre le même placement.
+ */
+function poserObjet() {
+  const e = envoi();
+  if (!e) return;
+  const s = $('objet').style;
+  s.setProperty('left', `${e.place.x * 100}%`);
+  s.setProperty('top', `${e.place.y * 100}%`);
+  s.setProperty('width', `${e.place.taille * 100}%`);
+  s.setProperty('--angle', `${e.place.angle}deg`);
+}
+
+/**
+ * La page composée avec son envoi, par le chemin complet.
+ *
+ * C'est la confirmation, non l'aperçu : le canevas montre déjà le rendu, puisque le
+ * fond et l'objet viennent tous deux de Typst. Ce bouton les fait passer par la même
+ * composition, celle qui part à l'impression.
  */
 async function apercuEnvoi(i) {
   const img = $('apercuEnvoi');
   await tente(async () => {
     img.src = await invoke('envoi_apercu', { index: i });
-    img.alt = `Page de titre de l'exemplaire de ${projet.envois.liste[i].dedicataire}`;
+    img.alt = `Page ${projet.envois.liste[i].place.page} de l'exemplaire de `
+      + `${projet.envois.liste[i].dedicataire}`;
     img.hidden = false;
   });
 }
+
+/* ---------- la génération ---------- */
 
 async function envoyer() {
   const bt = $('btEnvoyer');
@@ -283,4 +425,87 @@ function afficherResultatEnvois(resultats) {
     box.append(bloc);
   }
   box.hidden = false;
+}
+
+/* ---------- les gestes ---------- */
+
+/**
+ * Un geste sur le canevas : ce qu'il tient, et ce que chaque pixel en fait.
+ *
+ * Le modèle est `saisir()` dans `couverture.js`, dont c'est l'idiome : le déplacement
+ * se mesure en **fraction du canevas** et jamais en pixels — le canevas s'affiche à la
+ * taille que la fenêtre lui laisse —, et un clic qui n'a rien déplacé n'est pas commis,
+ * pour ne pas marquer le projet modifié en ayant seulement posé la souris sur sa propre
+ * page.
+ *
+ * Le code n'est pas partagé avec lui, et c'est délibéré : `saisir()` est soudé à
+ * `#cadreApercu` et aux chemins de contrôles de la couverture. L'extraire dans un module
+ * commun est le bon geste, et c'est un remaniement du code le plus délicat de
+ * l'application, sans rapport avec ce que cette étape livre.
+ *
+ * Pendant le geste, **seul l'écran suit** : le projet n'est touché qu'au dépôt. C'est ce
+ * qui rend le glisser instantané — l'objet est déjà rendu, et le fond ne bouge pas.
+ */
+function saisirPlacement(el, calcule) {
+  el.addEventListener('pointerdown', (ev) => {
+    if (ev.button) return;
+    const e = envoi();
+    if (!e) return;
+    const cadre = $('canevas').getBoundingClientRect();
+    if (!cadre.width || !cadre.height) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    el.setPointerCapture(ev.pointerId);
+
+    const depart = e.place;
+    const canevas = { largeur: cadre.width, hauteur: cadre.height };
+    let dernier = depart;
+    $('canevas').setAttribute('data-geste', 'oui');
+
+    const bouger = (m) => {
+      dernier = calcule(depart, {
+        dx: m.clientX - ev.clientX,
+        dy: m.clientY - ev.clientY,
+        x: (m.clientX - cadre.left) / cadre.width,
+        y: (m.clientY - cadre.top) / cadre.height,
+      }, canevas);
+      projet.envois.liste[choisi].place = dernier;
+      poserObjet();
+    };
+    const lacher = () => {
+      el.removeEventListener('pointermove', bouger);
+      el.removeEventListener('pointerup', lacher);
+      el.removeEventListener('pointercancel', lacher);
+      $('canevas').removeAttribute('data-geste');
+      // Un clic qui n'a rien déplacé ne se commet pas : il marquerait le projet
+      // modifié, donc réveillerait la garde à la fermeture, pour avoir posé la souris
+      // sur sa propre page. La comparaison porte sur les valeurs et non sur le fait
+      // qu'un `pointermove` ait eu lieu — un pixel de tremblement, ramené dans les
+      // bornes, ne change rien non plus.
+      if (memePlace(dernier, depart)) return;
+      // La taille change les coupures de lignes de l'objet, donc son rendu ; la
+      // position et l'angle ne changent que sa pose, et le PNG en main suffit.
+      const refaire = dernier.taille !== depart.taille;
+      reglerPlace(dernier).then(() => (refaire ? majObjet() : afficherEnvois()));
+    };
+    el.addEventListener('pointermove', bouger);
+    el.addEventListener('pointerup', lacher);
+    el.addEventListener('pointercancel', lacher);
+  });
+}
+
+/** Deux placements que rien ne distingue : le geste n'a rien fait. */
+function memePlace(a, b) {
+  return a.page === b.page && a.x === b.x && a.y === b.y
+    && a.taille === b.taille && a.angle === b.angle;
+}
+
+/**
+ * Câble les trois gestes du canevas. Une fois, au démarrage : les poignées sont dans le
+ * balisage, seul l'objet qu'elles tiennent change d'un dédicataire à l'autre.
+ */
+function cablerPlacement() {
+  saisirPlacement($('objetImage'), (p, d, c) => deplace(p, d, c));
+  saisirPlacement($('poigneeTaille'), (p, d, c) => redimensionne(p, d, c));
+  saisirPlacement($('poigneeAngle'), (p, d, c) => incline(p, { x: d.x, y: d.y }, c));
 }

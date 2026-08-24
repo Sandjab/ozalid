@@ -339,7 +339,8 @@ async function charge({
   vm.createContext(contexte);
   // Les deux scripts de l'application, dans l'ordre du HTML : les déclarations de
   // couverture.js sont visibles depuis app.js, comme dans un navigateur.
-  for (const nom of ['couverture.js', 'livraison.js', 'envois.js', 'app.js']) {
+  for (const nom of ['couverture.js', 'livraison.js', 'placement.js', 'envois.js',
+    'app.js']) {
     const src = fs.readFileSync(path.join(__dirname, '..', 'src', nom), 'utf8');
     vm.runInContext(src, contexte, { filename: nom });
   }
