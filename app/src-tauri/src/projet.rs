@@ -1655,14 +1655,18 @@ auteur = "Ivan Pjig"
     }
 
     /// Les envois sont du travail de l'utilisateur au même titre que la maquette : les
-    /// reperdre, c'est réécrire tous les mots à la main.
+    /// reperdre, c'est réécrire tous les mots à la main. L'écriture choisie en fait
+    /// partie depuis qu'elle appartient à l'exemplaire, et non plus au livre.
     #[test]
     fn les_envois_survivent_a_l_aller_retour() {
         let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
         p.meta.envois.liste = vec![crate::envoi::Envoi {
             dedicataire: "Léa".into(),
             contenu: "À Léa, qui a lu la première version.".into(),
-            image: None,
+            main: crate::envoi::Main::Police {
+                police: crate::envoi::MAINS[1].into(),
+            },
+            ..Default::default()
         }];
 
         let r = aller_retour(&p);
@@ -1671,6 +1675,13 @@ auteur = "Ivan Pjig"
         assert_eq!(
             r.meta.envois.liste[0].contenu,
             "À Léa, qui a lu la première version."
+        );
+        assert_eq!(
+            r.meta.envois.liste[0].main,
+            crate::envoi::Main::Police {
+                police: crate::envoi::MAINS[1].into()
+            },
+            "l'écriture choisie pour Léa n'a pas survécu"
         );
     }
 
@@ -1683,13 +1694,17 @@ auteur = "Ivan Pjig"
     /// Le `.ozalid` doit être auto-portant : un projet composé avec l'écriture de son
     /// auteur doit se recomposer à l'identique sur une autre machine, où cette police
     /// n'est installée nulle part. Les octets voyagent donc dans l'archive, et la main
-    /// avec.
+    /// de l'envoi qui les nomme avec.
     #[test]
     fn la_police_personnelle_voyage_dans_l_archive() {
         let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
+        p.meta.envois.liste = vec![crate::envoi::Envoi {
+            dedicataire: "Léa".into(),
+            ..Default::default()
+        }];
         p.poser_police("main.ttf", FOURNIE.to_vec()).unwrap();
         assert_eq!(
-            p.meta.envois.main,
+            p.meta.envois.liste[0].main,
             crate::envoi::Main::Police {
                 police: FAMILLE.into()
             }
@@ -1698,6 +1713,13 @@ auteur = "Ivan Pjig"
         let r = aller_retour(&p);
         assert_eq!(r.polices["main.ttf"], FOURNIE);
         assert_eq!(r.meta.envois.personnelle.as_deref(), Some(FAMILLE));
+        assert_eq!(
+            r.meta.envois.liste[0].main,
+            crate::envoi::Main::Police {
+                police: FAMILLE.into()
+            },
+            "l'exemplaire de Léa a perdu l'écriture de l'auteur"
+        );
         assert!(r.meta.envois.verifie().is_ok(), "main perdue à l'ouverture");
     }
 
@@ -1709,9 +1731,13 @@ auteur = "Ivan Pjig"
     fn une_police_annoncee_mais_absente_ne_compose_pas() {
         let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
         p.meta.envois.personnelle = Some("Ma Main".into());
-        p.meta.envois.main = crate::envoi::Main::Police {
-            police: "Ma Main".into(),
-        };
+        p.meta.envois.liste = vec![crate::envoi::Envoi {
+            dedicataire: "Léa".into(),
+            main: crate::envoi::Main::Police {
+                police: "Ma Main".into(),
+            },
+            ..Default::default()
+        }];
 
         let r = aller_retour(&p);
         assert_eq!(r.meta.envois.personnelle, None);
@@ -1730,21 +1756,30 @@ auteur = "Ivan Pjig"
         assert_eq!(p.polices.keys().collect::<Vec<_>>(), ["seconde.ttf"]);
     }
 
-    /// Retirer la police rend au livre une main qu'il sait composer : la laisser sur une
-    /// écriture qui vient de partir ferait refuser la composition, exactement, mais pour
-    /// rien — l'utilisateur n'a pas demandé un livre qui ne compose plus.
+    /// Retirer la police rend aux envois qui la nommaient une main qu'on sait composer :
+    /// les laisser sur une écriture qui vient de partir ferait refuser la composition,
+    /// exactement, mais pour rien — l'utilisateur n'a pas demandé un livre qui ne
+    /// compose plus.
     #[test]
-    fn retirer_la_police_rend_au_livre_une_main_composable() {
+    fn retirer_la_police_rend_aux_envois_une_main_composable() {
         let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
+        p.meta.envois.liste = vec![crate::envoi::Envoi {
+            dedicataire: "Léa".into(),
+            ..Default::default()
+        }];
         p.poser_police("main.ttf", FOURNIE.to_vec()).unwrap();
         p.retirer_police();
         assert!(p.polices.is_empty());
         assert_eq!(p.meta.envois.personnelle, None);
-        assert!(p.meta.envois.verifie().is_ok(), "le livre ne compose plus");
+        assert_eq!(p.meta.envois.liste[0].main, crate::envoi::Main::default());
+        assert!(
+            p.meta.envois.verifie().is_ok(),
+            "l'exemplaire de Léa ne compose plus"
+        );
     }
 
-    /// La main embarquée que l'auteur a choisie ne doit pas être emportée par le retrait
-    /// de sa police personnelle : elle ne dépendait pas d'elle.
+    /// La main embarquée que l'auteur a choisie pour un exemplaire ne doit pas être
+    /// emportée par le retrait de sa police personnelle : elle ne dépendait pas d'elle.
     #[test]
     fn retirer_la_police_ne_touche_pas_a_une_main_embarquee() {
         let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
@@ -1752,9 +1787,83 @@ auteur = "Ivan Pjig"
         let choisie = crate::envoi::Main::Police {
             police: crate::envoi::MAINS[1].into(),
         };
-        p.meta.envois.main = choisie.clone();
+        p.meta.envois.liste = vec![crate::envoi::Envoi {
+            dedicataire: "Léa".into(),
+            main: choisie.clone(),
+            ..Default::default()
+        }];
         p.retirer_police();
-        assert_eq!(p.meta.envois.main, choisie);
+        assert_eq!(p.meta.envois.liste[0].main, choisie);
+    }
+
+    /// Poser sa police est un geste sur l'écriture, pas sur le mot : elle va aux
+    /// exemplaires qui composent du texte, et laisse intact celui qui porte une photo
+    /// d'écriture ou une image générée. Depuis que la main appartient à l'exemplaire,
+    /// ce geste croise des choix délibérés — substituer une police à une photo
+    /// effacerait le mot que l'auteur a écrit de sa main, ce qui ne se rattrape pas.
+    #[test]
+    fn une_police_posee_laisse_intact_l_envoi_qui_porte_une_image() {
+        let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
+        p.meta.envois.liste = vec![
+            crate::envoi::Envoi {
+                dedicataire: "Léa".into(),
+                ..Default::default()
+            },
+            crate::envoi::Envoi {
+                dedicataire: "Marc".into(),
+                main: crate::envoi::Main::Image,
+                ..Default::default()
+            },
+        ];
+        p.poser_police("main.ttf", FOURNIE.to_vec()).unwrap();
+        assert_eq!(
+            p.meta.envois.liste[0].main,
+            crate::envoi::Main::Police {
+                police: FAMILLE.into()
+            },
+            "Léa n'a pas reçu l'écriture qu'on vient d'importer"
+        );
+        assert_eq!(
+            p.meta.envois.liste[1].main,
+            crate::envoi::Main::Image,
+            "le mot que l'auteur a écrit à la main pour Marc a été remplacé"
+        );
+    }
+
+    /// Le retrait ne ramène au défaut que les exemplaires qui nommaient la police
+    /// partie : un envoi écrit dans une main de la maison n'a aucune raison de changer
+    /// d'écriture parce qu'un autre perd la sienne.
+    #[test]
+    fn retirer_la_police_ne_ramene_que_les_envois_qui_la_nommaient() {
+        let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
+        p.poser_police("main.ttf", FOURNIE.to_vec()).unwrap();
+        let autre = crate::envoi::Main::Police {
+            police: crate::envoi::MAINS[1].into(),
+        };
+        p.meta.envois.liste = vec![
+            crate::envoi::Envoi {
+                dedicataire: "Léa".into(),
+                main: crate::envoi::Main::Police {
+                    police: FAMILLE.into(),
+                },
+                ..Default::default()
+            },
+            crate::envoi::Envoi {
+                dedicataire: "Marc".into(),
+                main: autre.clone(),
+                ..Default::default()
+            },
+        ];
+        p.retirer_police();
+        assert_eq!(
+            p.meta.envois.liste[0].main,
+            crate::envoi::Main::default(),
+            "Léa reste sur une écriture qui a quitté l'archive"
+        );
+        assert_eq!(
+            p.meta.envois.liste[1].main, autre,
+            "Marc a changé d'écriture parce que Léa a perdu la sienne"
+        );
     }
 
     /// Un manuscrit renommé en `.ttf` n'est pas une écriture : le refus est au moment du
@@ -1762,11 +1871,16 @@ auteur = "Ivan Pjig"
     #[test]
     fn un_fichier_qui_n_est_pas_une_police_ne_devient_pas_la_main() {
         let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
-        let avant = p.meta.envois.main.clone();
+        p.meta.envois.liste = vec![crate::envoi::Envoi {
+            dedicataire: "Léa".into(),
+            ..Default::default()
+        }];
+        let avant = p.meta.envois.liste[0].main.clone();
         let err = p.poser_police("faux.ttf", b"## 01 - Un\n\nTexte.".to_vec());
         assert!(err.is_err());
         assert!(p.polices.is_empty(), "l'archive a gardé le faux fichier");
-        assert_eq!(p.meta.envois.main, avant);
+        assert_eq!(p.meta.envois.personnelle, None);
+        assert_eq!(p.meta.envois.liste[0].main, avant);
     }
 
     /// Un PNG réduit à ce que `image::dimensions` sait lire : sa signature et son IHDR.
@@ -1782,13 +1896,12 @@ auteur = "Ivan Pjig"
 
     fn avec_envois(qui: &[&str]) -> Projet {
         let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
-        p.meta.envois.main = crate::envoi::Main::Image;
         p.meta.envois.liste = qui
             .iter()
             .map(|d| crate::envoi::Envoi {
                 dedicataire: (*d).into(),
-                contenu: String::new(),
-                image: None,
+                main: crate::envoi::Main::Image,
+                ..Default::default()
             })
             .collect();
         p
