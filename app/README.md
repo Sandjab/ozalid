@@ -125,9 +125,9 @@ de l'auteur, qui appartient au livre ; *quelle page* — un rail de toutes les p
 l'intérieur, où cliquer une vignette déplace l'envoi, seul moyen d'en changer, et c'est
 pourquoi il n'y a pas de champ « page » ; *à quoi ça ressemble* — le canevas, la page en
 fond et l'envoi par-dessus, qu'on glisse, redimensionne et incline à la souris ; *avec
-quels réglages* — la main de **cet exemplaire-là**, son mot ou son image, l'échelle et
-l'inclinaison. Seul le rail défile : un livre a deux cents pages, et cette hauteur-là est
-irréductible.
+quels réglages* — la main de **cet exemplaire-là**, son mot ou son image, l'échelle,
+l'inclinaison, et les deux seuils qui détourent la photo. Seul le rail défile : un livre
+a deux cents pages, et cette hauteur-là est irréductible.
 
 Ce que le canevas montre vient de Typst, fond **et** objet : ce qu'on déplace est ce qui
 s'imprimera, même police, même corps, mêmes coupures de lignes. « Voir la page » prend
@@ -136,6 +136,20 @@ c'est une confirmation, et c'est le va-et-vient d'une image à l'autre qui la re
 rien ne doit bouger. Le fond, lui, est rendu **sans envoi** : un `foreground` ne
 réordonne rien, la page ne dépend donc d'aucun dédicataire, et la même image sert à
 tous — ce qui permet aussi de glisser l'objet sans rappeler Typst.
+
+**Le canevas prend la couleur du papier**, et la page comme l'objet s'y multiplient. Une
+photo de mot écrit à la main porte un fond — le papier photographié, jamais du blanc pur
+mais du 230-245 teinté —, et ce fond-là s'imprime : sur un crème, il fait un rectangle.
+Deux seuils en luminance le rendent transparent, estimés à la pose et repris à la main,
+appliqués sur le chemin de Typst et jamais dans l'archive, qui garde la photo d'origine.
+La teinte du papier est une **convention d'Ozalid, pas une mesure** : aucun prestataire
+ne publie celle de son crème, et un papier dont le libellé ne dit pas « crème » est tenu
+pour blanc plutôt que deviné. Elle ne sert qu'à l'écran — le PDF n'a pas de fond, et lui
+en donner un ferait imprimer un aplat sur toutes les pages.
+
+Les seuils sont globaux : sur une photo dont un coin est nettement plus sombre, il reste
+du fond, ou le trait pâle s'efface. C'est ce que les deux curseurs donnent à arbitrer, et
+sur la photo d'essai de la spec il restait 1,2 % de fond au meilleur réglage.
 
 Changer de destinataire au pied change la pagination : le rail et le canevas se
 refont. Sans quoi l'on viserait la page 264 d'un intérieur qui n'en fait plus que 190,
@@ -264,6 +278,7 @@ résultats. Tout le reste est testable sans fenêtre.
 | `typst` | Invocation du sidecar : mesurer la pagination, compiler, rendre un aperçu |
 | `interieur` | Source Typst de l'intérieur, police du livre, et convergence gouttière/parité |
 | `envoi` | L'envoi autographe : la main de chaque exemplaire, son mot, sa place sur la page, et les noms qu'ils prennent sur le disque |
+| `detourage` | Séparer l'encre du papier sur la photo d'un envoi : deux seuils de luminance, leur estimation, leur application |
 | `police` | Ce qu'un fichier de police déclare : sa famille, et les caractères qu'il porte vraiment |
 | `diffusion` | Demander une image à un modèle : le prompt, le contrat, et la clé qui ne remonte jamais |
 | `epreuve` | Source Typst de l'épreuve de relecture : A4, numéros de ligne, marge d'annotation |
