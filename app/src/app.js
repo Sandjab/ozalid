@@ -1295,6 +1295,22 @@ $('inAngle').addEventListener('input', () => {
   $('vAngle').textContent = `${$('inAngle').value}°`;
   return reglerPlace({ angle: Number($('inAngle').value) });
 });
+// Les deux seuils du détourage. `input` montre, `change` commet — et c'est la seule
+// divergence avec les deux curseurs ci-dessus, qui commettent à chaque cran. Elle se
+// paie sur une dépense qu'eux n'ont pas : chaque envoi décode la photo entière avant
+// de rappeler Typst, là où l'échelle ne recalcule qu'un corps de texte. Traverser
+// cinquante crans en décodant cinquante fois une photo de téléphone n'est pas la même
+// chose que la recomposer cinquante fois.
+for (const [id, val, champ] of [['inPapier', 'vPapier', 'papier'],
+  ['inEncre', 'vEncre', 'encre']]) {
+  $(id).addEventListener('input', () => { $(val).textContent = $(id).value; });
+  $(id).addEventListener('change', () => {
+    const e = envoi();
+    if (!e?.detourage) return undefined;
+    return reglerEnvoi({ detourage: { ...e.detourage, [champ]: Number($(id).value) } })
+      .then(majObjet);
+  });
+}
 $('btImageEnvoi').addEventListener('click', () => choisirImageEnvoi(choisi));
 $('btGenerer').addEventListener('click', () => genererEnvoi(choisi));
 $('btAccepter').addEventListener('click', () => accepterEnvoi(choisi));

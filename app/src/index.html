@@ -399,6 +399,17 @@
         <button id="btImageEnvoi" type="button">Choisir une image…</button>
       </div>
 
+      <!-- Les deux seuils, sous une main en image seulement. Le papier est le plus utile
+           des deux : c'est lui qui décide de ce qui reste du fond. -->
+      <div id="champDetourage" hidden>
+        <label><span>Papier</span>
+          <input type="range" id="inPapier" min="0" max="255" step="1">
+          <span class="val" id="vPapier"></span></label>
+        <label><span>Encre</span>
+          <input type="range" id="inEncre" min="0" max="255" step="1">
+          <span class="val" id="vEncre"></span></label>
+      </div>
+
       <!-- Le modèle de diffusion : l'adresse et la clé appartiennent à la machine, le
            gabarit au livre. Un `.ozalid` est fait pour être ouvert ailleurs — y écrire
            une clé la publierait au premier partage. -->

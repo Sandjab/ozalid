@@ -1746,3 +1746,71 @@ test('glisser l\'objet déplace l\'envoi', async () => {
   assert.equal(regle[1].envoi.place.y, PLACE_DEFAUT.y,
     'l\'envoi a dérivé en hauteur alors que le geste était horizontal');
 });
+
+/**
+ * Les deux seuils ne paraissent que sous une main en image : c'est la règle de la bande
+ * de réglages — ce que la main ne réclame pas ne paraît pas. Un curseur grisé sous une
+ * main en police donnerait à croire qu'on peut y toucher.
+ */
+test('les seuils de détourage ne paraissent que sous une image', async () => {
+  const a = atelier({
+    sur: {
+      envois: {
+        gabarit: '',
+        liste: [{ dedicataire: 'Léa', main: { mode: 'image' }, place: PLACE_DEFAUT,
+          contenu: '', image: 'Léa.jpg', detourage: { papier: 240, encre: 40 } }],
+      },
+    },
+  });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  await allerAuxEnvois(els);
+
+  assert.equal(els.get('champDetourage').hidden, false,
+    'les seuils sont cachés sous une main en image');
+
+  els.get('inMain').value = 'police';
+  await els.get('inMain').declenche('change');
+
+  assert.equal(els.get('champDetourage').hidden, true,
+    'les seuils restent sous une main en police');
+});
+
+/**
+ * Un seuil se commet au relâchement, pas à chaque pixel parcouru.
+ *
+ * Les curseurs de l'étape commettent à l'`input` — c'est l'usage de la maison, et
+ * `inTaille` le fait. Celui-ci diverge, et pour une raison mesurable : chaque envoi
+ * décode la photo entière avant de rappeler Typst, là où la taille ne recalcule qu'un
+ * corps de texte. Traverser cinquante crans en décodant cinquante fois une photo de
+ * téléphone n'est pas la même dépense.
+ */
+test('un seuil se commet au relâchement, pas à chaque cran', async () => {
+  const a = atelier({
+    sur: {
+      envois: {
+        gabarit: '',
+        liste: [{ dedicataire: 'Léa', main: { mode: 'image' }, place: PLACE_DEFAUT,
+          contenu: '', image: 'Léa.jpg', detourage: { papier: 240, encre: 40 } }],
+      },
+    },
+  });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  await allerAuxEnvois(els);
+
+  const avant = a.appels.filter(([c]) => c === 'envoi_regler').length;
+  els.get('inPapier').value = '228';
+  await els.get('inPapier').declenche('input');
+
+  assert.equal(els.get('vPapier').textContent, '228', 'la valeur affichée ne suit pas');
+  assert.equal(a.appels.filter(([c]) => c === 'envoi_regler').length, avant,
+    'le curseur commet à chaque cran : la photo se décode cinquante fois');
+
+  await els.get('inPapier').declenche('change');
+  await new Promise((r) => setImmediate(r));
+
+  const regle = a.appels.findLast(([c]) => c === 'envoi_regler');
+  assert.equal(regle[1].envoi.detourage.papier, 228, 'le seuil relâché n\'est pas parti');
+  assert.equal(regle[1].envoi.detourage.encre, 40, 'l\'autre seuil a été emporté');
+});

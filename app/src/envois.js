@@ -117,6 +117,9 @@ function afficherReglages() {
     $(id).disabled = !e;
   }
   $('champImage').hidden = !e || main() !== 'image';
+  // Les seuils suivent l'image, et non la seule main : un envoi d'avant ce chantier
+  // n'en porte pas, et deux curseurs sans valeur à régler ne diraient rien.
+  $('champDetourage').hidden = !e || main() !== 'image' || !e.detourage;
   $('champDiffusion').hidden = !e || main() !== 'diffusion';
   $('champMot').hidden = !!e && main() !== 'police';
   // Ce qui appartient au livre se pose **avant** la sortie : un livre sans dédicataire a
@@ -133,6 +136,15 @@ function afficherReglages() {
   // geste qui fige l'image dans le `.ozalid`, et il n'a pas d'objet avant qu'on ait
   // regardé. Un modèle de diffusion rend rarement une écriture lisible du premier coup.
   $('btAccepter').disabled = candidat !== choisi;
+
+  if (e.detourage) {
+    for (const [id, val, v] of [['inPapier', e.detourage.papier, 'vPapier'],
+      ['inEncre', e.detourage.encre, 'vEncre']]) {
+      const n = Math.round(val);
+      $(id).value = n;
+      $(v).textContent = String(n);
+    }
+  }
 
   const taille = Math.round(e.place.taille * 100);
   $('inTaille').value = taille;
