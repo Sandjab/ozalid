@@ -669,13 +669,17 @@ fn voile_fond(v: Voile, opacite: f64) -> Option<String> {
         Voile::Uni => noir(opacite),
         Voile::Clair => couleur_alpha("#ffffff", opacite),
         // 90deg : de haut en bas dans le repère de Typst.
+        // Typst exige une première borne à 0 % et une dernière à 100 % : le voile qui
+        // s'éteint à mi-hauteur prolonge donc sa transparence jusqu'au bord opposé.
         Voile::Haut => format!(
-            "gradient.linear(angle: 90deg, ({}, 0%), ({}, 55%))",
+            "gradient.linear(angle: 90deg, ({}, 0%), ({}, 55%), ({}, 100%))",
             noir(opacite),
+            noir(0.0),
             noir(0.0)
         ),
         Voile::Bas => format!(
-            "gradient.linear(angle: 90deg, ({}, 45%), ({}, 100%))",
+            "gradient.linear(angle: 90deg, ({}, 0%), ({}, 45%), ({}, 100%))",
+            noir(0.0),
             noir(0.0),
             noir(opacite)
         ),
@@ -1735,6 +1739,25 @@ mod tests {
             (dy - cv.bandeau / 100.0 * FORMAT.1).abs() < 0.01,
             "image à {dy} mm"
         );
+    }
+
+    /// Typst refuse un dégradé dont la première borne n'est pas à 0 % ou la dernière
+    /// à 100 % : la composition échoue, l'aperçu reste noir. Le voile qui s'éteint à
+    /// mi-hauteur doit donc porter une borne finale explicite, et non s'arrêter là où
+    /// il devient transparent.
+    #[test]
+    fn chaque_voile_degrade_va_de_zero_a_cent_pour_cent() {
+        for v in [Voile::Haut, Voile::Bas, Voile::Deux] {
+            let f = voile_fond(v, 0.55).unwrap();
+            // Chaque borne suit la parenthèse de sa couleur : `…(45.0%), 0%)`.
+            let bornes: Vec<&str> = f
+                .split("%), ")
+                .skip(1)
+                .filter_map(|x| x.split('%').next())
+                .collect();
+            assert_eq!(bornes.first(), Some(&"0"), "{v:?} : {f}");
+            assert_eq!(bornes.last(), Some(&"100"), "{v:?} : {f}");
+        }
     }
 
     #[test]
