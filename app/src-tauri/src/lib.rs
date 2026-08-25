@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod couverture;
+pub mod detourage;
 pub mod diffusion;
 pub mod ebook;
 pub mod envoi;

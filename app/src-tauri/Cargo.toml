@@ -21,6 +21,10 @@ toml = "0.8"
 zip = { version = "7", default-features = false, features = ["deflate"] }
 # Le bloc de réglages des PNG de l'atelier est du base64.
 base64 = "0.22"
+# Décoder une photo d'envoi pour en séparer l'encre du papier. `image.rs` ne lit que des
+# en-têtes ; un décodeur JPEG ne se réécrit pas. Restreinte aux deux formats que
+# l'application accepte, comme `zip` l'est à `deflate`.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 # La seule dépendance réseau du projet, tirée par le seul envoi généré par diffusion :
 # synchrone, sans exécuteur asynchrone à faire vivre, et avec ses propres racines de
 # certification — l'application est empaquetée, elle ne peut pas compter sur celles du
