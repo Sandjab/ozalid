@@ -35,6 +35,13 @@ fn luminance(r: u8, g: u8, b: u8) -> f64 {
 /// L'alpha calculé **multiplie** celui d'entrée : un PNG déjà détouré par l'auteur ne
 /// doit pas redevenir opaque là où son fond est clair.
 pub fn applique(octets: &[u8], d: &Detourage) -> Result<Vec<u8>, String> {
+    if d.papier <= d.encre {
+        return Err(format!(
+            "détourage impossible : le papier ({:.0}) doit être plus clair que \
+             l'encre ({:.0}).",
+            d.papier, d.encre
+        ));
+    }
     let mut img = image::load_from_memory(octets)
         .map_err(|e| format!("image illisible : {e}"))?
         .to_rgba8();
@@ -93,5 +100,22 @@ mod tests {
         // d'un gris vaut sa composante.
         let a = alpha(&applique(&uni(140, 140, 140), &SEUILS).unwrap());
         assert!((a as i32 - 128).abs() <= 2, "alpha {a}, attendu 128 ± 2");
+    }
+
+    /// `papier <= encre` divise par zéro ou inverse la rampe : l'image sortirait
+    /// entièrement opaque sans qu'on sache pourquoi. On refuse en nommant les deux
+    /// valeurs — c'est un réglage que l'écran laisse atteindre.
+    #[test]
+    fn un_papier_plus_sombre_que_l_encre_se_refuse() {
+        let d = Detourage {
+            papier: 40.0,
+            encre: 240.0,
+        };
+        let err = applique(&uni(200, 200, 200), &d).unwrap_err();
+        assert!(err.contains("240"), "le message ne dit pas l'encre : {err}");
+        assert!(
+            err.contains("40"),
+            "le message ne dit pas le papier : {err}"
+        );
     }
 }
