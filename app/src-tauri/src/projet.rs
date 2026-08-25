@@ -651,6 +651,11 @@ impl Projet {
             .collect();
         let nom = crate::envoi::nom_image(&e.dedicataire, ext, &pris);
         self.meta.envois.liste[index].image = Some(nom.clone());
+        // Estimé sur l'image reçue, et non posé à des valeurs de maison : deux photos
+        // n'ont ni le même papier ni le même éclairage. Une image que le décodeur ne
+        // sait pas lire n'empêche pas de la poser — Typst la lira peut-être — et elle
+        // se compose alors sans détourage.
+        self.meta.envois.liste[index].detourage = crate::detourage::estime(&octets).ok();
         self.images_envois.insert(nom, octets);
         // L'image que cet envoi portait avant n'est plus nommée par personne.
         self.elaguer_images_envois();
@@ -1908,6 +1913,20 @@ auteur = "Ivan Pjig"
         p
     }
 
+    /// Une image décodable, contrairement à `png()` qui n'est qu'un en-tête : la crate
+    /// `image` en lit les pixels, et l'estimation des seuils en a besoin.
+    fn photo() -> Vec<u8> {
+        let mut img = image::RgbaImage::from_pixel(16, 16, image::Rgba([243, 241, 236, 255]));
+        for x in 0..16 {
+            img.put_pixel(x, 8, image::Rgba([32, 38, 120, 255]));
+        }
+        let mut out = Vec::new();
+        image::DynamicImage::ImageRgba8(img)
+            .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
+            .unwrap();
+        out
+    }
+
     fn avec_envois(qui: &[&str]) -> Projet {
         let mut p = Projet::nouveau(livre(), "## 01\n\nA.\n".into());
         p.meta.envois.liste = qui
@@ -2037,5 +2056,18 @@ auteur = "Ivan Pjig"
             Some("À M."),
             "les bords doivent être rognés"
         );
+    }
+
+    /// Une photo posée après ce chantier naît détourée : c'est le cas d'usage, et
+    /// demander un geste de plus pour l'obtenir reviendrait à livrer le défaut par
+    /// défaut.
+    #[test]
+    fn une_photo_posee_nait_detouree() {
+        let mut p = avec_envois(&["Léa"]);
+        p.poser_image_envoi(0, photo()).unwrap();
+        let d = p.meta.envois.liste[0]
+            .detourage
+            .expect("aucun détourage posé");
+        assert!(d.papier > d.encre, "seuils incohérents : {d:?}");
     }
 }
