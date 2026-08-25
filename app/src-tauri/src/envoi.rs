@@ -101,6 +101,14 @@ pub struct Envoi {
     /// Nom, sous `envois/` dans l'archive, de l'image de cet envoi.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
+    /// Les seuils qui séparent l'encre du papier sur la photo de cet envoi.
+    ///
+    /// Sur l'envoi et non sur le livre : chaque photo a son éclairage. `None` — les
+    /// projets d'avant ce chantier — vaut « aucun détourage », et l'image se compose
+    /// telle quelle. Il survit à un passage en police : le perdre obligerait à régler à
+    /// nouveau après un aller-retour, et ce n'est pas ce que changer de main veut dire.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detourage: Option<crate::detourage::Detourage>,
     #[serde(default)]
     pub place: Place,
 }
@@ -564,5 +572,14 @@ mod tests {
         // En tête, et non quelque part : un « 1 » venu du nom d'une main ou d'un
         // numéro de version ferait passer ce test pour un message qui ne désigne rien.
         assert!(err.starts_with("envoi 1 :"), "le rang manque : {err}");
+    }
+
+    /// Un projet d'avant ce chantier n'a pas de détourage, et n'en reçoit pas d'office :
+    /// on ne change pas le tirage que quelqu'un a déjà relu. Le champ est un `Option`
+    /// pour cette seule raison, et `VERSION` ne bouge donc pas.
+    #[test]
+    fn un_envoi_ancien_n_a_pas_de_detourage() {
+        let e: Envoi = toml::from_str("dedicataire = \"Léa\"\ncontenu = \"\"\n").unwrap();
+        assert_eq!(e.detourage, None);
     }
 }
