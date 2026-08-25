@@ -43,6 +43,15 @@ impl Dos {
 pub struct Papier {
     pub cle: &'static str,
     pub libelle: &'static str,
+    /// La couleur du papier, en notation CSS, telle que le canevas la peint.
+    ///
+    /// **Convention d'Ozalid et non mesure** : aucun prestataire ne publie la teinte de
+    /// son crème. Elle suit ce que le libellé annonce, et rien d'autre — un papier dont
+    /// le nom ne dit pas « crème » est tenu pour blanc plutôt que deviné.
+    ///
+    /// Elle ne sert qu'à l'écran. Le PDF n'a pas de fond, et lui en donner un ferait
+    /// imprimer un aplat sur toutes les pages — l'erreur même qu'on corrige ici.
+    pub teinte: &'static str,
     pub dos: Dos,
 }
 
@@ -102,6 +111,7 @@ impl Provider {
 const PAPIER_UNIQUE_LULU: &[Papier] = &[Papier {
     cle: "standard",
     libelle: "Papier standard",
+    teinte: "#ffffff",
     // Formule Lulu, vérifiée sur un livre réel de 244 pages → 15,48 mm.
     dos: Dos::Divise {
         par: 17.48,
@@ -115,6 +125,7 @@ const PAPIER_UNIQUE_LULU: &[Papier] = &[Papier {
 const PAPIER_UNIQUE_BOD: &[Papier] = &[Papier {
     cle: "creme-90",
     libelle: "Crème 90 g",
+    teinte: "#f7f0e0",
     dos: Dos::Multiplie {
         par: 0.0675,
         plus: 0.6,
@@ -128,6 +139,7 @@ const PAPIERS_KDP: &[Papier] = &[
     Papier {
         cle: "creme",
         libelle: "Crème",
+        teinte: "#f7f0e0",
         dos: Dos::Multiplie {
             par: 0.0635,
             plus: 0.0,
@@ -136,6 +148,7 @@ const PAPIERS_KDP: &[Papier] = &[
     Papier {
         cle: "blanc",
         libelle: "Blanc",
+        teinte: "#ffffff",
         dos: Dos::Multiplie {
             par: 0.0572,
             plus: 0.0,
@@ -146,6 +159,7 @@ const PAPIERS_KDP: &[Papier] = &[
 const PAPIER_MESURE: &[Papier] = &[Papier {
     cle: "mesure",
     libelle: "Dos relevé sur le gabarit",
+    teinte: "#ffffff",
     dos: Dos::Mesure,
 }];
 
@@ -161,6 +175,7 @@ const PAPIERS_TBE: &[Papier] = &[
     Papier {
         cle: "munken-80",
         libelle: "Munken 80 g",
+        teinte: "#ffffff",
         dos: Dos::Multiplie {
             par: 0.060,
             plus: 0.0,
@@ -169,6 +184,7 @@ const PAPIERS_TBE: &[Papier] = &[
     Papier {
         cle: "120",
         libelle: "Papier 120 g",
+        teinte: "#ffffff",
         dos: Dos::Multiplie {
             par: 0.060,
             plus: 0.0,
@@ -187,6 +203,7 @@ const PAPIERS_BOOKVAULT: &[Papier] = &[
     Papier {
         cle: "creme-70",
         libelle: "Crème 70 g",
+        teinte: "#f7f0e0",
         dos: Dos::Multiplie {
             par: 0.056,
             plus: 0.0,
@@ -195,6 +212,7 @@ const PAPIERS_BOOKVAULT: &[Papier] = &[
     Papier {
         cle: "bond-80",
         libelle: "Bond blanc 80 g",
+        teinte: "#ffffff",
         dos: Dos::Multiplie {
             par: 0.055,
             plus: 0.0,
@@ -203,6 +221,7 @@ const PAPIERS_BOOKVAULT: &[Papier] = &[
     Papier {
         cle: "creme-premium-80",
         libelle: "Crème premium 80 g",
+        teinte: "#f7f0e0",
         dos: Dos::Multiplie {
             par: 0.072,
             plus: 0.0,
@@ -616,6 +635,25 @@ mod tests {
                     utile > 30.0,
                     "{} à {lo} pages : colonne de {utile} mm",
                     pr.cle
+                );
+            }
+        }
+    }
+
+    /// Chaque papier dit sa couleur, en notation CSS : c'est le front qui la peint, et
+    /// une conversion en chemin serait une occasion de se tromper. La valeur est une
+    /// convention d'Ozalid, pas une mesure — aucun prestataire ne publie la teinte de
+    /// son crème.
+    #[test]
+    fn chaque_papier_annonce_sa_teinte() {
+        for p in PROVIDERS {
+            for pa in p.papiers {
+                assert!(
+                    pa.teinte.len() == 7 && pa.teinte.starts_with('#'),
+                    "{} / {} : teinte « {} » illisible en CSS",
+                    p.cle,
+                    pa.cle,
+                    pa.teinte
                 );
             }
         }

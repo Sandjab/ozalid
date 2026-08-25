@@ -64,6 +64,9 @@ pub struct ProviderVue {
 pub struct PapierVue {
     cle: String,
     libelle: String,
+    /// La couleur du papier, telle que le canevas des envois la peint. Elle traverse
+    /// jusqu'ici parce que c'est l'écran qui s'en sert, jamais la composition.
+    teinte: String,
 }
 
 impl From<&Provider> for ProviderVue {
@@ -82,6 +85,7 @@ impl From<&Provider> for ProviderVue {
                 .map(|pa| PapierVue {
                     cle: pa.cle.into(),
                     libelle: pa.libelle.into(),
+                    teinte: pa.teinte.into(),
                 })
                 .collect(),
         }
