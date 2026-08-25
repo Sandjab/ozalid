@@ -20,9 +20,9 @@ pub struct Acces {
     #[serde(default)]
     pub cle: String,
     /// Le nom du modèle, quand le fournisseur l'attend dans le corps plutôt que dans
-    /// son adresse — `gemini-3-pro-image` chez Google, où l'adresse est la même pour
-    /// tous. Facultatif : là où l'adresse porte déjà le modèle, le nommer une seconde
-    /// fois ferait refuser la demande.
+    /// son adresse — `gemini-3-pro-image-preview` chez Google, où l'adresse est la même
+    /// pour tous. Facultatif : là où l'adresse porte déjà le modèle, le nommer une
+    /// seconde fois ferait refuser la demande.
     #[serde(default)]
     pub modele: String,
 }

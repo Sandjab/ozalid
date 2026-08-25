@@ -183,7 +183,10 @@ contrat attendu est celui des images d'OpenAI : un POST JSON authentifié par
 `data[0].url`. Le **nom du modèle** ne se remplit que si le fournisseur l'attend dans la
 demande plutôt que dans son adresse — c'est le cas de la couche compatible de Google,
 `https://generativelanguage.googleapis.com/v1beta/openai/images/generations`, où
-`gemini-3-pro-image` désigne le modèle et où l'adresse est la même pour tous. Laissé
+l'adresse est la même pour tous les modèles. Le nom à y écrire est
+`gemini-3-pro-image-preview` — **et non** l'identifiant stable `gemini-3-pro-image`,
+que cette couche refuse en 404 : elle n'a pas suivi le renommage, et seule l'API native
+connaît le nom sans suffixe. Relevé le 25/08/2026, contre le service. Laissé
 vide, le champ n'est pas envoyé : un `"model"` vide ferait refuser les fournisseurs qui
 n'en attendent aucun. La clé, elle, ne redescend jamais à l'écran.
 
