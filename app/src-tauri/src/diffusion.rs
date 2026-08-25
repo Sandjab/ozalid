@@ -41,21 +41,90 @@ pub trait Transport {
 /// La marque, dans le gabarit du livre, où le mot de chaque envoi s'insère.
 pub const MARQUE: &str = "{envoi}";
 
-/// Le prompt d'un envoi : le gabarit du livre, où son contenu vient se poser.
+/// Ce qu'un gabarit peut appeler par son nom.
 ///
-/// Sans la marque, le contenu est ajouté à la suite plutôt qu'ignoré : un gabarit écrit
-/// sans connaître la syntaxe produirait sinon M images identiques, ce qui ne se verrait
-/// qu'à l'aperçu — et seulement si on les regardait toutes.
-pub fn prompt(gabarit: &str, contenu: &str) -> String {
+/// Une structure plutôt que trois `&str` de rang : les trois ont le même type, et un
+/// appel qui les inverserait composerait un prompt plausible que rien ne rattraperait.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Mots<'a> {
+    /// La dédicace de cet envoi — le seul mot qui distingue une image de la suivante.
+    pub envoi: &'a str,
+    /// À qui l'exemplaire est adressé.
+    pub dedicataire: &'a str,
+    /// Le titre du livre : commun à tout le tirage, il ne distingue rien.
+    pub titre: &'a str,
+}
+
+/// Une marque et le mot qu'elle nomme.
+type Nommee = (&'static str, for<'a> fn(&Mots<'a>) -> &'a str);
+
+/// Les marques reconnues, dans l'ordre où l'aide les présente.
+const MARQUES: [Nommee; 3] = [
+    (MARQUE, |m| m.envoi),
+    ("{dedicataire}", |m| m.dedicataire),
+    ("{titre}", |m| m.titre),
+];
+
+/// Celles qui peuvent distinguer un envoi du suivant. Le titre n'en est pas : il est le
+/// même pour tout le tirage, et un gabarit qui ne nommerait que lui rendrait M fois la
+/// même image.
+const DISTINGUENT: [Nommee; 2] = [MARQUES[0], MARQUES[1]];
+
+/// Le prompt d'un envoi : le gabarit du livre, où ses mots viennent se poser.
+///
+/// Sans marque qui distingue un envoi du suivant, la dédicace est ajoutée à la suite
+/// plutôt qu'ignorée : un gabarit écrit sans connaître la syntaxe produirait sinon M
+/// images identiques, ce qui ne se verrait qu'à l'aperçu — et seulement si on les
+/// regardait toutes.
+pub fn prompt(gabarit: &str, mots: &Mots) -> String {
     let g = gabarit.trim();
-    let c = contenu.trim();
-    if g.contains(MARQUE) {
-        return g.replace(MARQUE, c);
+    let sortie = substituer(g, mots);
+    let c = mots.envoi.trim();
+    // Une marque vide ne distingue rien : elle est écrite dans le gabarit, mais deux
+    // exemplaires en tirent la même phrase. C'est la valeur qui décide, pas la présence.
+    let distingue = DISTINGUENT
+        .iter()
+        .any(|(marque, mot)| g.contains(marque) && !mot(mots).trim().is_empty());
+    if c.is_empty() || distingue {
+        return sortie;
     }
-    if c.is_empty() {
-        return g.to_string();
+    // `trim_end` et non `sortie` telle quelle : une marque vide en fin de gabarit y a
+    // laissé un blanc, et la dédicace se poserait derrière deux espaces.
+    format!("{} {c}", sortie.trim_end())
+}
+
+/// Remplace les marques connues par le mot qu'elles nomment.
+///
+/// **Une seule passe**, comme `gabarit::substituer` et pour la même raison : le texte
+/// est parcouru une fois de gauche à droite, et ce qu'une marque produit est poussé dans
+/// la sortie sans jamais être réexaminé. Un `replace` par marque en boucle aurait l'air
+/// équivalent et ne le serait pas — il traiterait le mot précédent comme du gabarit, et
+/// une dédicace citant `{titre}` suffit à le montrer.
+///
+/// Une marque inconnue est recopiée telle quelle : ce qui part au modèle est du texte,
+/// pas une syntaxe, et une faute de frappe doit se voir plutôt que vider la phrase.
+fn substituer(texte: &str, mots: &Mots) -> String {
+    let mut sortie = String::with_capacity(texte.len());
+    let mut reste = texte;
+    while let Some(i) = reste.find('{') {
+        sortie.push_str(&reste[..i]);
+        let a_partir_de_l_accolade = &reste[i..];
+        match MARQUES
+            .iter()
+            .find(|(marque, _)| a_partir_de_l_accolade.starts_with(marque))
+        {
+            Some((marque, mot)) => {
+                sortie.push_str(mot(mots).trim());
+                reste = &a_partir_de_l_accolade[marque.len()..];
+            }
+            None => {
+                sortie.push('{');
+                reste = &a_partir_de_l_accolade[1..];
+            }
+        }
     }
-    format!("{g} {c}")
+    sortie.push_str(reste);
+    sortie
 }
 
 /// Demande l'image, et rend ses octets — ou dit pourquoi elle n'est pas venue.
@@ -191,6 +260,15 @@ mod tests {
         p
     }
 
+    /// Les mots d'un envoi, dont seule la dédicace varie d'un test à l'autre.
+    fn mots(envoi: &str) -> Mots<'_> {
+        Mots {
+            envoi,
+            dedicataire: "Léa",
+            titre: "Le Chemin",
+        }
+    }
+
     fn acces() -> Acces {
         Acces {
             url: "https://exemple.test/images".into(),
@@ -211,14 +289,97 @@ mod tests {
     fn le_mot_de_l_envoi_entre_dans_le_gabarit_du_livre() {
         let g = "une aquarelle, mention manuscrite « {envoi} », papier grené";
         assert_eq!(
-            prompt(g, "À Léa"),
+            prompt(g, &mots("À Léa")),
             "une aquarelle, mention manuscrite « À Léa », papier grené"
         );
-        assert_ne!(prompt(g, "À Léa"), prompt(g, "À Marie"));
+        assert_ne!(prompt(g, &mots("À Léa")), prompt(g, &mots("À Marie")));
         assert_eq!(
-            prompt("une aquarelle", "À Léa"),
+            prompt("une aquarelle", &mots("À Léa")),
             "une aquarelle À Léa",
             "sans la marque, le mot doit être ajouté et non perdu"
+        );
+    }
+
+    /// Le dédicataire et le titre s'appellent par leur nom, comme la dédicace.
+    ///
+    /// Le titre vient du livre et le dédicataire de l'exemplaire : sans eux, un gabarit
+    /// qui veut « pour Léa, d'après Le Chemin » obligerait à réécrire les deux dans
+    /// chacune des M dédicaces, où ils se désaccorderaient du livre au premier renommage.
+    #[test]
+    fn le_dedicataire_et_le_titre_entrent_aussi_dans_le_gabarit() {
+        assert_eq!(
+            prompt(
+                "une aquarelle pour {dedicataire}, d'après « {titre} » : {envoi}",
+                &mots("À Léa")
+            ),
+            "une aquarelle pour Léa, d'après « Le Chemin » : À Léa"
+        );
+    }
+
+    /// **Une seule passe**, comme `gabarit::substituer` et pour la même raison : ce
+    /// qu'une marque produit est écrit et jamais réexaminé.
+    ///
+    /// Une dédicace est un texte libre, écrit par quelqu'un qui vient de lire l'aide des
+    /// marques. Qu'elle en cite une ne doit pas la faire remplacer — trois `replace` en
+    /// chaîne auraient l'air équivalents et ne le sont pas.
+    #[test]
+    fn une_marque_citee_dans_la_dedicace_reste_du_texte() {
+        assert_eq!(
+            prompt(
+                "une aquarelle : {envoi}",
+                &Mots {
+                    envoi: "pour toi qui écris {titre}",
+                    dedicataire: "Léa",
+                    titre: "Le Chemin",
+                }
+            ),
+            "une aquarelle : pour toi qui écris {titre}",
+            "la sortie d'une marque n'est pas relue"
+        );
+    }
+
+    /// Une marque inconnue est recopiée telle quelle : le gabarit part au modèle, qui
+    /// lit du texte et non une syntaxe. Une faute de frappe doit se voir dans l'image
+    /// plutôt que vider la phrase de son sujet.
+    #[test]
+    fn une_marque_inconnue_est_recopiee() {
+        assert_eq!(
+            prompt("une aquarelle {couleur} pour {dedicataire}", &mots("")),
+            "une aquarelle {couleur} pour Léa"
+        );
+    }
+
+    /// Le repli garde son objet — éviter M images identiques — et rien de plus.
+    ///
+    /// Un gabarit qui nomme le dédicataire distingue déjà chaque envoi : y ajouter la
+    /// dédicace en queue doublerait un mot que l'auteur a placé lui-même. Le titre, lui,
+    /// ne distingue rien : il est le même pour tout le tirage.
+    #[test]
+    fn le_repli_ne_joue_que_sans_marque_qui_distingue_les_envois() {
+        assert_eq!(
+            prompt("une aquarelle pour {dedicataire}", &mots("À Léa")),
+            "une aquarelle pour Léa",
+            "le dédicataire distingue déjà : rien à ajouter en queue"
+        );
+        assert_eq!(
+            prompt("une aquarelle, « {titre} »", &mots("À Léa")),
+            "une aquarelle, « Le Chemin » À Léa",
+            "le titre ne distingue rien : la dédicace doit rester"
+        );
+        // Une liste se remplit avant d'être nommée : un envoi sans dédicataire est un
+        // état de travail, pas une avarie — la marque est là, mais elle ne distingue
+        // rien, et sans la dédicace en queue tous les exemplaires partagent une image.
+        assert_eq!(
+            prompt(
+                "une aquarelle pour {dedicataire}",
+                &Mots {
+                    envoi: "À Léa",
+                    dedicataire: "  ",
+                    titre: "Le Chemin",
+                }
+            ),
+            "une aquarelle pour À Léa",
+            "un dédicataire vide ne distingue pas : la dédicace doit rester"
         );
     }
 

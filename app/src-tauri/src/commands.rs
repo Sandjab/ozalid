@@ -1525,10 +1525,16 @@ pub fn envoi_generer(
         return Err("la main de cet envoi n'est pas une image générée.".into());
     }
     let gabarit = &o.projet.meta.envois.gabarit;
+    // Le titre vient du livre et non de l'envoi : il est le même pour tout le tirage.
+    let mots = crate::diffusion::Mots {
+        envoi: &e.contenu,
+        dedicataire: &e.dedicataire,
+        titre: &o.projet.meta.livre.titre,
+    };
 
     let octets = crate::diffusion::genere(
         &acces,
-        &crate::diffusion::prompt(gabarit, &e.contenu),
+        &crate::diffusion::prompt(gabarit, &mots),
         &crate::diffusion::Reseau,
     )?;
     let donnee = donnee_image(&octets);

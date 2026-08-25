@@ -121,7 +121,10 @@ function afficherReglages() {
   // n'en porte pas, et deux curseurs sans valeur à régler ne diraient rien.
   $('champDetourage').hidden = !e || main() !== 'image' || !e.detourage;
   $('champDiffusion').hidden = !e || main() !== 'diffusion';
-  $('champMot').hidden = !!e && main() !== 'police';
+  // La main générée garde son mot : le gabarit dit le style du livre, le mot dit ce que
+  // cette image-ci doit porter, et c'est lui que `{envoi}` va chercher. Seule la forme
+  // en images n'a pas de texte à composer.
+  $('champMot').hidden = !!e && main() === 'image';
   // Ce qui appartient au livre se pose **avant** la sortie : un livre sans dédicataire a
   // quand même sa police personnelle, et la laisser dans l'état du livre précédent
   // offrirait de retirer une écriture que celui-ci ne porte pas.

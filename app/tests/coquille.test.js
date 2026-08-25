@@ -1305,6 +1305,34 @@ test('les réglages suivent la main de l\'exemplaire ouvert', async () => {
 });
 
 /**
+ * Sous une main générée, le mot reste offert : c'est lui que `{envoi}` va chercher.
+ *
+ * La forme en images n'a pas de texte à composer, la forme générée si — le gabarit dit
+ * le style du livre, le mot dit ce que cette image-ci doit porter. Les masquer ensemble
+ * laissait `{envoi}` sans rien à insérer, et le modèle rendait M fois la même image
+ * pendant que l'aide promettait le contraire.
+ */
+test('sous une main générée, le mot de la dédicace reste saisissable', async () => {
+  const a = atelier({
+    sur: {
+      envois: {
+        gabarit: 'une aquarelle, mention « {envoi} »',
+        liste: [{ dedicataire: 'Léa', main: { mode: 'diffusion' }, place: PLACE_DEFAUT,
+          contenu: 'À Léa.', image: null }],
+      },
+    },
+  });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+
+  assert.equal(els.get('champMot').hidden, false,
+    'rien où écrire la dédicace que « {envoi} » doit insérer');
+  assert.equal(els.get('inMot').value, 'À Léa.');
+  assert.equal(els.get('champImage').hidden, true, 'une image à choisir sous une main générée');
+  assert.equal(els.get('champDiffusion').hidden, false);
+});
+
+/**
  * Cliquer une vignette déplace l'envoi sur cette page.
  *
  * C'est le **seul** moyen d'en changer — il n'y a pas de champ « page » —, et c'est

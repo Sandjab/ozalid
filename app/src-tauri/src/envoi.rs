@@ -95,7 +95,9 @@ pub struct Envoi {
     /// et le faire composer pour l'autre.
     #[serde(default)]
     pub main: Main,
-    /// Ce que la main réclame : le texte à composer. Vide quand la main est une image.
+    /// Le mot adressé à cette personne. Composé tel quel sous une main en police ; sous
+    /// une main générée, c'est ce que la marque `{envoi}` du gabarit va chercher. Vide
+    /// sous une main en images, qui n'a pas de texte à composer.
     #[serde(default)]
     pub contenu: String,
     /// Nom, sous `envois/` dans l'archive, de l'image de cet envoi.

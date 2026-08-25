@@ -421,8 +421,11 @@
         <label><span>Gabarit du livre</span>
           <textarea id="inGabarit" rows="3"></textarea></label>
         <p class="note">Partagé par tous les envois : c'est le style d'écriture du
-          livre, pas le mot d'une personne. <code>{envoi}</code> y marque l'endroit où
-          le mot de chacun s'insère.</p>
+          livre, pas le mot d'une personne. Trois marques y appellent le reste —
+          <code>{envoi}</code> le mot écrit ci-dessus, <code>{dedicataire}</code> le nom
+          de la personne, <code>{titre}</code> celui du livre. Sans
+          <code>{envoi}</code> ni <code>{dedicataire}</code>, le mot est ajouté à la
+          suite : deux exemplaires ne doivent pas recevoir la même image.</p>
         <label><span>Adresse du modèle</span>
           <input type="url" id="inDiffusionUrl" placeholder="https://…"></label>
         <label><span>Clé</span>
