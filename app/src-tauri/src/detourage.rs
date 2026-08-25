@@ -26,6 +26,29 @@ fn luminance(r: u8, g: u8, b: u8) -> f64 {
     0.2126 * r as f64 + 0.7152 * g as f64 + 0.0722 * b as f64
 }
 
+/// La luminance d'une couleur écrite en `#rrggbb`, quand c'en est une.
+///
+/// Le champ de l'encre accepte deux formes, et c'est voulu : un nom anglais —
+/// « blue-black » — que les modèles lisent mieux qu'un hexadécimal, ou un code que
+/// l'auteur colle depuis un nuancier. Seule la seconde dit une valeur, et c'est ce qui
+/// la rend utile ici : elle pose le point d'encre exactement là où il faut.
+///
+/// Sans elle, une encre claire sort **délavée**. Le point d'encre est estimé sur les
+/// pixels les plus sombres d'une écriture, ce qui vaut ~37 pour du noir ; un rose à ~100
+/// de luminance n'atteint jamais ce seuil, et son trait plafonne à 69 % d'opacité — le
+/// papier transparaît au travers, sur toute la signature.
+///
+/// Ce qui n'est pas un code rend `None` plutôt qu'une valeur inventée : un mot ne dit
+/// aucune luminance, et deviner la sienne poserait un seuil au hasard.
+pub fn luminance_hex(couleur: &str) -> Option<f64> {
+    let c = couleur.trim().strip_prefix('#')?;
+    if c.len() != 6 {
+        return None;
+    }
+    let n = |i: usize| u8::from_str_radix(&c[i..i + 2], 16).ok();
+    Some(luminance(n(0)?, n(2)?, n(4)?))
+}
+
 /// La photo, son fond rendu transparent, en PNG.
 ///
 /// **La couleur du pixel n'est pas touchée.** Démultiplier l'encre pour la « retrouver »
@@ -211,5 +234,31 @@ mod tests {
         )
         .unwrap();
         assert_eq!(alpha(&applique(&jpeg, &SEUILS).unwrap()), 0);
+    }
+
+    /// Un code couleur dit exactement où poser le point d'encre. La luminance de
+    /// `#F532AC` vaut ~100 : sur un seuil relevé pour du noir (~37), ce rose sortirait
+    /// à 69 % d'opacité, délavé par le papier qui transparaît au travers.
+    #[test]
+    fn un_code_couleur_donne_son_point_d_encre() {
+        let l = luminance_hex("#F532AC").expect("code refusé");
+        assert!((l - 100.3).abs() < 0.5, "luminance {l}");
+        assert!((luminance_hex("#191917").unwrap() - 24.9).abs() < 0.5);
+    }
+
+    /// Ce qui n'est pas un code reste un mot : le champ accepte les deux, et
+    /// « blue-black » est un terme que les modèles lisent mieux qu'un hexadécimal.
+    #[test]
+    fn ce_qui_n_est_pas_un_code_ne_dit_aucun_point() {
+        for c in ["blue-black", "", "#GGGGGG", "#12345", "F532AC", "#F532ACF"] {
+            assert_eq!(luminance_hex(c), None, "« {c} » a été pris pour un code");
+        }
+    }
+
+    /// La casse et les blancs ne décident de rien : un code collé depuis un nuancier
+    /// arrive souvent en majuscules, parfois avec une espace.
+    #[test]
+    fn un_code_se_lit_quelle_que_soit_sa_casse() {
+        assert_eq!(luminance_hex(" #f532ac "), luminance_hex("#F532AC"));
     }
 }

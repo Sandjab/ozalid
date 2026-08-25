@@ -655,7 +655,24 @@ impl Projet {
         // n'ont ni le même papier ni le même éclairage. Une image que le décodeur ne
         // sait pas lire n'empêche pas de la poser — Typst la lira peut-être — et elle
         // se compose alors sans détourage.
-        self.meta.envois.liste[index].detourage = crate::detourage::estime(&octets).ok();
+        let mut d = crate::detourage::estime(&octets).ok();
+        // Une encre nommée par un code dit sa luminance, et donc exactement où poser le
+        // point d'encre. Sans cela, le seuil relevé sur les pixels d'une écriture — calé
+        // sur du sombre — laisserait une encre claire semi-transparente : un rose à 100
+        // de luminance plafonnerait à 69 % d'opacité, le papier au travers.
+        //
+        // Refusée si elle n'est pas plus sombre que le papier : la rampe s'inverserait,
+        // et `applique` ne saurait rien composer. L'estimation garde alors la main, ce
+        // qui est toujours exécutable.
+        if let (Some(d), Some(l)) = (
+            d.as_mut(),
+            crate::detourage::luminance_hex(&self.meta.envois.couleur),
+        ) {
+            if l < d.papier {
+                d.encre = l;
+            }
+        }
+        self.meta.envois.liste[index].detourage = d;
         self.images_envois.insert(nom, octets);
         // L'image que cet envoi portait avant n'est plus nommée par personne.
         self.elaguer_images_envois();
@@ -2069,5 +2086,40 @@ auteur = "Ivan Pjig"
             .detourage
             .expect("aucun détourage posé");
         assert!(d.papier > d.encre, "seuils incohérents : {d:?}");
+    }
+
+    /// Une encre nommée par un code pose le point d'encre à sa luminance : sans quoi le
+    /// seuil relevé sur les pixels d'une écriture — calé sur du sombre — laisserait un
+    /// rose à 69 % d'opacité, délavé par le papier au travers.
+    #[test]
+    fn une_encre_en_code_pose_son_point_d_encre() {
+        let mut p = avec_envois(&["Léa"]);
+        p.meta.envois.couleur = "#F532AC".into();
+        p.poser_image_envoi(0, photo()).unwrap();
+        let d = p.meta.envois.liste[0].detourage.expect("aucun détourage");
+        assert!((d.encre - 100.3).abs() < 0.5, "point d'encre {}", d.encre);
+    }
+
+    /// Une encre **plus claire que le papier** ne pose rien : la rampe s'inverserait, et
+    /// `applique` refuserait de composer. Mieux vaut l'estimation relevée sur les pixels
+    /// qu'un réglage que rien ne pourrait exécuter.
+    #[test]
+    fn une_encre_plus_claire_que_le_papier_ne_pose_rien() {
+        let mut p = avec_envois(&["Léa"]);
+        p.meta.envois.couleur = "#FFFFFF".into();
+        p.poser_image_envoi(0, photo()).unwrap();
+        let d = p.meta.envois.liste[0].detourage.expect("aucun détourage");
+        assert!(d.encre < d.papier, "seuils inexécutables : {d:?}");
+    }
+
+    /// Un mot n'est pas un code : l'estimation relevée sur l'image garde la main.
+    #[test]
+    fn une_encre_nommee_laisse_l_estimation_faire() {
+        let mut p = avec_envois(&["Léa"]);
+        p.meta.envois.couleur = "blue-black".into();
+        p.poser_image_envoi(0, photo()).unwrap();
+        let avec = p.meta.envois.liste[0].detourage.unwrap();
+        let sans = crate::detourage::estime(&photo()).unwrap();
+        assert_eq!(avec, sans);
     }
 }

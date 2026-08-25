@@ -160,6 +160,14 @@ le livre à côté du gabarit, non sur chaque exemplaire : un auteur signe ses v
 exemplaires du même stylo. Le paraphe n'est pas le `monogramme` du livre, qui nomme la
 maison au pied de la couverture.
 
+L'encre se nomme en anglais — `blue-black` — **ou par un code**, `#1F3A5F`. Les deux
+partent au modèle tels quels, mais seul le code dit une luminance, et c'est ce qui le
+rend utile : le point d'encre du détourage s'y cale au lieu d'être relevé sur les pixels.
+Sans lui, une encre claire sort semi-transparente — un rose à 100 de luminance plafonne à
+69 % d'opacité sur un seuil calé pour du noir, et le papier transparaît au travers de
+toute la signature. Une couleur qui ne serait pas plus sombre que le papier est ignorée :
+la rampe s'inverserait, et rien ne se composerait.
+
 Un gabarit est **livré** avec l'application, en anglais — langue que les modèles à poids
 ouverts suivent le mieux, le texte écrit restant français puisqu'il vient de `{envoi}`.
 Il demande un fond blanc uni sans texture ni ombre, ce qui donne au détourage la photo la
