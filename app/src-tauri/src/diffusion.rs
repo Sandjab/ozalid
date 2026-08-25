@@ -221,6 +221,32 @@ fn octets(reponse: &str, transport: &dyn Transport) -> Result<Vec<u8>, String> {
     transport.prend(url)
 }
 
+/// Ce qu'une réponse dit, ou pourquoi elle ne dit rien d'utilisable.
+///
+/// **Le statut seul ne diagnostique pas.** « 404 » sur une adresse juste veut dire que
+/// le modèle demandé n'existe pas pour cette clé, « 400 » que le corps ne porte pas ce
+/// qu'on attend — et c'est la réponse, jamais le statut, qui nomme lequel. Le corps est
+/// donc joint au message ; `genere` en retire la clé avant qu'il n'atteigne l'écran.
+///
+/// Tronqué, parce qu'une adresse qui n'est pas celle d'un modèle rend volontiers une
+/// page entière, et que celle-ci finirait dans une bulle d'interface.
+fn reponse(statut: u16, corps: String) -> Result<String, String> {
+    if (200..300).contains(&statut) {
+        return Ok(corps);
+    }
+    let dit = corps.trim();
+    if dit.is_empty() {
+        return Err(format!("le modèle a répondu {statut}, sans un mot."));
+    }
+    // Sur une frontière de caractère : le corps peut être en UTF-8, et une coupe à
+    // l'octet paniquerait au lieu de rapporter l'erreur qu'on est en train de rapporter.
+    let court = match dit.char_indices().nth(500) {
+        Some((i, _)) => format!("{}…", &dit[..i]),
+        None => dit.to_string(),
+    };
+    Err(format!("le modèle a répondu {statut} : {court}"))
+}
+
 /// Efface la clé d'un message avant qu'il ne remonte.
 ///
 /// Le message d'un client HTTP porte volontiers ce qu'on lui a donné — l'adresse
@@ -240,14 +266,20 @@ pub struct Reseau;
 
 impl Transport for Reseau {
     fn poste(&self, url: &str, cle: &str, corps: &str) -> Result<String, String> {
-        ureq::post(url)
+        // Le statut n'est pas traité comme une erreur, pour que le corps soit lu : c'est
+        // lui qui dit *pourquoi* la demande est refusée, et `ureq` le jetterait avec la
+        // réponse. Le tri revient à `reponse`.
+        let mut r = ureq::post(url)
+            .config()
+            .http_status_as_error(false)
+            .build()
             .header("Authorization", &format!("Bearer {cle}"))
             .header("Content-Type", "application/json")
             .send(corps)
-            .map_err(|e| e.to_string())?
-            .body_mut()
-            .read_to_string()
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?;
+        let statut = r.status().as_u16();
+        let lu = r.body_mut().read_to_string().map_err(|e| e.to_string())?;
+        reponse(statut, lu)
     }
 
     fn prend(&self, url: &str) -> Result<Vec<u8>, String> {
@@ -439,6 +471,50 @@ mod tests {
             "une aquarelle pour À Léa",
             "un dédicataire vide ne distingue pas : la dédicace doit rester"
         );
+    }
+
+    /// **Un statut seul ne diagnostique rien.** « 404 » sur une adresse juste veut dire
+    /// que le modèle demandé n'existe pas pour cette clé, et seul le corps de la réponse
+    /// le nomme. Sans lui, il n'y a rien à chercher : ni le champ fautif, ni le modèle
+    /// refusé, ni l'expiration de la clé.
+    #[test]
+    fn une_reponse_en_erreur_remonte_avec_ce_qu_elle_dit() {
+        let err = reponse(
+            404,
+            r#"{"error":{"message":"models/gemini-3-pro-image is not found"}}"#.into(),
+        )
+        .unwrap_err();
+        assert!(err.contains("404"), "{err}");
+        assert!(
+            err.contains("gemini-3-pro-image"),
+            "le corps est perdu : {err}"
+        );
+    }
+
+    /// Une adresse qui n'est pas celle d'un modèle rend volontiers une page entière.
+    /// Elle remonte jusqu'à une bulle d'interface : ce qui la nomme tient au début.
+    #[test]
+    fn un_corps_d_erreur_demesure_est_tronque() {
+        let err = reponse(500, "é".repeat(4000)).unwrap_err();
+        assert!(
+            err.chars().count() < 700,
+            "{} caractères",
+            err.chars().count()
+        );
+        assert!(err.ends_with('…'), "la troncature ne se voit pas : {err}");
+    }
+
+    /// Un statut muet ne doit pas laisser un message qui promet un détail absent.
+    #[test]
+    fn une_erreur_sans_un_mot_le_dit() {
+        let err = reponse(502, "  \n ".into()).unwrap_err();
+        assert!(err.contains("502"), "{err}");
+        assert!(err.contains("sans un mot"), "{err}");
+    }
+
+    #[test]
+    fn une_reponse_normale_passe_telle_quelle() {
+        assert_eq!(reponse(200, "{}".into()).unwrap(), "{}");
     }
 
     /// Le modèle se nomme dans le corps, quand il a un nom à donner.
