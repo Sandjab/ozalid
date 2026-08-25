@@ -432,15 +432,37 @@ fn bloc_dos(
         return s;
     }
 
-    let ecart = format!("#h({})", mm(d.ecart / 100.0 * fw));
+    // **Chaque champ dans sa propre colonne, et non tous sur une ligne.**
+    //
+    // Concaténés par un `#h()`, deux champs d'une même place tombaient dans le même
+    // paragraphe : ils partageaient une ligne de base, et le centrage portait sur cette
+    // ligne — dont la hauteur est celle du plus grand. Le petit se retrouvait à
+    // `(cap_grand − cap_petit) / 2` sous l'axe de la tranche : 1,1 mm relevé au pixel
+    // sur un dos de 15,5 mm, titre en corps 6 et auteur en corps 3, soit 7 % de
+    // l'épaisseur. `BOITE_DOS` fait épouser la boîte à la capitale, ce qui centre un
+    // champ seul ; il ne peut rien pour deux champs qu'une baseline commune tient.
+    //
+    // Un `grid` intérieur donne à chacun sa cellule, que `align: horizon` centre pour
+    // lui-même. La gouttière porte l'écart, à la place du `#h()` : les positions le long
+    // du dos ne bougent pas, et `boites_dos` — qui relit cette mise en page depuis
+    // l'autre bout pour poser les prises — reste d'accord avec elle.
+    let ecart = mm(d.ecart / 100.0 * fw);
     let cellules: Vec<String> = places
         .iter_mut()
         .map(|p| {
             p.sort_by_key(|(rang, _)| *rang);
-            p.iter()
-                .map(|(_, t)| t.as_str())
+            if p.len() < 2 {
+                return p.first().map(|(_, t)| t.clone()).unwrap_or_default();
+            }
+            let colonnes = p
+                .iter()
+                .map(|(_, t)| format!("[{t}]"))
                 .collect::<Vec<_>>()
-                .join(&ecart)
+                .join(", ");
+            format!(
+                "#grid(columns: {}, align: horizon, column-gutter: {ecart}, {colonnes})",
+                p.len()
+            )
         })
         .collect();
 
@@ -1367,5 +1389,97 @@ mod tests {
             !s.contains("titre: measure(rotate("),
             "rotation posée sur un élément qui n'en a pas :\n{s}"
         );
+    }
+
+    /// Les centres verticaux des groupes d'encre d'un rendu de dos couché, en pixels.
+    ///
+    /// Le dos est rendu couché : son épaisseur est la hauteur de l'image, et les
+    /// textes y courent en largeur. Les colonnes encrées sont groupées, un trou large
+    /// séparant deux champs, et chaque groupe rend le milieu de son encre.
+    fn centres_encre(png: &std::path::Path) -> (f64, Vec<f64>) {
+        let img = image::open(png).expect("rendu illisible").to_luma8();
+        let (w, h) = (img.width(), img.height());
+        let encree = |x: u32| (0..h).any(|y| img.get_pixel(x, y)[0] < 200);
+        let cols: Vec<u32> = (0..w).filter(|&x| encree(x)).collect();
+        assert!(!cols.is_empty(), "aucune encre sur le rendu");
+        let mut groupes: Vec<Vec<u32>> = vec![vec![cols[0]]];
+        for &x in &cols[1..] {
+            if x - groupes.last().unwrap().last().unwrap() > 20 {
+                groupes.push(vec![x]);
+            } else {
+                groupes.last_mut().unwrap().push(x);
+            }
+        }
+        let centres = groupes
+            .iter()
+            .map(|g| {
+                let mut haut = h;
+                let mut bas = 0u32;
+                for &x in g {
+                    for y in 0..h {
+                        if img.get_pixel(x, y)[0] < 200 {
+                            haut = haut.min(y);
+                            bas = bas.max(y);
+                        }
+                    }
+                }
+                (haut as f64 + bas as f64) / 2.0
+            })
+            .collect();
+        (h as f64 / 2.0, centres)
+    }
+
+    /// **Chaque champ se centre dans l'épaisseur, pas la ligne qui les porte.**
+    ///
+    /// Deux champs d'une même place étaient concaténés dans une seule cellule, donc
+    /// dans le même paragraphe : ils partageaient une ligne de base, et `align: horizon`
+    /// centrait cette ligne — dont la hauteur est celle du plus grand. Le petit tombait
+    /// alors à `(cap_grand − cap_petit) / 2` sous l'axe. Relevé avant correction sur un
+    /// dos Lulu de 15,5 mm, titre en corps 6 et auteur en corps 3 : **1,1 mm**, soit 7 %
+    /// de l'épaisseur.
+    ///
+    /// Les deux textes sont réduits à une capitale sans jambage : le haut et le bas de
+    /// leur encre sont alors exactement leur hauteur de capitale, et la mesure ne dépend
+    /// plus des lettres que le titre contient. Une seule lettre chacun, parce que deux
+    /// se séparent en deux groupes à ce corps-là et que le compte deviendrait faux.
+    #[test]
+    #[ignore = "lance le sidecar Typst : cargo test -- --ignored"]
+    fn deux_champs_d_une_meme_place_partagent_l_axe_du_dos() {
+        let typst = crate::typst::Typst::new("typst")
+            .avec_polices(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fonts"));
+        let dir = tempfile::tempdir().expect("répertoire de travail");
+        let g = gabarit("lulu", 244);
+        let livre = Livre {
+            titre: "H".into(),
+            auteur: "H".into(),
+            ..livre()
+        };
+        let mut cv = maquettes::fournie("bandeau");
+        cv.dos.titre.place = crate::couverture::PlaceDos::Centre;
+        cv.dos.titre.rang = 1;
+        cv.dos.titre.style.taille = 6.0;
+        cv.dos.auteur.place = crate::couverture::PlaceDos::Centre;
+        cv.dos.auteur.rang = 2;
+        cv.dos.auteur.style.taille = 3.0;
+        cv.dos.editeur.actif = false;
+        cv.dos.collection.actif = false;
+
+        let src = dir.path().join("dos.typ");
+        std::fs::write(&src, source_dos(&livre, &cv, g.format, g.dos, None)).expect("source");
+        let png = dir.path().join("dos.png");
+        typst.apercu(&src, &png, 1, 600).expect("rendu refusé");
+
+        let (axe, centres) = centres_encre(&png);
+        assert_eq!(centres.len(), 2, "deux champs attendus, vu {centres:?}");
+        // 600 ppi : 0,2 mm vaut 4,7 px. La tolérance couvre l'antialiasing du rendu et
+        // l'overshoot des rondes, pas un décalage de mise en page.
+        for (i, c) in centres.iter().enumerate() {
+            let mm_ = (c - axe) / 600.0 * 25.4;
+            assert!(
+                mm_.abs() < 0.2,
+                "champ {} à {mm_:+.2} mm de l'axe (centre {c}, axe {axe})",
+                i + 1
+            );
+        }
     }
 }
