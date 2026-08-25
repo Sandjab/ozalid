@@ -58,6 +58,28 @@ pub fn applique(octets: &[u8], d: &Detourage) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
+/// Les seuils que cette image-là appelle.
+///
+/// Le papier au 95e percentile de luminance, l'encre au 0,5e. Deux percentiles très
+/// écartés parce qu'aucun n'est fiable seul : la part encrée d'une image varie du tout
+/// au tout, et un percentile trop haut du côté de l'encre tombe dans le papier dès que
+/// le mot est court. C'est une estimation de départ, que l'écran laisse reprendre.
+pub fn estime(octets: &[u8]) -> Result<Detourage, String> {
+    let img = image::load_from_memory(octets)
+        .map_err(|e| format!("image illisible : {e}"))?
+        .to_rgba8();
+    let mut l: Vec<f64> = img.pixels().map(|p| luminance(p[0], p[1], p[2])).collect();
+    if l.is_empty() {
+        return Err("image vide : rien à détourer.".into());
+    }
+    l.sort_by(|a, b| a.total_cmp(b));
+    let au = |q: f64| l[((q * (l.len() - 1) as f64).round() as usize).min(l.len() - 1)];
+    Ok(Detourage {
+        papier: au(0.95),
+        encre: au(0.005),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -117,5 +139,42 @@ mod tests {
             err.contains("40"),
             "le message ne dit pas le papier : {err}"
         );
+    }
+
+    /// Une image faite d'une part d'encre sur du papier, en PNG.
+    ///
+    /// Cent lignes et non vingt : à vingt, une part de 2 % arrondit à zéro ligne, et le
+    /// test vérifierait l'estimation sur une image sans une goutte d'encre.
+    fn encre_sur_papier(part: f64) -> Vec<u8> {
+        let mut img = image::RgbaImage::from_pixel(20, 100, image::Rgba([242, 240, 235, 255]));
+        let lignes = (100.0 * part).round() as u32;
+        for y in 0..lignes {
+            for x in 0..20 {
+                img.put_pixel(x, y, image::Rgba([30, 36, 118, 255]));
+            }
+        }
+        let mut out = Vec::new();
+        image::DynamicImage::ImageRgba8(img)
+            .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
+            .unwrap();
+        out
+    }
+
+    /// L'estimation vise le papier haut et l'encre bas, et elle tient quand le mot est
+    /// court : la part encrée d'une image va de moins de 1 % pour une signature à plus
+    /// de 10 % pour un paragraphe. C'est ce qui a fait écarter un percentile unique —
+    /// sur la photo d'essai de la spec, le 5e percentile tombait déjà dans le papier.
+    #[test]
+    fn les_seuils_s_estiment_sur_une_signature_comme_sur_un_paragraphe() {
+        for part in [0.02, 0.30] {
+            let d = estime(&encre_sur_papier(part)).unwrap();
+            assert!(
+                d.papier > 200.0,
+                "papier {} pour une part de {part}",
+                d.papier
+            );
+            assert!(d.encre < 100.0, "encre {} pour une part de {part}", d.encre);
+            assert!(d.papier > d.encre);
+        }
     }
 }
