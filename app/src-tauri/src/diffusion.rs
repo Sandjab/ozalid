@@ -38,6 +38,35 @@ pub trait Transport {
     fn prend(&self, url: &str) -> Result<Vec<u8>, String>;
 }
 
+/// Le gabarit livré avec l'application, celui qu'on trouve avant d'avoir rien réglé.
+///
+/// Un champ vide ne dit pas sa syntaxe : devant lui, personne ne devine qu'il existe
+/// cinq marques ni ce qu'un modèle de diffusion demande pour rendre une écriture. Il est
+/// en **anglais**, langue que les modèles à poids ouverts suivent le mieux ; le texte
+/// écrit, lui, reste français puisqu'il vient de `{envoi}`. C'est aussi pourquoi la
+/// couleur se saisit en anglais.
+///
+/// Il demande un fond blanc uni sans texture ni ombre, et ce n'est pas seulement une
+/// question de goût : c'est ce qui donne au détourage la photo la plus facile à séparer.
+pub const GABARIT_DEFAUT: &str = r#"A short handwritten dedication, isolated on a pure white background.
+Flat scan, not a photograph. No paper texture, no shadow, no vignette, no lighting effect.
+
+The dedication reads exactly:
+À {dedicataire}, {envoi}
+
+Handwriting: personal French cursive, {couleur} fountain pen ink, medium nib, written quickly, slightly untidy and irregular. Slight rightward slant. Uneven baseline — the lines drift a little.
+Letter size varies naturally between words. Ink slightly heavier where the pen changes direction, thinner on upstrokes.
+
+Written by an adult in one continuous gesture: unstudied, a little hurried, not calligraphic. Some letters joined, some lifted.
+
+Render the accented characters exactly as written: é è à ç.
+
+Below the dedication, offset slightly to the right, a personal signature mark: "{paraphe}", each word written as a single connected gesture, without the pen lifting. A wide loop encircles the letters before the pen exits to the right in a flat tapering stroke, thinner and slightly ragged at the end where the pen leaves the paper. The signature is slightly larger and looser than the dedication text above it, more gesture than writing. Written with the same fountain pen as the dedication, and it shows. Strong contrast between strokes: the downstrokes are broad, where the nib tines spread under pressure; the upstrokes are hairline-thin, where the nib barely touches. The transition between the two is gradual within a single stroke, never uniform. Ink pools into a darker, slightly bleeding dot where the pen starts and where it stops, and at the sharp turns. Along the broadest strokes the ink is unevenly saturated, a little darker at the edges than in the centre. 
+
+Nothing else on the image. No border, no ornament, no signature line, no date, no extra text.
+
+High resolution, sharp edges, pure {couleur} ink on pure white background."#;
+
 /// La marque, dans le gabarit du livre, où le mot de chaque envoi s'insère.
 pub const MARQUE: &str = "{envoi}";
 
@@ -53,21 +82,29 @@ pub struct Mots<'a> {
     pub dedicataire: &'a str,
     /// Le titre du livre : commun à tout le tirage, il ne distingue rien.
     pub titre: &'a str,
+    /// La couleur de l'encre, telle que le gabarit la nomme au modèle. Commune au
+    /// tirage : elle ne distingue rien.
+    pub couleur: &'a str,
+    /// Le paraphe de l'auteur, sa signature. Commun au tirage lui aussi — c'est la même
+    /// main qui signe les vingt exemplaires.
+    pub paraphe: &'a str,
 }
 
 /// Une marque et le mot qu'elle nomme.
 type Nommee = (&'static str, for<'a> fn(&Mots<'a>) -> &'a str);
 
 /// Les marques reconnues, dans l'ordre où l'aide les présente.
-const MARQUES: [Nommee; 3] = [
+const MARQUES: [Nommee; 5] = [
     (MARQUE, |m| m.envoi),
     ("{dedicataire}", |m| m.dedicataire),
     ("{titre}", |m| m.titre),
+    ("{couleur}", |m| m.couleur),
+    ("{paraphe}", |m| m.paraphe),
 ];
 
-/// Celles qui peuvent distinguer un envoi du suivant. Le titre n'en est pas : il est le
-/// même pour tout le tirage, et un gabarit qui ne nommerait que lui rendrait M fois la
-/// même image.
+/// Celles qui peuvent distinguer un envoi du suivant. Ni le titre, ni la couleur de
+/// l'encre, ni le paraphe n'en sont : ils sont les mêmes pour tout le tirage, et un
+/// gabarit qui ne nommerait qu'eux rendrait M fois la même image.
 const DISTINGUENT: [Nommee; 2] = [MARQUES[0], MARQUES[1]];
 
 /// Le prompt d'un envoi : le gabarit du livre, où ses mots viennent se poser.
@@ -266,6 +303,7 @@ mod tests {
             envoi,
             dedicataire: "Léa",
             titre: "Le Chemin",
+            ..Mots::default()
         }
     }
 
@@ -331,6 +369,7 @@ mod tests {
                     envoi: "pour toi qui écris {titre}",
                     dedicataire: "Léa",
                     titre: "Le Chemin",
+                    ..Mots::default()
                 }
             ),
             "une aquarelle : pour toi qui écris {titre}",
@@ -341,11 +380,16 @@ mod tests {
     /// Une marque inconnue est recopiée telle quelle : le gabarit part au modèle, qui
     /// lit du texte et non une syntaxe. Une faute de frappe doit se voir dans l'image
     /// plutôt que vider la phrase de son sujet.
+    ///
+    /// L'exemple était `{couleur}` avant qu'elle ne devienne une marque : une faute de
+    /// frappe sur une marque connue est un meilleur témoin, parce que c'est le cas que
+    /// ce comportement existe pour rattraper — et il ne risque pas d'être adopté un
+    /// jour, contrairement à un nom qu'on pourrait vouloir reconnaître.
     #[test]
     fn une_marque_inconnue_est_recopiee() {
         assert_eq!(
-            prompt("une aquarelle {couleur} pour {dedicataire}", &mots("")),
-            "une aquarelle {couleur} pour Léa"
+            prompt("une aquarelle {envooi} pour {dedicataire}", &mots("")),
+            "une aquarelle {envooi} pour Léa"
         );
     }
 
@@ -376,6 +420,7 @@ mod tests {
                     envoi: "À Léa",
                     dedicataire: "  ",
                     titre: "Le Chemin",
+                    ..Mots::default()
                 }
             ),
             "une aquarelle pour À Léa",
@@ -471,5 +516,45 @@ mod tests {
         let corps = f.vu.borrow()[0].split(" | ").nth(2).unwrap().to_string();
         let json: serde_json::Value = serde_json::from_str(&corps).expect("corps illisible");
         assert_eq!(json["prompt"], "une aquarelle « À Léa »\nsur papier");
+    }
+
+    /// La couleur de l'encre et le paraphe entrent dans le gabarit comme le reste.
+    ///
+    /// Ils appartiennent au **livre** et non à l'exemplaire : un auteur signe ses vingt
+    /// exemplaires du même stylo, et le gabarit est déjà le style d'écriture du livre.
+    #[test]
+    fn la_couleur_et_le_paraphe_entrent_aussi_dans_le_gabarit() {
+        let m = Mots {
+            envoi: "ces heures creuses",
+            dedicataire: "Léa",
+            titre: "Les Heures creuses",
+            couleur: "blue-black",
+            paraphe: "Ivan Pjig",
+        };
+        let p = prompt("encre {couleur}, signé « {paraphe} » : {envoi}", &m);
+        assert_eq!(
+            p,
+            "encre blue-black, signé « Ivan Pjig » : ces heures creuses"
+        );
+    }
+
+    /// **Ni la couleur ni le paraphe ne distinguent un envoi du suivant** : ils sont les
+    /// mêmes pour tout le tirage, comme le titre. Un gabarit qui ne citerait qu'eux
+    /// rendrait M images identiques, et c'est justement ce que le repli existe pour
+    /// éviter — il doit continuer de s'en apercevoir.
+    #[test]
+    fn la_couleur_et_le_paraphe_ne_distinguent_rien() {
+        let m = Mots {
+            envoi: "ces heures creuses",
+            dedicataire: "Léa",
+            titre: "Les Heures creuses",
+            couleur: "black",
+            paraphe: "Ivan Pjig",
+        };
+        let p = prompt("encre {couleur}, paraphe {paraphe}", &m);
+        assert!(
+            p.ends_with("ces heures creuses"),
+            "le repli n'a pas joué : {p}"
+        );
     }
 }

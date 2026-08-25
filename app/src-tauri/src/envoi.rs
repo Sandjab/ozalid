@@ -133,6 +133,20 @@ pub struct Envois {
     /// le mot de chacun s'insère.
     #[serde(default)]
     pub gabarit: String,
+    /// La couleur de l'encre et le paraphe de l'auteur, que le gabarit appelle par
+    /// `{couleur}` et `{paraphe}`.
+    ///
+    /// Sur le livre et non sur l'exemplaire, comme le gabarit lui-même : un auteur signe
+    /// ses vingt exemplaires du même stylo, et de la même main. C'est ce qui les
+    /// sépare de la `main`, descendue sur l'envoi en v4 parce qu'elle, elle varie —
+    /// écrire à la main pour l'une et faire composer pour l'autre a un sens.
+    ///
+    /// La couleur se saisit **dans la langue du gabarit** : celui de la maison est en
+    /// anglais, et « bleu-noir » y produirait une phrase que le modèle lirait mal.
+    #[serde(default)]
+    pub couleur: String,
+    #[serde(default)]
+    pub paraphe: String,
     #[serde(default)]
     pub liste: Vec<Envoi>,
 }

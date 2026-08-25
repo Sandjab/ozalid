@@ -16,7 +16,7 @@ const FICHIER: &str = "preferences.toml";
 /// `deny_unknown_fields` n'y figure pas volontairement : un champ écrit par une
 /// version plus récente doit être ignoré, pas faire échouer la lecture. Un champ
 /// perdu coûte un réglage ; une lecture refusée coûte la liste entière.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Preferences {
     #[serde(default)]
     pub recents: Vec<String>,
@@ -30,6 +30,38 @@ pub struct Preferences {
     /// aucune vue, aucune journalisation.
     #[serde(default)]
     pub diffusion: crate::diffusion::Acces,
+    /// Le gabarit qu'un projet neuf reçoit : le style d'écriture qu'on ne veut pas
+    /// retaper d'un livre à l'autre.
+    ///
+    /// Ici et non dans une maquette : une maquette dit la couverture, et un éditeur peut
+    /// en avoir trois pour un seul style d'envoi — les coupler ferait recopier le même
+    /// gabarit dans chacune. Ici et non dans le `.ozalid` : celui-là porte le gabarit du
+    /// livre ouvert, qui compose. Celui-ci n'est qu'une valeur de départ, jamais
+    /// consultée à la génération.
+    ///
+    /// Absent, il vaut celui de la maison. Un fichier écrit avant ce champ le reçoit
+    /// donc, et c'est voulu.
+    #[serde(default = "gabarit_defaut")]
+    pub gabarit_defaut: String,
+}
+
+/// Le gabarit de la maison, quand l'utilisateur n'en a pas posé.
+fn gabarit_defaut() -> String {
+    crate::diffusion::GABARIT_DEFAUT.into()
+}
+
+impl Default for Preferences {
+    /// `Default` à la main plutôt que dérivé : `#[serde(default = …)]` ne joue qu'à la
+    /// désérialisation, et un `Preferences::default()` dérivé rendrait un gabarit vide
+    /// là où un fichier absent rend celui de la maison. Deux chemins pour le même état
+    /// initial doivent mener au même endroit.
+    fn default() -> Self {
+        Self {
+            recents: Vec::new(),
+            diffusion: crate::diffusion::Acces::default(),
+            gabarit_defaut: gabarit_defaut(),
+        }
+    }
 }
 
 impl Preferences {
@@ -182,5 +214,27 @@ mod tests {
 
         std::fs::write(fichier(dir.path()), b"autre_chose = 3\n").unwrap();
         assert_eq!(charger(dir.path()), Preferences::default(), "champ inconnu");
+    }
+
+    /// Des préférences qui n'ont jamais été écrites servent le gabarit de la maison, et
+    /// non un champ vide : devant un champ vide, personne ne devine qu'il existe cinq
+    /// marques ni ce qu'un modèle réclame pour rendre une écriture.
+    #[test]
+    fn des_preferences_vierges_servent_le_gabarit_de_la_maison() {
+        let p = Preferences::default();
+        assert_eq!(p.gabarit_defaut, crate::diffusion::GABARIT_DEFAUT);
+    }
+
+    /// Un défaut posé par l'utilisateur remplace celui de la maison, et se relit tel
+    /// quel — sauts de ligne compris, ce qu'un gabarit de diffusion porte en nombre.
+    #[test]
+    fn un_gabarit_pose_se_relit_ligne_pour_ligne() {
+        let d = tempfile::tempdir().unwrap();
+        let p = Preferences {
+            gabarit_defaut: "une aquarelle\n\npour {dedicataire}".into(),
+            ..Default::default()
+        };
+        enregistrer(d.path(), &p).unwrap();
+        assert_eq!(charger(d.path()).gabarit_defaut, p.gabarit_defaut);
     }
 }

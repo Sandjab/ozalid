@@ -172,13 +172,30 @@ pub fn projet_importer(livre_toml: String, atelier: State<Atelier>) -> Result<Pr
 /// fait quand on veut. Le projet n'est pas « modifié » : il n'y a encore rien à
 /// perdre, et le premier champ saisi lèvera le drapeau.
 #[tauri::command]
-pub fn projet_nouveau(atelier: State<Atelier>) -> Result<ProjetVue, String> {
-    poser(
-        &atelier,
-        None,
-        Projet::nouveau(Livre::vide(), String::new()),
-        false,
-    )
+pub fn projet_nouveau(atelier: State<Atelier>, app: tauri::AppHandle) -> Result<ProjetVue, String> {
+    poser(&atelier, None, projet_neuf(gabarit_de_depart(&app)), false)
+}
+
+/// Le projet neuf que sert `projet_nouveau`, gabarit de départ compris.
+///
+/// À part de la commande pour être vérifiable : une commande Tauri réclame un `State` et
+/// un `AppHandle` qu'aucun test ne fabrique, et la ligne qui pose le gabarit serait alors
+/// la seule du chantier que rien ne protège.
+fn projet_neuf(gabarit: String) -> Projet {
+    let mut p = Projet::nouveau(Livre::vide(), String::new());
+    p.meta.envois.gabarit = gabarit;
+    p
+}
+
+/// Le gabarit de départ tel que les préférences le portent, celui de la maison à défaut.
+///
+/// Un répertoire de configuration introuvable ne fait pas échouer la création d'un
+/// projet : on part alors du gabarit de la maison, ce qui est exactement l'état d'un
+/// poste où rien n'a encore été réglé.
+fn gabarit_de_depart(app: &tauri::AppHandle) -> String {
+    config(app)
+        .map(|d| preferences::charger(&d).gabarit_defaut)
+        .unwrap_or_else(|| crate::diffusion::GABARIT_DEFAUT.into())
 }
 
 /// Referme le projet sans rien écrire.
@@ -1530,6 +1547,8 @@ pub fn envoi_generer(
         envoi: &e.contenu,
         dedicataire: &e.dedicataire,
         titre: &o.projet.meta.livre.titre,
+        couleur: &o.projet.meta.envois.couleur,
+        paraphe: &o.projet.meta.envois.paraphe,
     };
 
     let octets = crate::diffusion::genere(
@@ -2260,5 +2279,23 @@ mod tests {
         assert_eq!(l.auteur, "Auteur");
         assert_eq!(l.chapitres, None);
         assert_eq!(l.titre_page, "%TITRE%");
+    }
+
+    /// Un projet neuf part avec le gabarit que l'utilisateur a posé pour défaut : c'est
+    /// tout l'objet du réglage — ne pas le retaper d'un livre à l'autre.
+    #[test]
+    fn un_projet_neuf_recoit_le_gabarit_de_depart() {
+        let p = projet_neuf("une aquarelle pour {dedicataire}".into());
+        assert_eq!(p.meta.envois.gabarit, "une aquarelle pour {dedicataire}");
+    }
+
+    /// Le défaut n'est qu'une valeur de départ : il ne touche ni la liste des envois, ni
+    /// la couleur, ni le paraphe, qui appartiennent au livre qu'on écrit.
+    #[test]
+    fn le_gabarit_de_depart_ne_pose_rien_d_autre() {
+        let p = projet_neuf("une aquarelle".into());
+        assert!(p.meta.envois.liste.is_empty());
+        assert_eq!(p.meta.envois.couleur, "");
+        assert_eq!(p.meta.envois.paraphe, "");
     }
 }
