@@ -1311,13 +1311,19 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
   max-width: 100%;
   max-height: 100%;
   aspect-ratio: var(--ratio);
-  background: var(--etabli);
+  /* Le papier sous la page : c'est lui qui rend visible un fond mal détouré. Posé par
+     `majPage`, retiré avec la page — sans quoi l'établi vide garderait un crème qui ne
+     désigne plus rien. */
+  background: var(--papier, var(--etabli));
   /* Le geste appartient au pointeur : sans cela, un glisser sur pavé tactile ferait
      défiler la fenêtre au lieu de déplacer l'envoi. */
   touch-action: none;
 }
 
-.envois .canevas .fond { display: block; width: 100%; height: 100%; }
+/* La page et l'objet se multiplient sur le papier : l'encre multiplie le papier, c'est
+   la physique de l'impression, et c'est ce qui fait qu'un blanc pur disparaît quand un
+   gris de photo se voit. */
+.envois .canevas .fond { display: block; width: 100%; height: 100%; mix-blend-mode: multiply; }
 
 /* L'objet : le PNG rendu par Typst, à la place et à l'inclinaison réglées.
    Sa largeur est un pourcentage du canevas — c'est le `box(width: …%)` que Typst
@@ -1329,7 +1335,7 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
   cursor: grab;
 }
 
-.envois .objet img { display: block; width: 100%; pointer-events: none; }
+.envois .objet img { display: block; width: 100%; pointer-events: none; mix-blend-mode: multiply; }
 .envois .canevas[data-geste] .objet { cursor: grabbing; }
 
 /* Les poignées ne portent pas la classe `.prise` de la couverture : celle-là se place

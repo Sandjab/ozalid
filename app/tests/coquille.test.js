@@ -13,7 +13,7 @@ const { charge } = require('./dom_shim');
 const LULU = {
   cle: 'lulu', libelle: 'Lulu — poche 108 × 175',
   largeur: 108, hauteur: 175, fond_perdu: 3.175, dos_publie: true,
-  papiers: [{ cle: 'standard', libelle: 'Papier standard' }],
+  papiers: [{ cle: 'standard', libelle: 'Papier standard', teinte: '#ffffff' }],
 };
 
 /** Un destinataire neuf chez un prestataire, comme le Rust en fabrique un. */
@@ -685,14 +685,15 @@ test('fermer le projet efface le pied', async () => {
 const KDP = {
   cle: 'kdp-6x9', libelle: 'Amazon KDP — 6 × 9 po',
   largeur: 152.4, hauteur: 228.6, fond_perdu: 3.175, dos_publie: true,
-  papiers: [{ cle: 'creme', libelle: 'Crème' }, { cle: 'blanc', libelle: 'Blanc' }],
+  papiers: [{ cle: 'creme', libelle: 'Crème', teinte: '#f7f0e0' },
+    { cle: 'blanc', libelle: 'Blanc', teinte: '#ffffff' }],
 };
 
 /** Un prestataire à gabarit : le dos ne s'y calcule pas, il se relève. */
 const COOLLIBRI = {
   cle: 'coollibri-148x210', libelle: 'CoolLibri — A5',
   largeur: 148, hauteur: 210, fond_perdu: null, dos_publie: false,
-  papiers: [{ cle: 'mesure', libelle: 'Dos relevé sur le gabarit' }],
+  papiers: [{ cle: 'mesure', libelle: 'Dos relevé sur le gabarit', teinte: '#ffffff' }],
 };
 
 /**
@@ -1813,4 +1814,29 @@ test('un seuil se commet au relâchement, pas à chaque cran', async () => {
   const regle = a.appels.findLast(([c]) => c === 'envoi_regler');
   assert.equal(regle[1].envoi.detourage.papier, 228, 'le seuil relâché n\'est pas parti');
   assert.equal(regle[1].envoi.detourage.encre, 40, 'l\'autre seuil a été emporté');
+});
+
+/**
+ * Sans fond teinté, le réglage du détourage se ferait à l'aveugle : un fond résiduel
+ * gris pâle ne se distingue pas du blanc de l'écran, et c'est précisément ce qu'on
+ * cherche à voir. La teinte suit le papier du destinataire visé — c'est lui qu'on tire,
+ * et changer de papier doit changer ce que le canevas montre.
+ */
+test('le canevas prend la couleur du papier visé', async () => {
+  const a = atelier({
+    providers: [KDP],
+    sur: {
+      envois: {
+        gabarit: '',
+        liste: [{ dedicataire: 'Léa', main: { mode: 'image' }, place: PLACE_DEFAUT,
+          contenu: '', image: 'Léa.jpg', detourage: { papier: 240, encre: 40 } }],
+      },
+    },
+  });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  await allerAuxEnvois(els);
+
+  assert.equal(els.get('canevas').style.getPropertyValue('--papier'), '#f7f0e0',
+    'le canevas ne prend pas le crème du destinataire visé');
 });

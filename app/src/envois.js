@@ -337,6 +337,21 @@ function marquerVignette(n) {
 }
 
 /**
+ * La couleur du papier que le destinataire visé imprimera.
+ *
+ * Le premier papier du prestataire à défaut du sien : c'est la règle du Rust, dont
+ * `papier_defaut` rend le premier de la liste. Blanc quand rien ne se retrouve — mieux
+ * vaut un canevas honnêtement blanc qu'un crème inventé.
+ */
+function teintePapier() {
+  const l = projet?.livraison;
+  const d = l?.destinataires.find((x) => x.provider === l.courant);
+  const pr = providers.find((p) => p.cle === d?.provider);
+  const pa = pr?.papiers.find((x) => x.cle === d?.papier) ?? pr?.papiers[0];
+  return pa?.teinte ?? '#ffffff';
+}
+
+/**
  * La page de fond du canevas : celle que l'envoi vise, rendue **sans envoi**.
  *
  * Sans envoi parce qu'un `foreground` ne réordonne rien : la page ne dépend d'aucun
@@ -354,8 +369,15 @@ async function majPage() {
     // Le rapport s'en va avec la page : un canevas qui le garderait garderait sa
     // place, l'établi seul, un rectangle sombre là où il n'y a rien à montrer.
     $('canevas').style.removeProperty('--ratio');
+    $('canevas').style.removeProperty('--papier');
     return;
   }
+
+  // La teinte du papier que le destinataire visé imprimera. C'est un fait d'écran : le
+  // PDF n'a pas de fond, et lui en donner un ferait imprimer un aplat sur toutes les
+  // pages. Sans elle, un fond mal détouré resterait invisible — blanc de photo sur
+  // blanc d'écran — jusqu'au tirage.
+  $('canevas').style.setProperty('--papier', teintePapier());
   await tente(async () => {
     img.src = await invoke('envoi_page', { page: e.place.page });
     img.alt = `Page ${e.place.page} de l'intérieur`;
