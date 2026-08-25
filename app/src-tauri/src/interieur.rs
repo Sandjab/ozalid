@@ -268,7 +268,13 @@ fn assemble(
                 // fait. La blanche est donc posée ici, sans folio, en regardant la
                 // parité de la page où le flux se trouve : la partie ouvre la suivante,
                 // donc c'est une page **impaire** en cours qui appelle une blanche.
-                s.push_str("#context if calc.odd(here().page()) { page(footer: none)[] }\n");
+                //
+                // En tête de corps, rien à caler : les liminaires viennent de rendre la
+                // main sur une belle page vierge. Le test y verrait une page impaire
+                // « en cours » et poserait sa blanche au recto — l'inverse du but.
+                if i > 0 {
+                    s.push_str("#context if calc.odd(here().page()) { page(footer: none)[] }\n");
+                }
                 s.push_str(&format!(
                     "#page(footer: none)[\n#v(22mm)\n\
                      #align(center, text(size: 13pt)[{r}])\n"
@@ -501,7 +507,18 @@ fn liminaires(livre: &Livre, pieces: &[Piece]) -> String {
     for p in pieces {
         s.push_str(&ouverture_piece(&p.titre));
         s.push_str(&blocs_typst(&p.blocs));
-        s.push_str("#pagebreak()\n\n");
+        // Ce qui suit une pièce liminaire ouvre en belle page — le corps, ou la pièce
+        // suivante. Sa longueur, elle, dépend d'un texte que l'auteur retouche : une
+        // page de plus ou de moins à la préface renversait la parité de tout ce qui
+        // vient après, et le corps s'ouvrait au verso sans que rien ne le dise.
+        //
+        // Ici, et à la différence de la page de partie, le saut de parité est le bon
+        // outil : `footer: none` court encore, donc la blanche qu'il insère n'est pas
+        // foliotée — c'est la seule objection que le corps lui oppose. Le compter à la
+        // main sur `here().page()` serait au contraire faux : en fin de page, un
+        // élément de taille nulle est déjà rendu sur la page suivante, et le calage
+        // poserait sa blanche au recto — relevé sur PDF, une préface de deux pages.
+        s.push_str("#pagebreak(to: \"odd\", weak: true)\n\n");
     }
 
     s
@@ -1122,6 +1139,63 @@ mod tests {
             "la préface passe après le rétablissement du folio"
         );
         assert!(s.contains("Entrez."), "le texte de la préface est perdu");
+    }
+
+    /// Une pièce liminaire ne laisse pas la suite ouvrir au verso.
+    ///
+    /// Sa longueur dépend d'un texte que l'auteur retouche : une préface de deux pages
+    /// laisse le corps s'ouvrir en recto, la même préface d'une page l'ouvre en verso —
+    /// et rien ne le dit avant tirage. Le calage pose une blanche **au verso** quand il
+    /// en faut une, jamais au recto : une page vide isolée est un verso, sinon elle
+    /// n'est pas une blanche, c'est une page perdue.
+    #[test]
+    fn une_piece_liminaire_cale_la_suite_sur_une_belle_page() {
+        let piece = |t: &str| Piece {
+            sorte: Sorte::Liminaire,
+            titre: t.into(),
+            blocs: vec![Bloc::Paragraphe("Entrez.".into())],
+        };
+        let s = liminaires(&livre(), &[piece("Préface"), piece("Avant-propos")]);
+        assert_eq!(
+            s.matches(r#"#pagebreak(to: "odd", weak: true)"#).count(),
+            2,
+            "chaque pièce liminaire cale ce qui la suit sur un recto : {s}"
+        );
+    }
+
+    /// Une partie qui ouvre le corps n'a rien à caler : les liminaires viennent de
+    /// rendre la main sur une belle page vierge. Le calage y verrait une page impaire
+    /// « en cours » et poserait sa blanche **au recto**, envoyant la partie au verso —
+    /// le dispositif exactement à l'envers, pour deux pages payées au tirage.
+    #[test]
+    fn une_partie_qui_ouvre_le_corps_ne_pose_pas_de_blanche() {
+        let pieces = vec![
+            Piece {
+                sorte: Sorte::Partie("I".into()),
+                titre: "Avant Clément".into(),
+                blocs: Vec::new(),
+            },
+            Piece {
+                sorte: Sorte::Chapitre(1),
+                titre: "Un".into(),
+                blocs: vec![Bloc::Paragraphe("Texte.".into())],
+            },
+        ];
+        let s = source(
+            &livre(),
+            &Interieur::default(),
+            provider("lulu").unwrap(),
+            &Reglage {
+                gouttiere: 25.0,
+                blanche: false,
+            },
+            &pieces,
+            None,
+        );
+        assert!(
+            !s.contains("calc.odd(here().page())"),
+            "la partie en tête de corps se cale sur une page vierge : {s}"
+        );
     }
 
     /// Une page de partie prend une belle page au verso blanc, sans folio : deux
