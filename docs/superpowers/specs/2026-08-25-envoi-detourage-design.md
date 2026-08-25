@@ -88,6 +88,13 @@ luminance vaut 38,8 (dans le trait, bon) et le 5e vaut 185,4 (déjà dans le
 papier, faux). Un percentile fixe tombe dans le papier dès que le mot est court.
 D'où deux réglages estimés à la pose **et** repris à la main.
 
+**Le portage Rust rend les mêmes chiffres** (relevé le 25/08, après implémentation, sur
+la même photo d'essai) : papier estimé 243,9 et encre 37,0, contre 243,9 et 37,1 au
+prototype ; fond résiduel 22/255 au seuil estimé et 3/255 à 228, contre 24 et 4. Les
+écarts tiennent aux pixels échantillonnés et aux arrondis. Le trait sort opaque, à
+(28, 31, 110) — sa couleur photographiée, non retouchée. **Ce sont ces valeurs-là qui
+font foi**, et c'est celles que le README cite.
+
 **Réserve assumée.** La photo d'essai est synthétique : dégradé, bruit et JPEG
 imités, pas une vraie photo de téléphone. Les ordres de grandeur sont crédibles,
 les chiffres exacts ne valent que pour elle. Le premier relevé sur une photo
