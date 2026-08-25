@@ -1,5 +1,11 @@
 # Ozalid
 
+> **Dépôt gelé.** Le développement continue sur
+> [**OzalidStudio**](https://github.com/Sandjab/OzalidStudio), qui porte
+> l'application de bureau (Tauri, macOS + Windows) née dans `app/`. Ce dépôt
+> conserve l'atelier HTML historique, les outils Python et l'historique complet ;
+> il n'évoluera plus.
+
 Atelier de packaging de couverture pour l'auto-édition : maquette de première, quatrième de couverture, planche complète avec dos, export au format attendu par le prestataire d'impression. Outil HTML autonome, sans build, sans dépendance serveur.
 
 Le nom vient du terme de prépresse désignant l'épreuve de contrôle avant tirage.
