@@ -441,6 +441,8 @@
           suite : deux exemplaires ne doivent pas recevoir la même image.</p>
         <label><span>Adresse du modèle</span>
           <input type="url" id="inDiffusionUrl" placeholder="https://…"></label>
+        <label><span>Nom du modèle</span>
+          <input type="text" id="inDiffusionModele" placeholder="laisser vide si l'adresse le porte"></label>
         <label><span>Clé</span>
           <input type="password" id="inDiffusionCle" placeholder="inchangée"></label>
         <div class="ligne">
@@ -448,8 +450,11 @@
           <button id="btDiffusionOublier" type="button">Oublier la clé</button>
           <span id="etatDiffusion" class="etat"></span>
         </div>
-        <p class="note">L'adresse et la clé restent sur cette machine, hors du
-          <code>.ozalid</code>.</p>
+        <p class="note">L'adresse, le nom du modèle et la clé restent sur cette machine,
+          hors du <code>.ozalid</code>. Le nom n'est à remplir que si le fournisseur
+          l'attend dans la demande plutôt que dans son adresse — Google le réclame
+          (<code>gemini-3-pro-image</code>), là où d'autres le portent déjà dans
+          l'adresse et refuseraient de le lire deux fois.</p>
       </div>
 
       <label><span>Échelle</span>

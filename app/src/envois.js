@@ -42,14 +42,23 @@ function main() {
  */
 async function reglerDiffusion(cle) {
   await tente(async () => {
-    afficherDiffusion(await invoke('diffusion_regler', { url: $('inDiffusionUrl').value, cle }));
+    afficherDiffusion(await invoke('diffusion_regler', {
+      url: $('inDiffusionUrl').value,
+      modele: $('inDiffusionModele').value,
+      cle,
+    }));
     $('inDiffusionCle').value = '';
   });
 }
 
-/** Ce que la machine sait du modèle : son adresse, et si une clé y est posée. */
+/**
+ * Ce que la machine sait du modèle : son adresse, son nom, et si une clé y est posée.
+ *
+ * Le nom revient à l'écran, la clé jamais : l'un se corrige, l'autre se remplace.
+ */
 function afficherDiffusion(acces) {
   $('inDiffusionUrl').value = acces.url;
+  $('inDiffusionModele').value = acces.modele;
   $('etatDiffusion').textContent = acces.cle_posee
     ? 'clé enregistrée sur cette machine'
     : 'aucune clé : la génération sera refusée';

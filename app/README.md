@@ -176,6 +176,17 @@ tout projet neuf le reprend ; **le geste ne touche pas au livre ouvert**, dont l
 reste celui du `.ozalid`. « Reprendre mon défaut » fait le chemin inverse, sans quoi un
 projet créé avant ce réglage ne pourrait jamais le recevoir.
 
+L'**accès au modèle** — adresse, nom, clé — vit dans `preferences.toml` : il appartient
+à la machine, non au livre, et un `.ozalid` est fait pour être ouvert ailleurs. Le
+contrat attendu est celui des images d'OpenAI : un POST JSON authentifié par
+`Authorization: Bearer`, une réponse qui porte l'image en `data[0].b64_json` ou derrière
+`data[0].url`. Le **nom du modèle** ne se remplit que si le fournisseur l'attend dans la
+demande plutôt que dans son adresse — c'est le cas de la couche compatible de Google,
+`https://generativelanguage.googleapis.com/v1beta/openai/images/generations`, où
+`gemini-3-pro-image` désigne le modèle et où l'adresse est la même pour tous. Laissé
+vide, le champ n'est pas envoyé : un `"model"` vide ferait refuser les fournisseurs qui
+n'en attendent aucun. La clé, elle, ne redescend jamais à l'écran.
+
 Changer de destinataire au pied change la pagination : le rail et le canevas se
 refont. Sans quoi l'on viserait la page 264 d'un intérieur qui n'en fait plus que 190,
 et seul le refus à la génération le dirait — une fois le mot écrit.

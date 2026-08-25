@@ -19,6 +19,12 @@ pub struct Acces {
     pub url: String,
     #[serde(default)]
     pub cle: String,
+    /// Le nom du modèle, quand le fournisseur l'attend dans le corps plutôt que dans
+    /// son adresse — `gemini-3-pro-image` chez Google, où l'adresse est la même pour
+    /// tous. Facultatif : là où l'adresse porte déjà le modèle, le nommer une seconde
+    /// fois ferait refuser la demande.
+    #[serde(default)]
+    pub modele: String,
 }
 
 impl Acces {
@@ -176,7 +182,13 @@ pub fn genere(acces: &Acces, prompt: &str, transport: &dyn Transport) -> Result<
     if prompt.trim().is_empty() {
         return Err("rien à demander : le gabarit et le mot de l'envoi sont vides.".into());
     }
-    let corps = serde_json::json!({ "prompt": prompt }).to_string();
+    let mut corps = serde_json::json!({ "prompt": prompt });
+    // Nommé seulement s'il l'est : voir `Acces::modele`.
+    let modele = acces.modele.trim();
+    if !modele.is_empty() {
+        corps["model"] = modele.into();
+    }
+    let corps = corps.to_string();
     let reponse = transport
         .poste(acces.url.trim(), acces.cle.trim(), &corps)
         .map_err(|e| expurge(&e, &acces.cle))?;
@@ -311,6 +323,7 @@ mod tests {
         Acces {
             url: "https://exemple.test/images".into(),
             cle: CLE.into(),
+            modele: String::new(),
         }
     }
 
@@ -425,6 +438,37 @@ mod tests {
             ),
             "une aquarelle pour À Léa",
             "un dédicataire vide ne distingue pas : la dédicace doit rester"
+        );
+    }
+
+    /// Le modèle se nomme dans le corps, quand il a un nom à donner.
+    ///
+    /// Un fournisseur porte son modèle dans l'adresse, un autre l'attend dans le corps —
+    /// c'est le cas de la couche compatible de Google, qui refuse la demande sans lui.
+    /// Le champ est donc envoyé quand il est réglé, et **omis** quand il ne l'est pas :
+    /// un `"model": ""` ferait refuser les adresses qui n'en attendent aucun, et le
+    /// réglage d'un fournisseur casserait l'autre.
+    #[test]
+    fn le_modele_regle_est_nomme_dans_le_corps() {
+        let f = Faux::rend(&encodee());
+        let mut a = acces();
+        a.modele = "gemini-3-pro-image".into();
+        genere(&a, "une aquarelle", &f).unwrap();
+        assert!(
+            f.vu.borrow()[0].contains(r#""model":"gemini-3-pro-image""#),
+            "modèle absent du corps : {:?}",
+            f.vu.borrow()[0]
+        );
+    }
+
+    #[test]
+    fn sans_modele_regle_le_corps_n_en_nomme_aucun() {
+        let f = Faux::rend(&encodee());
+        genere(&acces(), "une aquarelle", &f).unwrap();
+        assert!(
+            !f.vu.borrow()[0].contains("model"),
+            "un modèle vide est envoyé quand même : {:?}",
+            f.vu.borrow()[0]
         );
     }
 

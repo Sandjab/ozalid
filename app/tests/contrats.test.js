@@ -52,7 +52,7 @@ const invoke = async (cmd) => {
   if (cmd === 'recents_liste') return [];
   if (cmd === 'garde_modifications') return 'ignorer';
   if (cmd === 'interface_prete') return null;
-  if (cmd === 'diffusion_lire') return { url: '', cle_posee: false };
+  if (cmd === 'diffusion_lire') return { url: '', modele: '', cle_posee: false };
   // Une entrée peut déclencher une commande que ce faux ignore : l'action échoue,
   // mais elle échoue *nommée* — ce n'est pas « entrée de menu inconnue », et c'est
   // tout ce que la garde vérifie.

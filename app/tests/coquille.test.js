@@ -68,7 +68,7 @@ const PLACE_DEFAUT = { page: 3, x: 0.5, y: 0.8, taille: 0.6, angle: 0 };
  */
 function atelier({
   recents = [], sur = {}, providers = [LULU], destinataires,
-  acces = { url: '', cle_posee: false }, composition,
+  acces = { url: '', modele: '', cle_posee: false }, composition,
 } = {}) {
   const appels = [];
   // Le gabarit de départ vit dans les préférences de la machine, pas dans le projet :
@@ -101,7 +101,7 @@ function atelier({
       // L'accès au modèle appartient à la machine : le Rust ne rend jamais la clé, il
       // dit seulement qu'elle est posée.
       case 'diffusion_lire': return acces;
-      case 'diffusion_regler': return { url: args.url, cle_posee: args.cle !== '' };
+      case 'diffusion_regler': return { url: args.url, modele: args.modele, cle_posee: args.cle !== '' };
       case 'envoi_generer': return 'data:image/png;base64,QUJD';
       // Les trois rendus du canevas. Muets : ce qui compte dans un test de coquille,
       // c'est quelle page est demandée, jamais ce que Typst en fait.
@@ -1699,11 +1699,36 @@ test('une clé non ressaisie est laissée en place, et l\'oubli se demande', asy
   els.get('inDiffusionUrl').value = 'https://autre.test/images';
   await els.get('btDiffusionRegler').declenche('click');
   const regle = a.appels.findLast(([c]) => c === 'diffusion_regler');
-  assert.deepEqual(regle[1], { url: 'https://autre.test/images', cle: null });
+  assert.deepEqual(regle[1], { url: 'https://autre.test/images', modele: '', cle: null });
 
   await els.get('btDiffusionOublier').declenche('click');
   const oubli = a.appels.findLast(([c]) => c === 'diffusion_regler');
   assert.equal(oubli[1].cle, '', 'oublier la clé ne l\'efface pas');
+});
+
+/**
+ * Le nom du modèle fait le trajet inverse de la clé : il revient à l'écran, et il
+ * repart avec l'enregistrement. Chez le fournisseur qui l'attend dans la demande —
+ * Google —, une adresse enregistrée sans lui fait refuser toute génération ; et un
+ * champ qui se rouvrirait vide se ressaisirait de travers à la première correction
+ * d'adresse.
+ */
+test('le nom du modèle revient à l\'écran et repart avec l\'accès', async () => {
+  const a = atelier({
+    acces: {
+      url: 'https://generativelanguage.googleapis.com/v1beta/openai/images/generations',
+      modele: 'gemini-3-pro-image',
+      cle_posee: true,
+    },
+  });
+  const { els } = await charge({ invoke: a.invoke });
+
+  assert.equal(els.get('inDiffusionModele').value, 'gemini-3-pro-image');
+
+  els.get('inDiffusionModele').value = 'gemini-3.1-flash-image';
+  await els.get('btDiffusionRegler').declenche('click');
+  const regle = a.appels.findLast(([c]) => c === 'diffusion_regler');
+  assert.equal(regle[1].modele, 'gemini-3.1-flash-image');
 });
 
 /**

@@ -1528,6 +1528,10 @@ pub fn envoi_image_choisir(
 pub struct AccesVue {
     pub url: String,
     pub cle_posee: bool,
+    /// Le nom du modèle, quand le fournisseur l'attend dans le corps. Contrairement à
+    /// la clé, il revient à l'interface : ce n'est pas un secret, et un champ qui se
+    /// rouvre vide se ressaisit de travers.
+    pub modele: String,
 }
 
 #[tauri::command]
@@ -1535,6 +1539,7 @@ pub fn diffusion_lire(app: tauri::AppHandle) -> AccesVue {
     let d = config(&app).map(|c| preferences::charger(&c).diffusion);
     AccesVue {
         url: d.as_ref().map(|d| d.url.clone()).unwrap_or_default(),
+        modele: d.as_ref().map(|d| d.modele.clone()).unwrap_or_default(),
         cle_posee: d.is_some_and(|d| !d.cle.trim().is_empty()),
     }
 }
@@ -1546,12 +1551,14 @@ pub fn diffusion_lire(app: tauri::AppHandle) -> AccesVue {
 #[tauri::command]
 pub fn diffusion_regler(
     url: String,
+    modele: String,
     cle: Option<String>,
     app: tauri::AppHandle,
 ) -> Result<AccesVue, String> {
     let dir = config(&app).ok_or("répertoire de configuration introuvable.")?;
     let mut p = preferences::charger(&dir);
     p.diffusion.url = url;
+    p.diffusion.modele = modele;
     if let Some(c) = cle {
         p.diffusion.cle = c;
     }
@@ -2214,6 +2221,7 @@ mod tests {
     fn la_vue_de_l_acces_au_modele_ne_porte_pas_la_cle() {
         let v = AccesVue {
             url: "https://exemple.test/images".into(),
+            modele: "gemini-3-pro-image".into(),
             cle_posee: true,
         };
         let json = serde_json::to_string(&v).unwrap();

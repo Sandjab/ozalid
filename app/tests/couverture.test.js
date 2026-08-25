@@ -189,7 +189,7 @@ async function ouvre(couverture, sur = {}, dialogues = []) {
     if (cmd === 'interface_prete') return null;
     // L'accès au modèle de diffusion se lit au démarrage : il appartient à la
     // machine, et l'écran le montre avant qu'aucun projet ne soit ouvert.
-    if (cmd === 'diffusion_lire') return { url: '', cle_posee: false };
+    if (cmd === 'diffusion_lire') return { url: '', modele: '', cle_posee: false };
     throw new Error(`commande inattendue : ${cmd}`);
   };
   const file = ['/livres/LHC.ozalid', ...dialogues];

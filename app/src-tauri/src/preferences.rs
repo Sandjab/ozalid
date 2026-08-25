@@ -177,6 +177,7 @@ mod tests {
         p.diffusion = crate::diffusion::Acces {
             url: "https://exemple.test/images".into(),
             cle: "sk-tres-secrete".into(),
+            modele: "gemini-3-pro-image".into(),
         };
         enregistrer(dir.path(), &p).unwrap();
         assert_eq!(charger(dir.path()), p);
