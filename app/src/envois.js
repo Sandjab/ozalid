@@ -119,7 +119,12 @@ function afficherReglages() {
   $('champImage').hidden = !e || main() !== 'image';
   // Les seuils suivent l'image, et non la seule main : un envoi d'avant ce chantier
   // n'en porte pas, et deux curseurs sans valeur à régler ne diraient rien.
-  $('champDetourage').hidden = !e || main() !== 'image' || !e.detourage;
+  //
+  // Les **deux** formes en images, écrite à la main comme générée : `trace` les détoure
+  // dans la même branche, et une écriture produite par un modèle porte un fond comme
+  // une feuille photographiée en porte un. Les cacher sous la diffusion faisait subir
+  // un réglage dont on voyait l'effet sans pouvoir le corriger.
+  $('champDetourage').hidden = !e || main() === 'police' || !e.detourage;
   $('champDiffusion').hidden = !e || main() !== 'diffusion';
   // La main générée garde son mot : le gabarit dit le style du livre, le mot dit ce que
   // cette image-ci doit porter, et c'est lui que `{envoi}` va chercher. Seule la forme
@@ -372,7 +377,7 @@ async function majPage() {
     // Le rapport s'en va avec la page : un canevas qui le garderait garderait sa
     // place, l'établi seul, un rectangle sombre là où il n'y a rien à montrer.
     $('canevas').style.removeProperty('--ratio');
-    $('canevas').style.removeProperty('--papier');
+    $('canevas').style.removeProperty('--papier-canevas');
     return;
   }
 
@@ -380,7 +385,7 @@ async function majPage() {
   // PDF n'a pas de fond, et lui en donner un ferait imprimer un aplat sur toutes les
   // pages. Sans elle, un fond mal détouré resterait invisible — blanc de photo sur
   // blanc d'écran — jusqu'au tirage.
-  $('canevas').style.setProperty('--papier', teintePapier());
+  $('canevas').style.setProperty('--papier-canevas', teintePapier());
   await tente(async () => {
     img.src = await invoke('envoi_page', { page: e.place.page });
     img.alt = `Page ${e.place.page} de l'intérieur`;

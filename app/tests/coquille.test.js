@@ -1777,11 +1777,15 @@ test('glisser l\'objet déplace l\'envoi', async () => {
 });
 
 /**
- * Les deux seuils ne paraissent que sous une main en image : c'est la règle de la bande
- * de réglages — ce que la main ne réclame pas ne paraît pas. Un curseur grisé sous une
- * main en police donnerait à croire qu'on peut y toucher.
+ * Les seuils paraissent sous les **deux** mains en images, jamais sous une police.
+ *
+ * Une image générée porte un fond comme une photo en porte un, et `trace` la détoure
+ * dans la même branche que l'autre. Les cacher sous la diffusion faisait subir à
+ * l'auteur un réglage dont il voyait l'effet sans pouvoir le corriger. Une main en
+ * police, elle, n'a pas d'image : deux curseurs y donneraient à croire qu'on peut y
+ * toucher.
  */
-test('les seuils de détourage ne paraissent que sous une image', async () => {
+test('les seuils paraissent sous les deux mains en images, jamais sous une police', async () => {
   const a = atelier({
     sur: {
       envois: {
@@ -1797,6 +1801,12 @@ test('les seuils de détourage ne paraissent que sous une image', async () => {
 
   assert.equal(els.get('champDetourage').hidden, false,
     'les seuils sont cachés sous une main en image');
+
+  els.get('inMain').value = 'diffusion';
+  await els.get('inMain').declenche('change');
+
+  assert.equal(els.get('champDetourage').hidden, false,
+    'une image générée se détoure sans qu\'on puisse la régler');
 
   els.get('inMain').value = 'police';
   await els.get('inMain').declenche('change');
@@ -1865,6 +1875,10 @@ test('le canevas prend la couleur du papier visé', async () => {
   await els.get('btNouveau').declenche('click');
   await allerAuxEnvois(els);
 
-  assert.equal(els.get('canevas').style.getPropertyValue('--papier'), '#f7f0e0',
+  // `--papier-canevas` et non `--papier` : celui-là est pris par la manipulation
+  // directe de la couverture, où il dit la couleur du papier de la 1ère. Deux étapes
+  // disjointes aujourd'hui, mais deux sens pour un nom se croisent le jour où l'un est
+  // posé plus haut.
+  assert.equal(els.get('canevas').style.getPropertyValue('--papier-canevas'), '#f7f0e0',
     'le canevas ne prend pas le crème du destinataire visé');
 });

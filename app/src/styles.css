@@ -1314,7 +1314,11 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
   /* Le papier sous la page : c'est lui qui rend visible un fond mal détouré. Posé par
      `majPage`, retiré avec la page — sans quoi l'établi vide garderait un crème qui ne
      désigne plus rien. */
-  background: var(--papier, var(--etabli));
+  /* `--papier-canevas` et non `--papier` : celui-là est pris par `.direct-papier`, où
+     il dit la couleur du papier de la 1ère de couverture. Les deux étapes sont
+     disjointes, mais deux sens pour un nom se croiseraient le jour où l'un serait posé
+     plus haut. */
+  background: var(--papier-canevas, var(--etabli));
   /* Le geste appartient au pointeur : sans cela, un glisser sur pavé tactile ferait
      défiler la fenêtre au lieu de déplacer l'envoi. */
   touch-action: none;
