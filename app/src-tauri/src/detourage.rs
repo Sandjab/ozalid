@@ -177,4 +177,39 @@ mod tests {
             assert!(d.papier > d.encre);
         }
     }
+
+    /// La couleur ne se retouche pas : seul l'alpha se calcule. C'est la décision du
+    /// § 2 de la spec — la démultiplication a été mesurée moins fidèle qu'un point noir
+    /// bien posé — et rien d'autre ne la protège.
+    #[test]
+    fn la_couleur_de_l_encre_ne_bouge_pas() {
+        let px = image::load_from_memory(&applique(&uni(30, 36, 118), &SEUILS).unwrap())
+            .unwrap()
+            .to_rgba8();
+        let [r, g, b, a] = px.get_pixel(0, 0).0;
+        assert_eq!((r, g, b), (30, 36, 118), "la couleur a été retouchée");
+        assert!(
+            a > 200,
+            "un bleu franc devrait être quasi opaque, alpha {a}"
+        );
+    }
+
+    /// Les photos d'appareil sont des JPEG : les refuser viderait le chantier de son
+    /// objet. Le format se relève sur le contenu, comme partout ailleurs dans
+    /// l'application.
+    #[test]
+    fn un_jpeg_se_detoure_comme_un_png() {
+        let mut jpeg = Vec::new();
+        image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
+            4,
+            4,
+            image::Rgb([248, 246, 241]),
+        ))
+        .write_to(
+            &mut std::io::Cursor::new(&mut jpeg),
+            image::ImageFormat::Jpeg,
+        )
+        .unwrap();
+        assert_eq!(alpha(&applique(&jpeg, &SEUILS).unwrap()), 0);
+    }
 }

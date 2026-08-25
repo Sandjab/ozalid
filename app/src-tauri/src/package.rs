@@ -598,4 +598,39 @@ mod tests {
             "le papier n'a pas été rendu transparent"
         );
     }
+
+    /// Un projet d'avant ce chantier compose exactement ce qu'il composait : mêmes
+    /// octets, même nom. C'est l'autre moitié de la décision « un projet ancien garde
+    /// son rendu » — la première moitié est dans `envoi.rs`, et elle ne dit que le
+    /// modèle.
+    #[test]
+    fn sans_detourage_l_image_part_telle_quelle() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut p = projet_en_images(Some("Léa.jpg"));
+        let mut jpeg = Vec::new();
+        image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
+            8,
+            8,
+            image::Rgb([245, 243, 238]),
+        ))
+        .write_to(
+            &mut std::io::Cursor::new(&mut jpeg),
+            image::ImageFormat::Jpeg,
+        )
+        .unwrap();
+        p.images_envois.insert("Léa.jpg".into(), jpeg.clone());
+        // Le projet ancien : la photo est là, les seuils n'y sont pas.
+        p.meta.envois.liste[0].detourage = None;
+
+        let t = trace(&p, &p.meta.envois.liste[0], dir.path()).unwrap();
+        let interieur::Quoi::Image { fichier } = t.quoi else {
+            panic!("la trace n'est pas une image");
+        };
+        assert!(fichier.ends_with(".jpg"), "le nom a changé : « {fichier} »");
+        assert_eq!(
+            std::fs::read(dir.path().join(&*fichier)).unwrap(),
+            jpeg,
+            "les octets ont été retouchés sans qu'on l'ait demandé"
+        );
+    }
 }
