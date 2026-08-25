@@ -196,6 +196,8 @@ function afficherMain() {
 function afficherLivre() {
   const perso = projet.envois.personnelle;
   $('inGabarit').value = projet.envois.gabarit ?? '';
+  $('inCouleur').value = projet.envois.couleur ?? '';
+  $('inParaphe').value = projet.envois.paraphe ?? '';
   $('etatPolice').textContent = perso
     ? `Police personnelle embarquée : ${perso}.`
     : 'Aucune police personnelle : les envois s\'écrivent dans une main de la maison.';

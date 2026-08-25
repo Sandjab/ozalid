@@ -151,6 +151,23 @@ Les seuils sont globaux : sur une photo dont un coin est nettement plus sombre, 
 du fond, ou le trait pâle s'efface. C'est ce que les deux curseurs donnent à arbitrer, et
 sur la photo d'essai de la spec il restait 1,2 % de fond au meilleur réglage.
 
+Le **gabarit** des envois générés porte cinq marques — `{envoi}`, `{dedicataire}`,
+`{titre}`, `{couleur}`, `{paraphe}` — substituées en une seule passe. Seules les deux
+premières distinguent un exemplaire du suivant ; les trois autres sont les mêmes pour
+tout le tirage, et un gabarit qui ne citerait qu'elles rendrait M images identiques —
+c'est ce que le repli existe pour éviter. La couleur de l'encre et le paraphe vivent sur
+le livre à côté du gabarit, non sur chaque exemplaire : un auteur signe ses vingt
+exemplaires du même stylo. Le paraphe n'est pas le `monogramme` du livre, qui nomme la
+maison au pied de la couverture.
+
+Un gabarit est **livré** avec l'application, en anglais — langue que les modèles à poids
+ouverts suivent le mieux, le texte écrit restant français puisqu'il vient de `{envoi}`.
+Il demande un fond blanc uni sans texture ni ombre, ce qui donne au détourage la photo la
+plus facile à séparer. « En faire mon défaut » le retient dans `preferences.toml`, d'où
+tout projet neuf le reprend ; **le geste ne touche pas au livre ouvert**, dont le gabarit
+reste celui du `.ozalid`. « Reprendre mon défaut » fait le chemin inverse, sans quoi un
+projet créé avant ce réglage ne pourrait jamais le recevoir.
+
 Changer de destinataire au pied change la pagination : le rail et le canevas se
 refont. Sans quoi l'on viserait la page 264 d'un intérieur qui n'en fait plus que 190,
 et seul le refus à la génération le dirait — une fois le mot écrit.
@@ -280,7 +297,7 @@ résultats. Tout le reste est testable sans fenêtre.
 | `envoi` | L'envoi autographe : la main de chaque exemplaire, son mot, sa place sur la page, et les noms qu'ils prennent sur le disque |
 | `detourage` | Séparer l'encre du papier sur la photo d'un envoi : deux seuils de luminance, leur estimation, leur application |
 | `police` | Ce qu'un fichier de police déclare : sa famille, et les caractères qu'il porte vraiment |
-| `diffusion` | Demander une image à un modèle : le prompt, le contrat, et la clé qui ne remonte jamais |
+| `diffusion` | Demander une image à un modèle : le gabarit et ses cinq marques, le contrat, et la clé qui ne remonte jamais |
 | `epreuve` | Source Typst de l'épreuve de relecture : A4, numéros de ligne, marge d'annotation |
 | `planche` | Assemblage 4ème \| dos \| 1ère au gabarit, et dos composé élément par élément |
 | `package` | Un prestataire, un intérieur, une planche, dans son répertoire |

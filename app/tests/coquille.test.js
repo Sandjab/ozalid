@@ -10,6 +10,9 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { charge } = require('./dom_shim');
 
+/** Le gabarit livré avec l'application, tel que le faux Rust le sert. */
+const GABARIT_MAISON = 'une écriture manuscrite : {envoi}, signé {paraphe}';
+
 const LULU = {
   cle: 'lulu', libelle: 'Lulu — poche 108 × 175',
   largeur: 108, hauteur: 175, fond_perdu: 3.175, dos_publie: true,
@@ -68,6 +71,9 @@ function atelier({
   acces = { url: '', cle_posee: false }, composition,
 } = {}) {
   const appels = [];
+  // Le gabarit de départ vit dans les préférences de la machine, pas dans le projet :
+  // le faux le tient donc à part, comme le Rust le tient hors du `.ozalid`.
+  let gabaritDefaut = GABARIT_MAISON;
   const liste = (destinataires ?? [dest(providers[0])]).map((d) => ({ ...d }));
   let livraison = { destinataires: liste, courant: liste[0].provider, deja_compose: false };
   // Les règles du Rust, modélisées ici parce que le front les lit désormais dans le
@@ -135,6 +141,16 @@ function atelier({
       case 'envois_gabarit':
         envois = { ...envois, gabarit: args.gabarit };
         return vue();
+      case 'envois_couleur':
+        envois = { ...envois, couleur: args.couleur };
+        return vue();
+      case 'envois_paraphe':
+        envois = { ...envois, paraphe: args.paraphe };
+        return vue();
+      case 'gabarit_defaut_lire': return gabaritDefaut;
+      case 'gabarit_defaut_poser':
+        gabaritDefaut = args.gabarit;
+        return null;
       case 'maquettes_liste': return [];
       case 'recents_liste': return recents;
       case 'garde_modifications': return 'ignorer';
@@ -1881,4 +1897,72 @@ test('le canevas prend la couleur du papier visé', async () => {
   // posé plus haut.
   assert.equal(els.get('canevas').style.getPropertyValue('--papier-canevas'), '#f7f0e0',
     'le canevas ne prend pas le crème du destinataire visé');
+});
+
+/**
+ * La couleur de l'encre et le paraphe partent au Rust, chacun sur sa commande.
+ *
+ * Ils appartiennent au livre comme le gabarit : c'est le style d'écriture du tirage.
+ */
+test('la couleur et le paraphe se saisissent et partent au livre', async () => {
+  const a = atelier({ sur: { envois: EN_DIFFUSION } });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  await allerAuxEnvois(els);
+
+  els.get('inCouleur').value = 'blue-black';
+  await els.get('inCouleur').declenche('change');
+  els.get('inParaphe').value = 'Ivan Pjig';
+  await els.get('inParaphe').declenche('change');
+
+  assert.equal(a.appels.findLast(([c]) => c === 'envois_couleur')[1].couleur, 'blue-black');
+  assert.equal(a.appels.findLast(([c]) => c === 'envois_paraphe')[1].paraphe, 'Ivan Pjig');
+});
+
+/**
+ * « En faire mon défaut » écrit dans les préférences et **ne touche pas au livre**.
+ *
+ * Les deux se règlent au même endroit à l'écran, ils ne vivent pas au même endroit sur
+ * le disque : le gabarit qui compose reste celui du `.ozalid`. Un geste qui marquerait
+ * le projet modifié réveillerait la garde à la fermeture pour un réglage de machine.
+ */
+test('en faire son défaut n\'écrit pas dans le livre', async () => {
+  const a = atelier({ sur: { envois: EN_DIFFUSION } });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  await allerAuxEnvois(els);
+
+  els.get('inGabarit').value = 'une aquarelle pour {dedicataire}';
+  await els.get('inGabarit').declenche('change');
+  const avant = a.appels.filter(([c]) => c === 'envois_gabarit').length;
+
+  await els.get('btGabaritDefaut').declenche('click');
+
+  assert.equal(a.appels.findLast(([c]) => c === 'gabarit_defaut_poser')[1].gabarit,
+    'une aquarelle pour {dedicataire}');
+  assert.equal(a.appels.filter(([c]) => c === 'envois_gabarit').length, avant,
+    'le geste a aussi écrit dans le livre');
+});
+
+/**
+ * « Reprendre mon défaut » repose le défaut sur le livre ouvert.
+ *
+ * Sans ce geste, un projet créé avant ce réglage ne pourrait jamais recevoir le défaut —
+ * et c'est le cas de tous les projets existants.
+ */
+test('reprendre son défaut repose le gabarit sur le livre', async () => {
+  const a = atelier({ sur: { envois: EN_DIFFUSION } });
+  const { els } = await charge({ invoke: a.invoke });
+  await els.get('btNouveau').declenche('click');
+  await allerAuxEnvois(els);
+
+  els.get('inGabarit').value = 'quelque chose d\'autre';
+  await els.get('inGabarit').declenche('change');
+
+  await els.get('btGabaritReprendre').declenche('click');
+  await new Promise((r) => setImmediate(r));
+
+  assert.equal(a.appels.findLast(([c]) => c === 'envois_gabarit')[1].gabarit, GABARIT_MAISON,
+    'le défaut n\'a pas été reposé sur le livre');
+  assert.equal(els.get('inGabarit').value, GABARIT_MAISON, 'le champ ne le montre pas');
 });

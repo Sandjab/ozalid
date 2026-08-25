@@ -1404,12 +1404,59 @@ pub fn envoi_retirer(index: usize, atelier: State<Atelier>) -> Result<ProjetVue,
 /// de chacun s'insère. Le réécrire pour chaque personne n'aurait pas d'usage.
 #[tauri::command]
 pub fn envois_gabarit(gabarit: String, atelier: State<Atelier>) -> Result<ProjetVue, String> {
+    regler_style(&atelier, |e| e.gabarit = gabarit)
+}
+
+/// La couleur de l'encre que `{couleur}` nomme au modèle.
+///
+/// Au livre comme le gabarit : un auteur signe ses vingt exemplaires du même stylo.
+#[tauri::command]
+pub fn envois_couleur(couleur: String, atelier: State<Atelier>) -> Result<ProjetVue, String> {
+    regler_style(&atelier, |e| e.couleur = couleur)
+}
+
+/// Le paraphe de l'auteur, que `{paraphe}` nomme au modèle.
+///
+/// À ne pas confondre avec le `monogramme` du livre, qui nomme la **maison** et figure
+/// au pied de la couverture. Celui-ci est une signature manuscrite.
+#[tauri::command]
+pub fn envois_paraphe(paraphe: String, atelier: State<Atelier>) -> Result<ProjetVue, String> {
+    regler_style(&atelier, |e| e.paraphe = paraphe)
+}
+
+/// Applique une retouche au style d'écriture du livre, et rend la vue.
+///
+/// Les trois réglages ne diffèrent que par le champ qu'ils touchent : les écrire trois
+/// fois en entier ferait diverger leurs contrôles au premier ajout.
+fn regler_style(
+    atelier: &State<Atelier>,
+    retouche: impl FnOnce(&mut crate::envoi::Envois),
+) -> Result<ProjetVue, String> {
     let mut garde = atelier.ouvert.lock().unwrap();
     let o = garde.as_mut().ok_or_else(aucun_projet)?;
     let mut envois = o.projet.meta.envois.clone();
-    envois.gabarit = gabarit;
+    retouche(&mut envois);
     o.projet.regler_envois(envois)?;
     vue_modifiee(o)
+}
+
+/// Le gabarit de départ des projets neufs, tel que les préférences le portent.
+#[tauri::command]
+pub fn gabarit_defaut_lire(app: tauri::AppHandle) -> String {
+    gabarit_de_depart(&app)
+}
+
+/// Retient ce gabarit comme départ des projets neufs.
+///
+/// **Ne touche pas au livre ouvert** : c'est un réglage de la machine, et le gabarit qui
+/// compose reste celui du `.ozalid`. Les deux se règlent au même endroit à l'écran, ils
+/// ne vivent pas au même endroit sur le disque.
+#[tauri::command]
+pub fn gabarit_defaut_poser(gabarit: String, app: tauri::AppHandle) -> Result<(), String> {
+    let dir = config(&app).ok_or("répertoire de configuration introuvable.")?;
+    let mut p = preferences::charger(&dir);
+    p.gabarit_defaut = gabarit;
+    preferences::enregistrer(&dir, &p)
 }
 
 /// Les mains offertes par l'application.

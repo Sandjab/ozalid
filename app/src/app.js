@@ -1331,6 +1331,19 @@ $('btPoliceRetirer').addEventListener('click', () => tente(async () =>
 // la clé ne redescend jamais — le champ reste vide, et « inchangée » le dit.
 $('inGabarit').addEventListener('change', () => tente(async () =>
   afficherProjet(await invoke('envois_gabarit', { gabarit: $('inGabarit').value }))));
+$('inCouleur').addEventListener('change', () => tente(async () =>
+  afficherProjet(await invoke('envois_couleur', { couleur: $('inCouleur').value }))));
+$('inParaphe').addEventListener('change', () => tente(async () =>
+  afficherProjet(await invoke('envois_paraphe', { paraphe: $('inParaphe').value }))));
+// Le défaut appartient à la machine, le gabarit au livre : les deux se règlent ici,
+// ils ne vivent pas au même endroit. « En faire mon défaut » ne touche donc pas au
+// projet — sans quoi le geste le marquerait modifié pour un réglage de poste.
+$('btGabaritDefaut').addEventListener('click', () => tente(async () =>
+  invoke('gabarit_defaut_poser', { gabarit: $('inGabarit').value })));
+$('btGabaritReprendre').addEventListener('click', () => tente(async () => {
+  const gabarit = await invoke('gabarit_defaut_lire');
+  afficherProjet(await invoke('envois_gabarit', { gabarit }));
+}));
 $('btDiffusionRegler').addEventListener('click', () => reglerDiffusion(
   $('inDiffusionCle').value === '' ? null : $('inDiffusionCle').value));
 $('btDiffusionOublier').addEventListener('click', () => reglerDiffusion(''));
