@@ -132,16 +132,20 @@ pub fn converge(
 /// que l'envoi a décidé. Une image écrite à la main et une image produite par un
 /// modèle de diffusion arrivent ici de la même façon — ce module n'a pas à savoir
 /// laquelle, seulement qu'elle est posée à côté de la source.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Quoi<'a> {
     /// Un texte, composé dans la main de cet envoi.
     Texte { police: &'a str, texte: &'a str },
     /// Une image, déjà écrite à côté de la source, désignée par son seul nom.
-    Image { fichier: &'a str },
+    ///
+    /// `Cow` parce que le nom écrit n'est pas toujours celui de l'archive : une photo
+    /// détourée sort en PNG et change d'extension. L'emprunt subsiste quand rien n'est
+    /// détouré, et c'est le cas des projets d'avant ce chantier.
+    Image { fichier: std::borrow::Cow<'a, str> },
 }
 
 /// Un envoi et sa place sur la page.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Trace<'a> {
     pub quoi: Quoi<'a>,
     pub place: &'a crate::envoi::Place,
@@ -383,7 +387,7 @@ fn foreground(envoi: Option<Trace>, largeur_mm: f64) -> String {
 /// des coupures de lignes, et la rendre à une autre largeur donnerait un objet dont le
 /// rapport ne serait pas celui du rendu.
 pub fn source_objet(t: &Trace, largeur_mm: f64) -> String {
-    let quoi = match t.quoi {
+    let quoi = match &t.quoi {
         Quoi::Texte { police, texte } => format!(
             r#"#set par(justify: false, first-line-indent: 0pt, leading: 0.9em)
 #set text(font: "{police}", size: {corps:.3}mm, hyphenate: false, lang: "fr")
@@ -1267,7 +1271,9 @@ mod tests {
 
     fn image(fichier: &str) -> Trace<'_> {
         Trace {
-            quoi: Quoi::Image { fichier },
+            quoi: Quoi::Image {
+                fichier: fichier.into(),
+            },
             place: PLACE,
         }
     }
@@ -1534,7 +1540,7 @@ mod tests {
                 blanche: false,
             },
             &chapitres(),
-            Some(t),
+            Some(t.clone()),
         ));
         // La largeur passée à l'objet est celle qu'il occupera sur la page : c'est le
         // contrat que `envoi_objet` honore côté commandes.
@@ -1656,7 +1662,12 @@ mod tests {
                         texte: "À Léa,\nces heures creuses.",
                     },
                 ),
-                ("image", Quoi::Image { fichier: "mot.png" }),
+                (
+                    "image",
+                    Quoi::Image {
+                        fichier: "mot.png".into(),
+                    },
+                ),
             ] {
                 let s = source(
                     &livre,

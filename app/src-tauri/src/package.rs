@@ -195,9 +195,29 @@ pub fn trace<'a>(
             let octets = projet.images_envois.get(fichier).ok_or_else(|| {
                 format!("{qui} : l'image « {fichier} » ne figure pas dans le projet.")
             })?;
-            std::fs::write(dossier.join(fichier), octets)
-                .map_err(|err| format!("{fichier} : écriture impossible : {err}"))?;
-            interieur::Quoi::Image { fichier }
+            // Détouré ici et nulle part ailleurs : `trace` est le seul chemin par où
+            // passent la composition d'un package et le rendu de l'objet du canevas.
+            // L'écran ne peut donc pas montrer autre chose que ce qui s'imprime.
+            //
+            // Le nom passe en `.png` : Typst reconnaît le format d'une image à son
+            // extension, et un PNG rangé sous `.jpg` ne se composerait pas.
+            let (nom, octets) = match &e.detourage {
+                Some(d) => {
+                    let png = crate::detourage::applique(octets, d)
+                        .map_err(|err| format!("{qui} : {err}"))?;
+                    let tige = fichier.rsplit_once('.').map_or(fichier, |(t, _)| t);
+                    (format!("{tige}.png"), std::borrow::Cow::Owned(png))
+                }
+                None => (
+                    fichier.to_string(),
+                    std::borrow::Cow::Borrowed(octets.as_slice()),
+                ),
+            };
+            std::fs::write(dossier.join(&nom), &*octets)
+                .map_err(|err| format!("{nom} : écriture impossible : {err}"))?;
+            interieur::Quoi::Image {
+                fichier: nom.into(),
+            }
         }
     };
     Ok(interieur::Trace {
@@ -432,10 +452,8 @@ mod tests {
         let t = trace(&p, &p.meta.envois.liste[0], dir.path()).unwrap();
 
         assert!(matches!(
-            t.quoi,
-            interieur::Quoi::Image {
-                fichier: "Léa.png"
-            }
+            &t.quoi,
+            interieur::Quoi::Image { fichier } if fichier == "Léa.png"
         ));
         assert_eq!(
             std::fs::read(dir.path().join("Léa.png")).unwrap(),
@@ -455,10 +473,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let t = trace(&p, &p.meta.envois.liste[0], dir.path()).unwrap();
         assert!(matches!(
-            t.quoi,
-            interieur::Quoi::Image {
-                fichier: "Léa.png"
-            }
+            &t.quoi,
+            interieur::Quoi::Image { fichier } if fichier == "Léa.png"
         ));
     }
 
@@ -542,5 +558,44 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.contains("Léa"), "{err}");
+    }
+
+    /// Ce que `trace` écrit sur le disque est détouré, et porte un nom en `.png` : Typst
+    /// reconnaît le format d'une image **à son extension**, et un PNG rangé sous `.jpg`
+    /// ne se composerait pas — l'erreur tomberait sur l'exemplaire d'une personne.
+    #[test]
+    fn une_image_detouree_s_ecrit_en_png() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut p = projet_en_images(Some("Léa.jpg"));
+        // Un JPEG uni clair : tout est papier, donc tout doit sortir transparent.
+        let mut jpeg = Vec::new();
+        image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
+            8,
+            8,
+            image::Rgb([245, 243, 238]),
+        ))
+        .write_to(
+            &mut std::io::Cursor::new(&mut jpeg),
+            image::ImageFormat::Jpeg,
+        )
+        .unwrap();
+        p.images_envois.insert("Léa.jpg".into(), jpeg);
+        p.meta.envois.liste[0].detourage = Some(crate::detourage::Detourage {
+            papier: 240.0,
+            encre: 40.0,
+        });
+
+        let t = trace(&p, &p.meta.envois.liste[0], dir.path()).unwrap();
+        let interieur::Quoi::Image { fichier } = t.quoi else {
+            panic!("la trace n'est pas une image");
+        };
+        assert!(fichier.ends_with(".png"), "écrit sous « {fichier} »");
+        let ecrit = std::fs::read(dir.path().join(&*fichier)).unwrap();
+        let px = image::load_from_memory(&ecrit).unwrap().to_rgba8();
+        assert_eq!(
+            px.get_pixel(0, 0)[3],
+            0,
+            "le papier n'a pas été rendu transparent"
+        );
     }
 }
